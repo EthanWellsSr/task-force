@@ -1,0 +1,160 @@
+// ============================================================
+// Weapon & perk definitions — MW2-inspired, tuned for 100 HP.
+// dmg = body damage up close, minDmg = damage at/past range[1] meters.
+// rpm = rounds per minute. mode: auto | semi | burst | bolt | pump
+// spread values are radians of cone half-angle. speed = move speed mult.
+// ============================================================
+
+const WEAPONS = {
+  // ---------- PRIMARY: ASSAULT RIFLES ----------
+  m4a1: { slot:'primary', cat:'Assault Rifle', name:'M4A1',
+    dmg:30, minDmg:20, head:1.4, rpm:780, mag:30, reserve:120, reload:2.05, mode:'auto',
+    spreadHip:.030, spreadAds:.0035, recoil:.0135, bloom:.0042, zoom:1.35, adsTime:.24,
+    speed:.95, range:[26,52], model:'ar' },
+  scar: { slot:'primary', cat:'Assault Rifle', name:'SCAR-H',
+    dmg:40, minDmg:30, head:1.4, rpm:585, mag:20, reserve:100, reload:2.3, mode:'auto',
+    spreadHip:.034, spreadAds:.0038, recoil:.019, bloom:.0055, zoom:1.35, adsTime:.26,
+    speed:.94, range:[30,58], model:'ar' },
+  acr: { slot:'primary', cat:'Assault Rifle', name:'ACR',
+    dmg:28, minDmg:21, head:1.4, rpm:705, mag:30, reserve:120, reload:2.1, mode:'auto',
+    spreadHip:.028, spreadAds:.0026, recoil:.0085, bloom:.0030, zoom:1.35, adsTime:.24,
+    speed:.95, range:[28,56], model:'ar' },
+  tar21: { slot:'primary', cat:'Assault Rifle', name:'TAR-21',
+    dmg:34, minDmg:24, head:1.4, rpm:750, mag:30, reserve:120, reload:2.25, mode:'auto',
+    spreadHip:.036, spreadAds:.0045, recoil:.017, bloom:.0052, zoom:1.35, adsTime:.25,
+    speed:.94, range:[24,48], model:'ar' },
+  famas: { slot:'primary', cat:'Assault Rifle', name:'FAMAS',
+    dmg:35, minDmg:26, head:1.4, rpm:840, mag:30, reserve:120, reload:2.15, mode:'burst',
+    burstCount:3, burstDelay:.19,
+    spreadHip:.032, spreadAds:.0032, recoil:.014, bloom:.0040, zoom:1.35, adsTime:.24,
+    speed:.95, range:[28,56], model:'ar' },
+  fal: { slot:'primary', cat:'Assault Rifle', name:'FAL',
+    dmg:48, minDmg:35, head:1.5, rpm:420, mag:20, reserve:100, reload:2.2, mode:'semi',
+    spreadHip:.033, spreadAds:.0028, recoil:.021, bloom:.0048, zoom:1.35, adsTime:.25,
+    speed:.95, range:[32,60], model:'ar' },
+
+  // ---------- PRIMARY: SMGs ----------
+  mp5k: { slot:'primary', cat:'SMG', name:'MP5K',
+    dmg:26, minDmg:16, head:1.4, rpm:900, mag:30, reserve:150, reload:1.85, mode:'auto',
+    spreadHip:.024, spreadAds:.0048, recoil:.012, bloom:.0038, zoom:1.25, adsTime:.18,
+    speed:1.0, range:[16,34], model:'smg' },
+  ump45: { slot:'primary', cat:'SMG', name:'UMP45',
+    dmg:34, minDmg:22, head:1.4, rpm:600, mag:32, reserve:128, reload:1.95, mode:'auto',
+    spreadHip:.025, spreadAds:.0045, recoil:.013, bloom:.0040, zoom:1.25, adsTime:.18,
+    speed:1.0, range:[20,40], model:'smg' },
+  vector: { slot:'primary', cat:'SMG', name:'VECTOR',
+    dmg:21, minDmg:14, head:1.4, rpm:1090, mag:30, reserve:180, reload:1.8, mode:'auto',
+    spreadHip:.026, spreadAds:.0050, recoil:.0075, bloom:.0028, zoom:1.25, adsTime:.17,
+    speed:1.0, range:[14,30], model:'smg' },
+  p90: { slot:'primary', cat:'SMG', name:'P90',
+    dmg:23, minDmg:15, head:1.4, rpm:855, mag:50, reserve:150, reload:2.4, mode:'auto',
+    spreadHip:.027, spreadAds:.0052, recoil:.011, bloom:.0035, zoom:1.25, adsTime:.19,
+    speed:.99, range:[16,36], model:'smg' },
+
+  // ---------- PRIMARY: LMG ----------
+  rpd: { slot:'primary', cat:'LMG', name:'RPD',
+    dmg:36, minDmg:28, head:1.4, rpm:660, mag:100, reserve:200, reload:4.4, mode:'auto',
+    spreadHip:.044, spreadAds:.0050, recoil:.017, bloom:.0038, zoom:1.35, adsTime:.34,
+    speed:.87, range:[32,64], model:'lmg' },
+
+  // ---------- PRIMARY: SNIPERS ----------
+  intervention: { slot:'primary', cat:'Sniper Rifle', name:'INTERVENTION',
+    dmg:100, minDmg:100, head:1.6, rpm:46, mag:5, reserve:25, reload:2.9, mode:'bolt',
+    spreadHip:.11, spreadAds:.0006, recoil:.05, bloom:.002, zoom:6.0, adsTime:.36,
+    speed:.92, range:[60,100], model:'sniper' },
+  barrett: { slot:'primary', cat:'Sniper Rifle', name:'BARRETT .50CAL',
+    dmg:100, minDmg:100, head:1.8, rpm:190, mag:10, reserve:30, reload:3.3, mode:'semi',
+    spreadHip:.12, spreadAds:.0012, recoil:.042, bloom:.006, zoom:6.0, adsTime:.4,
+    speed:.9, range:[60,100], model:'sniper' },
+
+  // ---------- SECONDARIES ----------
+  usp: { slot:'secondary', cat:'Handgun', name:'USP .45',
+    dmg:32, minDmg:20, head:1.5, rpm:420, mag:12, reserve:48, reload:1.55, mode:'semi',
+    spreadHip:.022, spreadAds:.0060, recoil:.016, bloom:.0050, zoom:1.2, adsTime:.14,
+    speed:1.0, range:[14,32], model:'pistol' },
+  deagle: { slot:'secondary', cat:'Handgun', name:'DESERT EAGLE',
+    dmg:52, minDmg:35, head:1.6, rpm:250, mag:7, reserve:28, reload:1.8, mode:'semi',
+    spreadHip:.030, spreadAds:.0058, recoil:.036, bloom:.0090, zoom:1.2, adsTime:.16,
+    speed:1.0, range:[16,36], model:'pistol' },
+  g18: { slot:'secondary', cat:'Machine Pistol', name:'GLOCK 18',
+    dmg:18, minDmg:12, head:1.4, rpm:1000, mag:33, reserve:99, reload:1.85, mode:'auto',
+    spreadHip:.034, spreadAds:.0085, recoil:.011, bloom:.0042, zoom:1.2, adsTime:.15,
+    speed:1.0, range:[10,26], model:'pistol' },
+  spas12: { slot:'secondary', cat:'Shotgun', name:'SPAS-12',
+    dmg:15, minDmg:5, head:1.2, rpm:66, mag:8, reserve:32, reload:2.9, mode:'pump',
+    pellets:8, pumpTime:.55,
+    spreadHip:.045, spreadAds:.028, recoil:.045, bloom:.004, zoom:1.15, adsTime:.22,
+    speed:.98, range:[8,22], model:'shotgun' },
+};
+
+// Fire mode label shown on the HUD
+function fireModeLabel(w) {
+  return { auto:'AUTO', semi:'SEMI', burst:'3-RND BURST', bolt:'BOLT ACTION', pump:'PUMP' }[w.mode];
+}
+
+// ============================================================
+// PERKS — three tiers, one pick per tier (MW2 style)
+// ============================================================
+const PERKS = {
+  1: [
+    { id:'marathon',  name:'MARATHON',          desc:'Unlimited sprint' },
+    { id:'soh',       name:'SLEIGHT OF HAND',   desc:'Reload 50% faster' },
+    { id:'scavenger', name:'SCAVENGER',         desc:'Double reserve ammo' },
+  ],
+  2: [
+    { id:'stopping',    name:'STOPPING POWER', desc:'+25% bullet damage' },
+    { id:'lightweight', name:'LIGHTWEIGHT',    desc:'Move 8% faster' },
+    { id:'coldblooded', name:'COLD-BLOODED',   desc:'Bots spot you from 30% closer' },
+  ],
+  3: [
+    { id:'steadyaim', name:'STEADY AIM', desc:'35% tighter hip fire' },
+    { id:'ninja',     name:'NINJA',      desc:'Bots react to you 40% slower' },
+    { id:'commando',  name:'COMMANDO',   desc:'Extended melee lunge range' },
+  ],
+};
+
+function perkById(id) {
+  for (const tier of [1, 2, 3]) {
+    const p = PERKS[tier].find(p => p.id === id);
+    if (p) return p;
+  }
+  return null;
+}
+
+// Default classes — MW2's stock loadout names
+const DEFAULT_CLASSES = [
+  { name:'GRENADIER',     primary:'m4a1',         secondary:'usp',    perks:['soh','stopping','steadyaim'] },
+  { name:'FIRST RECON',   primary:'famas',        secondary:'g18',    perks:['marathon','lightweight','ninja'] },
+  { name:'OVERWATCH',     primary:'rpd',          secondary:'deagle', perks:['scavenger','stopping','steadyaim'] },
+  { name:'SCOUT SNIPER',  primary:'intervention', secondary:'usp',    perks:['soh','coldblooded','ninja'] },
+  { name:'RIOT CONTROL',  primary:'ump45',        secondary:'spas12', perks:['marathon','lightweight','commando'] },
+];
+
+// Loadout pool bots draw from
+const BOT_LOADOUTS = [
+  { primary:'m4a1',   secondary:'usp' },
+  { primary:'scar',   secondary:'deagle' },
+  { primary:'acr',    secondary:'usp' },
+  { primary:'tar21',  secondary:'g18' },
+  { primary:'famas',  secondary:'usp' },
+  { primary:'fal',    secondary:'deagle' },
+  { primary:'mp5k',   secondary:'usp' },
+  { primary:'ump45',  secondary:'spas12' },
+  { primary:'vector', secondary:'g18' },
+  { primary:'p90',    secondary:'usp' },
+  { primary:'rpd',    secondary:'deagle' },
+  { primary:'intervention', secondary:'usp' },
+];
+
+// Normalized 0..1 stats for the class editor bars
+function weaponStatBars(w) {
+  const dps = w.dmg * (w.rpm / 60);
+  return [
+    ['DAMAGE',    Math.min(1, w.dmg / 70)],
+    ['FIRE RATE', Math.min(1, w.rpm / 1100)],
+    ['DPS',       Math.min(1, dps / 420)],
+    ['RANGE',     Math.min(1, w.range[1] / 100)],
+    ['ACCURACY',  Math.min(1, 1 - w.recoil / .05)],
+    ['MOBILITY',  Math.min(1, (w.speed - .8) / .2)],
+  ];
+}

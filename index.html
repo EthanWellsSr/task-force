@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TASK FORCE — Team Deathmatch</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- ============ HUD ============ -->
+  <div id="hud" class="screen hidden">
+    <div id="vignette"></div>
+    <div id="dmgIndicator"></div>
+    <div id="scopeOverlay" class="hidden">
+      <div class="scope-circle"></div>
+      <div class="scope-line h"></div>
+      <div class="scope-line v"></div>
+    </div>
+    <div id="crosshair">
+      <div class="ch-line ch-t"></div><div class="ch-line ch-b"></div>
+      <div class="ch-line ch-l"></div><div class="ch-line ch-r"></div>
+      <div class="ch-dot"></div>
+    </div>
+    <div id="hitmarker" class="hidden">
+      <div class="hm hm1"></div><div class="hm hm2"></div><div class="hm hm3"></div><div class="hm hm4"></div>
+    </div>
+    <div id="targetName" class="hidden"></div>
+    <div id="scorebar">
+      <div class="team-score tf"><span class="tname">TF 141</span><span id="scoreTF">0</span></div>
+      <div id="matchTimer">10:00</div>
+      <div class="team-score sp"><span id="scoreSP">0</span><span class="tname">SPETSNAZ</span></div>
+    </div>
+    <div id="objText">TEAM DEATHMATCH &mdash; FIRST TO <span id="scoreLimitLabel">75</span></div>
+    <div id="killfeed"></div>
+    <canvas id="minimap" width="150" height="150"></canvas>
+    <div id="ammoBox">
+      <div id="weaponName">M4A1</div>
+      <div id="ammoCount"><span id="ammoMag">30</span><span class="ammo-div">/</span><span id="ammoReserve">120</span></div>
+      <div id="fireMode">AUTO</div>
+    </div>
+    <div id="healthWrap"><div id="healthBar"></div></div>
+    <div id="sprintWrap"><div id="sprintBar"></div></div>
+    <div id="reloadHint" class="hidden">RELOADING...</div>
+    <div id="killMsg" class="hidden"></div>
+  </div>
+
+  <!-- ============ MAIN MENU ============ -->
+  <div id="menu" class="screen">
+    <div class="menu-bg"></div>
+    <div class="menu-inner">
+      <h1 class="game-title">TASK<span>FORCE</span></h1>
+      <div class="game-sub">MODERN WARFARE &mdash; TEAM DEATHMATCH</div>
+      <div class="map-cards">
+        <div class="map-card" data-map="nuketown">
+          <div class="map-art nuketown-art"></div>
+          <div class="map-name">NUKETOWN</div>
+          <div class="map-desc">Suburban test site. Close quarters chaos.</div>
+        </div>
+        <div class="map-card" data-map="rust">
+          <div class="map-art rust-art"></div>
+          <div class="map-name">RUST</div>
+          <div class="map-desc">Desert oil yard. Small &amp; fast.</div>
+        </div>
+      </div>
+      <div class="menu-buttons">
+        <button id="btnClasses" class="menu-btn">CREATE A CLASS</button>
+        <button id="btnSettings" class="menu-btn">OPTIONS</button>
+      </div>
+      <div class="menu-hint">Click a map to deploy &middot; WASD move &middot; Mouse aim &middot; LMB fire &middot; X toggles aim down sights</div>
+    </div>
+  </div>
+
+  <!-- ============ CREATE A CLASS ============ -->
+  <div id="classScreen" class="screen hidden">
+    <div class="panel wide">
+      <h2>CREATE A CLASS</h2>
+      <div class="class-layout">
+        <div id="classSlots" class="class-slots"></div>
+        <div class="class-editor">
+          <div class="editor-row">
+            <label>CLASS NAME</label>
+            <input id="className" type="text" maxlength="18">
+          </div>
+          <div class="editor-cols">
+            <div class="editor-col">
+              <label>PRIMARY WEAPON</label>
+              <div id="primaryList" class="weapon-list"></div>
+            </div>
+            <div class="editor-col">
+              <label>SECONDARY WEAPON</label>
+              <div id="secondaryList" class="weapon-list"></div>
+              <label style="margin-top:14px">WEAPON STATS</label>
+              <div id="weaponStats" class="weapon-stats"></div>
+            </div>
+            <div class="editor-col">
+              <label>PERK 1</label>
+              <div id="perk1List" class="perk-list"></div>
+              <label>PERK 2</label>
+              <div id="perk2List" class="perk-list"></div>
+              <label>PERK 3</label>
+              <div id="perk3List" class="perk-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-buttons">
+        <button id="btnClassBack" class="menu-btn">BACK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS ============ -->
+  <div id="settingsScreen" class="screen hidden">
+    <div class="panel">
+      <h2>OPTIONS</h2>
+      <div class="setting-row"><label>MOUSE SENSITIVITY</label>
+        <input id="setSens" type="range" min="0.2" max="3" step="0.1"><span id="setSensVal"></span></div>
+      <div class="setting-row"><label>FIELD OF VIEW</label>
+        <input id="setFov" type="range" min="60" max="110" step="1"><span id="setFovVal"></span></div>
+      <div class="setting-row"><label>VOLUME</label>
+        <input id="setVol" type="range" min="0" max="1" step="0.05"><span id="setVolVal"></span></div>
+      <div class="setting-row"><label>BOT DIFFICULTY</label>
+        <select id="setDiff">
+          <option value="recruit">RECRUIT</option>
+          <option value="regular" selected>REGULAR</option>
+          <option value="hardened">HARDENED</option>
+          <option value="veteran">VETERAN</option>
+        </select></div>
+      <div class="setting-row"><label>PLAYERS PER TEAM</label>
+        <select id="setTeamSize">
+          <option value="4">4 v 4</option>
+          <option value="6" selected>6 v 6</option>
+          <option value="8">8 v 8</option>
+        </select></div>
+      <div class="setting-row"><label>SCORE LIMIT</label>
+        <select id="setScoreLimit">
+          <option value="30">30 KILLS</option>
+          <option value="50">50 KILLS</option>
+          <option value="75" selected>75 KILLS</option>
+        </select></div>
+      <div class="panel-buttons">
+        <button id="btnSettingsBack" class="menu-btn">BACK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SPAWN / RESPAWN ============ -->
+  <div id="spawnScreen" class="screen hidden">
+    <div class="spawn-inner">
+      <div id="deathInfo" class="hidden">
+        <div id="killedByText"></div>
+        <div id="respawnCountdown"></div>
+      </div>
+      <h2 id="spawnTitle">CHOOSE YOUR LOADOUT</h2>
+      <div id="spawnClasses" class="spawn-classes"></div>
+      <button id="btnDeploy" class="menu-btn deploy">DEPLOY</button>
+      <div class="menu-hint">WASD move &middot; X aim down sights &middot; SHIFT sprint &middot; SPACE jump &middot; C crouch &middot; R reload &middot; 1/2 or Q swap weapon &middot; V melee &middot; TAB scoreboard &middot; ESC pause</div>
+    </div>
+  </div>
+
+  <!-- ============ PAUSE ============ -->
+  <div id="pauseScreen" class="screen hidden">
+    <div class="panel">
+      <h2>PAUSED</h2>
+      <div class="panel-buttons vertical">
+        <button id="btnResume" class="menu-btn deploy">RESUME</button>
+        <button id="btnChangeClass" class="menu-btn">CHANGE CLASS (ON RESPAWN)</button>
+        <button id="btnQuitMatch" class="menu-btn danger">LEAVE MATCH</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SCOREBOARD ============ -->
+  <div id="scoreboard" class="screen hidden">
+    <div class="sb-wrap">
+      <div class="sb-team">
+        <div class="sb-head tf">TASK FORCE 141 &mdash; <span id="sbScoreTF"></span></div>
+        <table id="sbTableTF"><thead><tr><th>NAME</th><th>KILLS</th><th>DEATHS</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="sb-team">
+        <div class="sb-head sp">SPETSNAZ &mdash; <span id="sbScoreSP"></span></div>
+        <table id="sbTableSP"><thead><tr><th>NAME</th><th>KILLS</th><th>DEATHS</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MATCH END ============ -->
+  <div id="endScreen" class="screen hidden">
+    <div class="end-inner">
+      <h1 id="endResult">VICTORY</h1>
+      <div id="endScore"></div>
+      <div class="sb-wrap" id="endBoards"></div>
+      <div class="panel-buttons">
+        <button id="btnRematch" class="menu-btn deploy">REMATCH</button>
+        <button id="btnEndMenu" class="menu-btn">MAIN MENU</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/three.min.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/weapons.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/bots.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
