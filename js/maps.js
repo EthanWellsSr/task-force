@@ -100,30 +100,36 @@ class MapKit {
 }
 
 // ============================================================
-// NUKETOWN — cul-de-sac layout: two two-storey houses set
-// diagonally across the street, school bus dead center, picket-
-// fenced front/flank yards, carport driveways, gated backyard
-// spawns. The whole map is point-symmetric about the origin.
+// NUKETOWN — faithful cul-de-sac layout: street runs north-south
+// and dead-ends both ways (pink garage building at the north end,
+// sandbag/barbed-wire barricade at the south end). Two two-storey
+// houses face each other across the cul-de-sac circle — teal house
+// on the west (shifted north), yellow house on the east (shifted
+// south) — with picket-fenced front yards, carport driveways, and
+// gated backyard spawns behind each house. School bus + semi truck
+// sit on the circle. Point-symmetric about the origin except the
+// two street ends.
 // ============================================================
 function buildNuketown(scene, colliders) {
   const k = new MapKit(scene, colliders);
-  const W = 18, D = 24; // half extents
+  const W = 24, D = 20; // half extents: x = east-west, z = along the street
   const T = 0.3;
-  const wood = 0x8a6d4a;
+  const wood = 0x8a6d4a, hedge = 0x4a6a3a;
 
   scene.background = new THREE.Color(0x9fc4e0);
-  scene.fog = new THREE.Fog(0x9fc4e0, 70, 150);
+  scene.fog = new THREE.Fog(0x9fc4e0, 70, 160);
 
-  // ---- ground: lawn, street down the middle, cul-de-sac circle
+  // ---- ground: desert beyond, lawn inside, street down the middle
+  k.box(0, -0.55, 0, 160, 1, 160, 0xc9a97c, { solid: false, shadow: false });
   k.box(0, -0.5, 0, W * 2 + 2, 1, D * 2 + 2, 0x567f3c);
-  k.box(0, 0.012, 0, 6, 0.024, D * 2, 0x5b5e63, { solid: false, shadow: false });
-  const circle = new THREE.Mesh(new THREE.CylinderGeometry(6.8, 6.8, 0.024, 28), k.mat(0x5b5e63));
+  k.box(0, 0.012, -0.25, 7.2, 0.024, 33.5, 0x5b5e63, { solid: false, shadow: false });
+  const circle = new THREE.Mesh(new THREE.CylinderGeometry(7.2, 7.2, 0.024, 32), k.mat(0x5b5e63));
   circle.position.set(0, 0.012, 0);
   circle.receiveShadow = true;
   scene.add(circle);
-  for (const s of [-1, 1]) k.box(4.1 * s, 0.02, 0, 1.2, 0.024, D * 2, 0x8f8d86, { solid: false, shadow: false });
-  for (let z = -22; z <= 22; z += 3)
-    if (Math.abs(z) > 7.5) k.box(0, 0.03, z, 0.22, 0.02, 1.4, 0xd8c860, { solid: false, shadow: false });
+  for (const s of [-1, 1]) k.box(4.2 * s, 0.02, -0.25, 1.2, 0.024, 33.5, 0x8f8d86, { solid: false, shadow: false });
+  for (let z = -14; z <= 14; z += 3)
+    if (Math.abs(z) > 8.2) k.box(0, 0.03, z, 0.22, 0.02, 1.4, 0xd8c860, { solid: false, shadow: false });
 
   // ---- perimeter fence + invisible walls
   k.wall('z', -D, D, -W, 2.4, T, wood);
@@ -135,8 +141,8 @@ function buildNuketown(scene, colliders) {
   k.blocker(0, 5, -D, W * 2, 10, 0.5);
   k.blocker(0, 5, D, W * 2, 10, 0.5);
 
-  // Point-symmetric builder: s=1 lays out the south/yellow half,
-  // s=-1 mirrors it through the origin for the north/green half.
+  // Point-symmetric builder: s=1 lays out the west/teal half,
+  // s=-1 mirrors it through the origin for the east/yellow half.
   const xform = s => ({
     wall: (axis, a1, a2, at, h, thick, col, ops = [], y0 = 0) =>
       k.wall(axis, Math.min(s * a1, s * a2), Math.max(s * a1, s * a2), s * at, h, thick, col,
@@ -147,59 +153,58 @@ function buildNuketown(scene, colliders) {
     box: (cx, cy, cz, w, h, d, col, opts) => k.box(s * cx, cy, s * cz, w, h, d, col, opts),
   });
 
-  // ---- house: footprint x -15..-5, z -17..-9, front faces the center.
-  // Ground floor: living room + kitchen; staircase up to a second
-  // storey with windows overlooking the street and front yard.
+  // ---- house: footprint x -17..-8, z -14..-4, front wall at x=-8
+  // facing the street. Ground floor: living room + kitchen behind;
+  // staircase up to a second storey overlooking the street.
   function house(s, wallC, innerC, roofC) {
     const t = xform(s);
     const H1 = 2.8, H2 = 2.6, TOP = H1 + H2;
     // ground floor shell
-    t.wall('x', -15, -5, -9, H1, T, wallC, [
-      { a: -7.0, b: -5.8, top: 2.2 },                 // front door
-      { a: -13.5, b: -11.5, bottom: 1.15, top: 2.45 },// picture window
+    t.wall('z', -14, -4, -8, H1, T, wallC, [
+      { a: -7.5, b: -6.3, top: 2.2 },                  // front door
+      { a: -12.6, b: -10.4, bottom: 1.15, top: 2.45 }, // picture window
     ]);
-    t.wall('x', -15, -5, -17, H1, T, wallC, [
-      { a: -13.6, b: -12.4, top: 2.2 },               // back door
-      { a: -9.2, b: -7.6, bottom: 1.15, top: 2.3 },   // kitchen window
+    t.wall('z', -14, -4, -17, H1, T, wallC, [
+      { a: -11.7, b: -10.5, top: 2.2 },                // back door -> backyard spawn
+      { a: -7.0, b: -5.5, bottom: 1.15, top: 2.3 },    // kitchen window
     ]);
-    t.wall('z', -17, -9, -15, H1, T, wallC, [{ a: -14.2, b: -12.6, bottom: 1.15, top: 2.3 }]);
-    t.wall('z', -17, -9, -5, H1, T, wallC, [{ a: -11.4, b: -9.8, bottom: 1.15, top: 2.3 }]);
-    t.wall('x', -15, -9, -13, H1, T, innerC, [{ a: -11.6, b: -10.4, top: 2.2 }]); // kitchen wall
+    t.wall('x', -17, -8, -14, H1, T, wallC, [{ a: -14.6, b: -13.0, bottom: 1.15, top: 2.3 }]);
+    t.wall('x', -17, -8, -4, H1, T, wallC, [{ a: -16.0, b: -14.5, bottom: 1.15, top: 2.3 }]);
+    t.wall('z', -14, -7, -12.5, H1, T, innerC, [{ a: -10.4, b: -9.2, top: 2.2 }]); // kitchen wall
     // second storey
-    t.wall('x', -15, -5, -9, H2, T, wallC, [
-      { a: -13.2, b: -10.8, bottom: 0.9, top: 2.3 },
-      { a: -7.6, b: -6.0, bottom: 0.9, top: 2.3 },
+    t.wall('z', -14, -4, -8, H2, T, wallC, [
+      { a: -13.0, b: -11.0, bottom: 0.9, top: 2.3 },   // windows over the street
+      { a: -7.4, b: -5.8, bottom: 0.9, top: 2.3 },
     ], H1);
-    t.wall('x', -15, -5, -17, H2, T, wallC, [{ a: -12.4, b: -10.6, bottom: 0.9, top: 2.3 }], H1);
-    t.wall('z', -17, -9, -15, H2, T, wallC, [], H1);
-    t.wall('z', -17, -9, -5, H2, T, wallC, [{ a: -13.0, b: -11.0, bottom: 0.9, top: 2.3 }], H1);
-    t.wall('z', -17, -13.2, -10, H2, T, innerC, [{ a: -14.6, b: -13.4, top: 2.2 }], H1); // bedroom wall
+    t.wall('z', -14, -4, -17, H2, T, wallC, [{ a: -11.2, b: -9.4, bottom: 0.9, top: 2.3 }], H1);
+    t.wall('x', -17, -8, -14, H2, T, wallC, [{ a: -13.6, b: -11.8, bottom: 0.9, top: 2.3 }], H1);
+    t.wall('x', -17, -8, -4, H2, T, wallC, [], H1);
+    t.wall('x', -17, -12.7, -9, H2, T, innerC, [{ a: -14.6, b: -13.4, top: 2.2 }], H1); // bedroom wall
     // upstairs floor slab with a hole over the staircase
     const fC = 0x6e5637;
-    t.box(-10.85, H1 - 0.075, -13, 8.3, 0.15, 8, fC);
-    t.box(-5.85, H1 - 0.075, -10.25, 1.7, 0.15, 2.5, fC);
-    t.box(-5.85, H1 - 0.075, -15.5, 1.7, 0.15, 3.0, fC);
-    t.box(-6.78, H1 + 0.42, -12.75, 0.1, 0.85, 2.6, innerC); // rail at the hole
-    // staircase along the east wall
+    t.box(-12.5, H1 - 0.075, -9.7, 9, 0.15, 8.6, fC);
+    t.box(-14.85, H1 - 0.075, -4.7, 4.3, 0.15, 1.4, fC);
+    t.box(-10.35, H1 + 0.42, -5.45, 4.7, 0.85, 0.1, innerC); // rail at the hole
+    // staircase along the south wall
     for (let i = 0; i < 7; i++)
-      t.box(-5.72, 0.2 * (i + 1), -11.065 - 0.53 * i, 1.15, 0.4 * (i + 1), 0.53, 0x7a6248);
+      t.box(-8.865 - 0.53 * i, 0.2 * (i + 1), -4.75, 0.53, 0.4 * (i + 1), 1.15, 0x7a6248);
     // roof + chimney
-    t.box(-10, TOP + 0.14, -13, 10.8, 0.28, 8.8, roofC);
-    t.box(-10, TOP + 0.42, -13, 10.8, 0.28, 5.6, roofC);
-    t.box(-12.6, TOP + 0.95, -14.6, 0.8, 1.5, 0.8, 0x8a5a4a);
+    t.box(-12.5, TOP + 0.14, -9, 9.8, 0.28, 10.8, roofC);
+    t.box(-12.5, TOP + 0.42, -9, 6.2, 0.28, 10.8, roofC);
+    t.box(-14.8, TOP + 0.95, -12, 0.8, 1.5, 0.8, 0x8a5a4a);
     // porch
-    t.box(-6.4, 0.05, -8.35, 2.4, 0.1, 1.5, 0x9b9890, { solid: false });
-    t.box(-7.45, 1.2, -8.2, 0.16, 2.4, 0.16, 0xe6e4da);
-    t.box(-5.35, 1.2, -8.2, 0.16, 2.4, 0.16, 0xe6e4da);
-    t.box(-6.4, 2.48, -8.3, 2.7, 0.16, 1.8, roofC);
+    t.box(-7.1, 0.05, -6.9, 1.8, 0.1, 2.6, 0x9b9890, { solid: false });
+    t.box(-6.35, 1.2, -5.75, 0.16, 2.4, 0.16, 0xe6e4da);
+    t.box(-6.35, 1.2, -8.05, 0.16, 2.4, 0.16, 0xe6e4da);
+    t.box(-7.15, 2.48, -6.9, 2.1, 0.16, 3.0, roofC);
     // furniture (kept against walls so bots keep clean lanes)
-    t.box(-14.3, 0.4, -10.8, 1.1, 0.8, 2.2, 0x7a4a3a);       // sofa
-    t.box(-10.8, 0.5, -16.3, 2.6, 1.0, 1.0, 0xb0aca0);       // kitchen counter
-    t.box(-13.7, H1 + 0.3, -15.6, 1.7, 0.6, 2.3, 0x6a7a94);  // bed
-    t.box(-13.9, H1 + 0.35, -10.0, 1.4, 0.7, 1.0, 0x84765a); // dresser
+    t.box(-10.5, 0.4, -13.2, 2.2, 0.8, 1.1, 0x7a4a3a);       // sofa
+    t.box(-16.35, 0.5, -9.2, 1.0, 1.0, 2.6, 0xb0aca0);       // kitchen counter
+    t.box(-15.8, H1 + 0.3, -12.6, 2.2, 0.6, 1.7, 0x6a7a94);  // bed
+    t.box(-16.3, H1 + 0.35, -6.2, 1.1, 0.7, 1.4, 0x84765a);  // dresser
   }
-  house(1, 0xd7c05a, 0xcfc7b2, 0x55504a);   // yellow house, south-west
-  house(-1, 0x9cba86, 0xcfc7b2, 0x4e4a44);  // green house, north-east
+  house(1, 0x4fb3a5, 0xcfc7b2, 0x55504a);   // teal house, west (shifted north)
+  house(-1, 0xd8c052, 0xcfc7b2, 0x4e4a44);  // yellow house, east (shifted south)
 
   function pickup(t, cx, cz, col) {
     t.box(cx, 0.8, cz, 1.9, 0.9, 4.4, col);
@@ -207,55 +212,108 @@ function buildNuketown(scene, colliders) {
     t.box(cx, 1.35, cz + 1.1, 1.6, 0.25, 2.0, 0x2a2d31, { solid: false }); // bed cavity
   }
 
-  // ---- yards: picket-fenced front + flank yards, carport driveway,
-  // gated backyard fence (one set per half, mirrored)
+  // ---- yards: picket-fenced front yard with a gate, gated backyard
+  // spawn behind the house, carport driveway on the flank, hedges,
+  // camper in the far corner lawn (one set per half, mirrored)
   function yard(s) {
     const t = xform(s);
     const P = 0xe6e4da, FH = 1.25, PT = 0.16;
-    t.wall('z', -9, -4.2, -4, FH, PT, P, [{ a: -7.0, b: -5.8 }]);     // front yard, street side
-    t.wall('x', -15, -4, -4.2, FH, PT, P, [{ a: -14.2, b: -13.0 }]);  // front yard, center side
-    t.wall('x', -15, -9, 0, FH, PT, P, [{ a: -12.6, b: -11.4 }]);     // flank-yard divider
-    t.wall('z', -4.2, 1.8, -4, FH, PT, P, [{ a: -2.6, b: -1.4 }]);    // street fence, flank yard
-    t.wall('x', 3, 18, -17, 2.2, T, wood, [{ a: 9.4, b: 10.6 }]);     // backyard fence + gate
+    // front yard pickets (gate lines up with the front door)
+    t.wall('z', -14.5, -3.5, -5, FH, PT, P, [{ a: -7.5, b: -6.3 }]);
+    t.wall('x', -8, -5, -14.5, FH, PT, P);
+    t.wall('x', -8, -5, -3.5, FH, PT, P);
+    // backyard spawn fences: gates at both ends + fillers to the house
+    t.wall('x', -24, -17, -16.5, 2.2, T, wood, [{ a: -21.8, b: -20.6 }]);
+    t.wall('x', -24, -17, -2.5, 2.2, T, wood, [{ a: -21.8, b: -20.6 }]);
+    t.wall('z', -16.5, -14, -17, 2.2, T, wood);
+    t.wall('z', -4, -2.5, -17, 2.2, T, wood);
+    // walkway + driveway
+    t.box(-6.5, 0.02, -6.9, 3.4, 0.04, 1.1, 0x9b9890, { solid: false, shadow: false });
+    t.box(-4.2, 0.02, -6.9, 1.4, 0.04, 1.1, 0x9b9890, { solid: false, shadow: false });
+    t.box(-6.3, 0.015, 4.1, 5.4, 0.03, 3.8, 0x8f8d86, { solid: false, shadow: false });
     // mailbox by the walkway
-    t.box(-4.5, 0.5, -7.8, 0.12, 1.0, 0.12, 0x50524f);
-    t.box(-4.5, 1.12, -7.8, 0.34, 0.26, 0.55, 0x9a3a30);
-    // carport + pickup in the driveway yard
-    for (const [px, pz] of [[6.4, -10.4], [6.4, -15.6], [11.6, -10.4], [11.6, -15.6]])
+    t.box(-4.5, 0.5, -8.4, 0.12, 1.0, 0.12, 0x50524f);
+    t.box(-4.5, 1.12, -8.4, 0.34, 0.26, 0.55, 0x9a3a30);
+    // carport + pickup on the flank
+    for (const [px, pz] of [[-14, 1], [-14, 6], [-9, 1], [-9, 6]])
       t.box(px, 1.3, pz, 0.22, 2.6, 0.22, wood);
-    t.box(9, 2.7, -13, 5.6, 0.2, 5.6, 0x74707a);
-    pickup(t, 9, -12.8, s > 0 ? 0x6a7a94 : 0xa08040);
-    // swing set at the back of the spawn (visual only)
-    for (const dx of [-1.7, 1.7]) t.box(3.8 + dx, 1.1, -22.3, 0.14, 2.2, 0.14, 0x9a5a40, { solid: false });
-    t.box(3.8, 2.22, -22.3, 3.8, 0.14, 0.14, 0x9a5a40, { solid: false });
+    t.box(-11.5, 2.7, 3.5, 5.6, 0.2, 5.6, 0x74707a);
+    pickup(t, -11.5, 3.5, s > 0 ? 0x6a7a94 : 0xa08040);
+    // hedges: one by the driveway entrance, one row on the corner lawn
+    t.box(-6.1, 0.85, 0.2, 1.3, 1.7, 3.6, hedge);
+    t.box(-11, 0.85, 8.6, 5.0, 1.7, 1.2, hedge);
+    // camper in the far corner lawn
+    t.box(-18.5, 1.45, 11.5, 2.3, 2.5, 5.6, s > 0 ? 0xd8d5c8 : 0xcfd4c4);
+    t.box(-19.68, 1.9, 11.5, 0.06, 0.6, 4.2, 0x262a30, { solid: false });
+    // spawn cover crates in the backyard
+    t.box(-23, 0.6, -14.8, 1.2, 1.2, 1.2, 0x7a6a4a);
+    t.box(-22.6, 0.5, -13.5, 1.0, 1.0, 1.0, 0x6e5e40);
   }
   yard(1);
   yard(-1);
 
-  // ---- the school bus on the cul-de-sac circle
-  k.box(0, 1.7, 0, 2.5, 2.4, 8.4, 0xe8b820);                        // body
-  k.box(0, 3.02, 0, 2.55, 0.2, 8.5, 0xf0eee4);                      // roof
-  k.box(0, 1.05, 4.9, 2.3, 1.1, 1.5, 0xe8b820);                     // hood
-  k.box(0, 0.62, 5.75, 2.3, 0.5, 0.2, 0x3a3d42);                    // bumper
-  k.box(0, 2.32, 4.24, 2.2, 1.0, 0.1, 0x262a30, { solid: false });  // windshield
+  // ---- pink garage building capping the north end of the street
+  k.box(0, 2.1, -18.5, 16, 4.2, 3, 0xd8a8b8);
+  k.box(0, 4.32, -18.5, 16.8, 0.24, 3.6, 0x6a6660);
   for (const sx of [-1, 1]) {
-    k.box(sx * 1.28, 2.35, -0.4, 0.06, 0.85, 6.8, 0x262a30, { solid: false }); // window band
-    k.box(sx * 1.28, 0.95, -0.4, 0.06, 0.35, 6.8, 0x1c1e22, { solid: false }); // black stripe
+    k.box(sx * 4, 1.5, -16.96, 5.4, 3.0, 0.08, 0xb03030, { solid: false });  // red door
+    k.box(sx * 4, 3.1, -16.94, 5.6, 0.25, 0.06, 0xe8e6e0, { solid: false }); // white trim
+    k.box(sx * 4, 1.5, -16.93, 0.22, 3.0, 0.06, 0xe8e6e0, { solid: false });
+  }
+  k.box(0, 0.02, -15.8, 14, 0.04, 2.4, 0x8f8d86, { solid: false, shadow: false });
+
+  // ---- sandbag + barbed-wire barricade sealing the south end
+  k.box(0, 0.55, 16.4, 10.5, 1.1, 1.0, 0x8f8060);
+  k.box(-3.4, 0.35, 15.6, 2.2, 0.7, 0.8, 0x8f8060);
+  k.box(3.2, 0.35, 15.7, 1.8, 0.7, 0.8, 0x8f8060);
+  for (let px = -5; px <= 5; px += 2.5) k.box(px, 0.9, 16.9, 0.1, 1.8, 0.1, 0x4a4a48);
+  k.box(0, 1.35, 16.9, 11, 0.04, 0.04, 0x3a3a38, { solid: false });
+  k.box(0, 1.7, 16.9, 11, 0.04, 0.04, 0x3a3a38, { solid: false });
+  k.blocker(0, 3, 16.9, 13, 6, 1.6);
+  k.box(0.5, 1.3, 18.2, 2.4, 2.2, 3.2, 0x4a5240); // army truck behind the wire
+  // fence off the dead corners behind each street end
+  k.wall('x', -24, -6, 16.5, 2.4, T, wood);
+  k.wall('z', 16.5, 20, 6, 2.4, T, wood);
+  k.wall('x', 6, 24, -16.5, 2.4, T, wood);
+  k.wall('z', -20, -16.5, -6, 2.4, T, wood);
+  k.blocker(-15, 4, 16.5, 18, 8, 0.4);
+  k.blocker(15, 4, -16.5, 18, 8, 0.4);
+
+  // ---- school bus on the circle (nose toward the barricade)
+  const BX = -2.1, BZ = 1.9;
+  k.box(BX, 1.7, BZ, 2.5, 2.4, 8.4, 0xe8b820);                        // body
+  k.box(BX, 3.02, BZ, 2.55, 0.2, 8.5, 0xf0eee4);                      // roof
+  k.box(BX, 1.05, BZ + 4.9, 2.3, 1.1, 1.5, 0xe8b820);                 // hood
+  k.box(BX, 0.62, BZ + 5.75, 2.3, 0.5, 0.2, 0x3a3d42);                // bumper
+  k.box(BX, 2.32, BZ + 4.24, 2.2, 1.0, 0.1, 0x262a30, { solid: false }); // windshield
+  for (const sx of [-1, 1]) {
+    k.box(BX + sx * 1.28, 2.35, BZ - 0.4, 0.06, 0.85, 6.8, 0x262a30, { solid: false }); // window band
+    k.box(BX + sx * 1.28, 0.95, BZ - 0.4, 0.06, 0.35, 6.8, 0x1c1e22, { solid: false }); // black stripe
     for (const zw of [-2.9, 2.9]) {
       const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 12), k.mat(0x1c1e22));
       wheel.rotation.z = Math.PI / 2;
-      wheel.position.set(sx * 1.15, 0.5, zw);
+      wheel.position.set(BX + sx * 1.15, 0.5, BZ + zw);
       wheel.castShadow = true;
       scene.add(wheel);
     }
   }
 
-  // cars: two wagons flanking the bus (jump car -> bus roof),
-  // one parked on the road edge by each driveway
-  k.car(-3.2, 4.4, 0x7799aa);
-  k.car(3.2, -4.4, 0xa05540);
-  k.car(-1.6, -12, 0x9a4a3a);
-  k.car(1.6, 12, 0x4a6a8a);
+  // ---- semi truck beside the bus (cab toward the barricade)
+  k.box(2.35, 1.85, -1.4, 2.3, 3.0, 6.6, 0xd8d5cc);                  // trailer
+  k.box(2.35, 1.15, 3.2, 2.2, 1.9, 2.6, 0xb03028);                   // cab
+  k.box(2.35, 1.75, 4.52, 1.9, 0.7, 0.06, 0x262a30, { solid: false }); // windshield
+  for (const sx of [-1, 1])
+    for (const zw of [-3.8, -0.4, 3.9]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.3, 12), k.mat(0x1c1e22));
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(2.35 + sx * 1.05, 0.45, zw);
+      wheel.castShadow = true;
+      scene.add(wheel);
+    }
+
+  // cars: burnt wreck south of the circle, parked car by the garage
+  k.car(0.7, 9.8, 0x33343a);
+  k.car(-2.2, -12.6, 0xd8d5c8);
 
   // ---- mannequins in the yards (visual only)
   function mannequin(x, z) {
@@ -271,36 +329,55 @@ function buildNuketown(scene, colliders) {
     g.position.set(x, 0, z);
     scene.add(g);
   }
-  for (const [mx, mz] of [[-11.6, -6.2], [-9.0, -5.3], [-13.0, 2.4], [-9.8, -2.6], [-5.9, 3.4]]) {
+  for (const [mx, mz] of [[-6.4, -11.8], [-6.2, -5.2], [-4.5, 7.8], [-14.5, 11.5], [-19.8, -18.6]]) {
     mannequin(mx, mz);
     mannequin(-mx, -mz);
   }
 
+  // ---- radio tower on the horizon (visual only, out of bounds NW)
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
+    k.box(-17 + dx * 1.0, 6.7, -26 + dz * 1.0, 0.18, 13.4, 0.18, 0x9096a0, { solid: false });
+  for (const ty of [2.5, 6.5, 10.5, 13.3]) {
+    k.box(-17, ty, -26, 2.2, 0.14, 0.14, 0x9096a0, { solid: false });
+    k.box(-17, ty, -26, 0.14, 0.14, 2.2, 0x9096a0, { solid: false });
+  }
+  k.box(-17, 14.7, -26, 0.12, 2.6, 0.12, 0x9096a0, { solid: false });
+
   // scattered cover
-  k.crate(-17.2, -22.9); k.crate(-15.9, -23.3, 1.0); k.barrel(4.2, -20.8);
-  k.crate(17.2, 22.9); k.crate(15.9, 23.3, 1.0); k.barrel(-4.2, 20.8);
-  k.barrel(-8.5, 5.6); k.barrel(8.5, -5.6);
+  k.barrel(-13.5, -18.6); k.barrel(13.5, 18.6);
+  k.barrel(-4.9, 8.6); k.barrel(4.9, -8.6);
+  k.crate(9.5, -13.5); k.crate(-9.5, 13.5);
 
   // ---- waypoints: coarse grid + mirrored hand-placed lane/door seeds
   const grid = [];
-  for (const x of [-16, -11, -6.5, 0, 6.5, 11, 16])
-    for (const z of [-21, -15, -11, -6.5, -2, 2, 6.5, 11, 15, 21])
+  for (const x of [-22, -18.5, -14.5, -10.5, -6.3, 0, 6.3, 10.5, 14.5, 18.5, 22])
+    for (const z of [-18.3, -14.8, -11, -7, -2.5, 2.5, 7, 11, 14.8, 18.3]) {
+      if (z > 16 && x < -6) continue;  // dead corner behind the barricade
+      if (z < -16 && x > 6) continue;  // dead corner behind the garage
       grid.push([x, z]);
+    }
   const half = [
-    [-6.4, -7.7], [-6.5, -10.2],   // front door in/out
-    [-9, -11], [-12.5, -10.8],     // living room
-    [-11, -12.2], [-11, -13.8],    // kitchen doorway
-    [-7.6, -13], [-8, -15.3],      // hall by the stairs / back room
-    [-12.5, -15],                  // kitchen
-    [-13, -16.1], [-13, -18.2],    // back door in/out
-    [-5, -6.4], [-2.9, -6.4],      // front walkway gap
-    [-13.6, -5.1], [-13.6, -3.2],  // front-yard west gate
-    [-12, -1.3], [-12, 1.3],       // flank-yard fence gap
-    [-4.9, -2], [-2.8, -2],        // street fence gap
-    [-2.6, 0],                     // squeeze west of the bus
-    [-4, -10.5], [-4, -14.5],      // driveway beside the house
-    [10, -15.7], [10, -18.4],      // backyard gate
-    [13, -13.5],                   // carport yard
+    [-4.2, -6.9], [-6.0, -6.9],           // front gate out/in
+    [-6.3, -10.5], [-6.3, -4.5],          // front yard corners
+    [-9.3, -6.9],                          // inside the front door
+    [-10.2, -9.5], [-10.2, -12.8],         // living room
+    [-11.6, -9.8], [-13.6, -9.8],          // kitchen doorway
+    [-14.8, -7.2], [-14.6, -12.3],         // kitchen
+    [-15.9, -11.1], [-18.3, -11.1],        // back door in/out
+    [-20.5, -8.5], [-19.5, -13.5], [-19.5, -4.5], // backyard spawn
+    [-21.2, -15.1], [-21.2, -17.9],        // backyard north gate
+    [-21.2, -3.9], [-21.2, -1.1],          // backyard south gate
+    [-12.5, -15.3], [-8.8, -15.3],         // corridor behind the house
+    [-6.3, -15.6], [-2.5, -15.5], [1.8, -15.2], // garage forecourt
+    [-15.6, 3.5], [-7.7, 3.5],             // carport sides
+    [-11.5, -0.6], [-11.5, 7.4],           // carport front/back
+    [-6.1, -2.6], [-8.6, 0.3],             // hedge/picket gaps
+    [-4.1, 2.2],                            // squeeze west of the bus
+    [0.15, 0.5], [0.15, 4.8], [0.15, -4.2], // lane between bus and truck
+    [-1.6, 9.8], [-2.5, 12.5],             // street south lane
+    [-1.5, 15.2],                           // barricade front
+    [-11, 10.6], [-6.9, 12],               // corner lawn lanes
+    [-18.5, 15.2],                          // behind the camper
   ];
   const extra = [];
   for (const [x, z] of half) extra.push([x, z], [-x, -z]);
@@ -311,8 +388,8 @@ function buildNuketown(scene, colliders) {
     sun: { color: 0xfff2d8, intensity: 1.0, pos: [30, 45, 20] },
     hemi: { sky: 0xbcd8ec, ground: 0x4e6a3a, intensity: 0.75 },
     spawns: {
-      tf: [[-13, -20], [-7, -21], [-1, -20.5], [7, -21], [13, -20], [-16, -22]],
-      sp: [[13, 20], [7, 21], [1, 20.5], [-7, 21], [-13, 20], [16, 22]],
+      tf: [[-20.5, -8], [-19, -12.5], [-21.5, -13.5], [-19, -4.5], [-22, -6], [-21, -10.5]],
+      sp: [[20.5, 8], [19, 12.5], [21.5, 13.5], [19, 4.5], [22, 6], [21, 10.5]],
     },
     waypointSeeds: grid.concat(extra),
   };
