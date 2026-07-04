@@ -2,14 +2,18 @@
 
 A browser FPS inspired by Call of Duty: Modern Warfare 2. No install, no build step.
 
+### ▶ [Play it here](https://ethanwellssr.github.io/task-force/)
+
 ## How to play
 
-**Option 1:** Double-click `index.html` — it runs straight from the file.
+**Option 1:** Play in your browser at the link above.
 
-**Option 2 (recommended for pointer lock):** Serve it locally:
+**Option 2:** Double-click `index.html` — it runs straight from the file.
+
+**Option 3:** Serve it locally:
 
 ```
-cd cod-clone
+cd task-force
 python3 -m http.server 8642
 ```
 
