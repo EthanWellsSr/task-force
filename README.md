@@ -1,6 +1,6 @@
-# TASK FORCE — MW2-style Team Deathmatch vs Bots
+# TASK FORCE — Browser Team Deathmatch vs Bots
 
-A browser FPS inspired by Call of Duty: Modern Warfare 2. No install, no build step.
+A fast, close-quarters browser FPS with bots. No install, no build step.
 
 ### ▶ [Play it here](https://ethanwellssr.github.io/task-force/)
 
@@ -41,10 +41,11 @@ Click a map (Nuketown or Rust) to start a Team Deathmatch, pick a class, and hit
 
 ## Features
 
-- **Team Deathmatch** — TF141 vs Spetsnaz, first to the score limit (default 75) or 10 minutes
-- **Create-a-Class** — 5 editable slots (saved in your browser), 17 MW2-style weapons
-  (M4A1, SCAR-H, ACR, FAMAS, FAL, TAR-21, UMP45, MP5K, Vector, P90, RPD,
-  Intervention, Barrett .50cal, USP .45, Desert Eagle, Glock 18, SPAS-12)
+- **Team Deathmatch** — Task Force vs Spetsnaz, first to the score limit (default 75) or 10 minutes
+- **Create-a-Class** — 5 editable slots (saved in your browser), 17 weapons
+  (M4A1, FN SCAR-H, Remington ACR, FAMAS, FN FAL, Tavor TAR-21, HK UMP45, HK MP5K,
+  KRISS Vector, FN P90, RPD, CheyTac M200, Barrett M82, HK USP45, Desert Eagle,
+  Glock 18, Franchi SPAS-12)
 - **Perks** — 3 tiers: Marathon / Sleight of Hand / Scavenger, Stopping Power /
   Lightweight / Cold-Blooded, Steady Aim / Ninja / Commando
 - **Bots** — 4 difficulty levels (Options menu), they patrol, hunt, strafe, and use the killfeed like you do
@@ -56,7 +57,6 @@ Built with Three.js (bundled locally, MIT licensed). Everything else is hand-rol
 
 ---
 
-*This is a fan-made, non-commercial educational project. It is not affiliated with or endorsed by
-Activision. "Call of Duty", "Modern Warfare", "Nuketown", and "Rust" are trademarks of
-Activision Publishing, Inc.*
+*This is a non-commercial educational project. It is not affiliated with or endorsed by
+Activision. "Nuketown" and "Rust" are trademarks of Activision Publishing, Inc.*
 

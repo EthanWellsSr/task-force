@@ -96,8 +96,8 @@ const keys = {};
 let firing = false, triggerEdge = false;
 
 const BOT_NAMES = {
-  tf: ['SOAP', 'GHOST', 'ROACH', 'PRICE', 'OZONE', 'SCARECROW', 'ARCHER', 'TOAD', 'ROYCE', 'MEAT', 'WORM'],
-  sp: ['MAKAROV', 'ANATOLY', 'VIKTOR', 'KIRIL', 'LEV', 'YURI', 'SASHA', 'DMITRI', 'BORIS', 'ANDREI', 'PAVEL'],
+  tf: ['HAVOC', 'FLINT', 'JESTER', 'MUSTANG', 'TALON', 'RATTLER', 'ONYX', 'DRIFTER', 'SABLE', 'VANDAL', 'CUTTER'],
+  sp: ['GRIGORI', 'ANATOLY', 'VIKTOR', 'KIRIL', 'LEV', 'OLEG', 'SASHA', 'DMITRI', 'BORIS', 'ANDREI', 'PAVEL'],
 };
 
 // ============================================================

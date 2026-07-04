@@ -22,19 +22,19 @@ const UI = {
   // ---------- persistence ----------
   loadSettings() {
     try {
-      const s = JSON.parse(localStorage.getItem('codc_settings'));
+      const s = JSON.parse(localStorage.getItem('tf_settings'));
       if (s) Object.assign(this.settings, s);
     } catch (e) {}
   },
-  saveSettings() { localStorage.setItem('codc_settings', JSON.stringify(this.settings)); },
+  saveSettings() { localStorage.setItem('tf_settings', JSON.stringify(this.settings)); },
   loadClasses() {
     try {
-      const c = JSON.parse(localStorage.getItem('codc_classes'));
+      const c = JSON.parse(localStorage.getItem('tf_classes'));
       if (Array.isArray(c) && c.length === 5) { this.classes = c; return; }
     } catch (e) {}
     this.classes = DEFAULT_CLASSES.map(c => JSON.parse(JSON.stringify(c)));
   },
-  saveClasses() { localStorage.setItem('codc_classes', JSON.stringify(this.classes)); },
+  saveClasses() { localStorage.setItem('tf_classes', JSON.stringify(this.classes)); },
 
   // ---------- screens ----------
   show(id) {
@@ -285,11 +285,11 @@ const UI = {
     const res = this.$('endResult');
     res.textContent = win === null ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT';
     res.className = win === null ? 'draw' : win ? 'win' : 'lose';
-    this.$('endScore').textContent = `TASK FORCE 141  ${tf}  —  ${sp}  SPETSNAZ`;
+    this.$('endScore').textContent = `TASK FORCE  ${tf}  —  ${sp}  SPETSNAZ`;
     // reuse scoreboard tables inside end screen
     const boards = this.$('endBoards');
     boards.innerHTML = `
-      <div class="sb-team"><div class="sb-head tf">TASK FORCE 141</div>
+      <div class="sb-team"><div class="sb-head tf">TASK FORCE</div>
         <table><thead><tr><th>NAME</th><th>KILLS</th><th>DEATHS</th></tr></thead><tbody id="endTF"></tbody></table></div>
       <div class="sb-team"><div class="sb-head sp">SPETSNAZ</div>
         <table><thead><tr><th>NAME</th><th>KILLS</th><th>DEATHS</th></tr></thead><tbody id="endSP"></tbody></table></div>`;
