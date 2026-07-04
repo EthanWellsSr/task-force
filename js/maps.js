@@ -101,35 +101,53 @@ class MapKit {
 
 // ============================================================
 // NUKETOWN — faithful cul-de-sac layout: street runs north-south
-// and dead-ends both ways (pink garage building at the north end,
+// and dead-ends both ways (red-door facility at the north end,
 // sandbag/barbed-wire barricade at the south end). Two two-storey
-// houses face each other across the cul-de-sac circle — teal house
-// on the west (shifted north), yellow house on the east (shifted
-// south) — with picket-fenced front yards, carport driveways, and
-// gated backyard spawns behind each house. School bus + semi truck
-// sit on the circle. Point-symmetric about the origin except the
-// two street ends.
+// houses with white trim face each other across the concrete-ringed
+// cul-de-sac circle — teal house on the west (shifted north), yellow
+// house on the east (shifted south) — with picket-fenced front yards,
+// carport driveways, and gated backyard spawns behind each house.
+// Angled school bus + white moving truck sit on the circle, a burnt
+// wreck blocks the south entrance, and power poles / lamps / sheds /
+// mannequins dress the yards. Point-symmetric about the origin except
+// the two street ends and per-house dressing (teal patio + stepping
+// stones, yellow deck + pergola).
 // ============================================================
 function buildNuketown(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 24, D = 20; // half extents: x = east-west, z = along the street
   const T = 0.3;
-  const wood = 0x8a6d4a, hedge = 0x4a6a3a;
+  // named palette (matched to the reference shots)
+  const DESERT = 0xc9a97c, LAWN = 0x567f3c, ASPHALT = 0x5b5e63,
+        SIDEWALK = 0x8f8d86, CONCRETE = 0x9b9890, CURB = 0xb0aca2,
+        TEAL = 0x4fb3a5, YELLOW = 0xd8c052, PINK = 0xd8a8b8, RED = 0xb03030,
+        TRIM = 0xf0eee6, GLASS = 0x262a30, POLE = 0x6a5138,
+        wood = 0x8a6d4a, hedge = 0x4a6a3a;
+  const ns = { solid: false }, nsf = { solid: false, shadow: false };
 
   scene.background = new THREE.Color(0x9fc4e0);
   scene.fog = new THREE.Fog(0x9fc4e0, 70, 160);
 
-  // ---- ground: desert beyond, lawn inside, street down the middle
-  k.box(0, -0.55, 0, 160, 1, 160, 0xc9a97c, { solid: false, shadow: false });
-  k.box(0, -0.5, 0, W * 2 + 2, 1, D * 2 + 2, 0x567f3c);
-  k.box(0, 0.012, -0.25, 7.2, 0.024, 33.5, 0x5b5e63, { solid: false, shadow: false });
-  const circle = new THREE.Mesh(new THREE.CylinderGeometry(7.2, 7.2, 0.024, 32), k.mat(0x5b5e63));
-  circle.position.set(0, 0.012, 0);
-  circle.receiveShadow = true;
-  scene.add(circle);
-  for (const s of [-1, 1]) k.box(4.2 * s, 0.02, -0.25, 1.2, 0.024, 33.5, 0x8f8d86, { solid: false, shadow: false });
-  for (let z = -14; z <= 14; z += 3)
-    if (Math.abs(z) > 8.2) k.box(0, 0.03, z, 0.22, 0.02, 1.4, 0xd8c860, { solid: false, shadow: false });
+  // ---- ground/road: desert beyond, lawn inside, cul-de-sac circle with
+  // a concrete apron ring, curbed street south to the barricade
+  k.box(0, -0.55, 0, 160, 1, 160, DESERT, nsf);          // desert plain
+  k.box(0, -0.5, 0, W * 2 + 2, 1, D * 2 + 2, LAWN);      // lawn slab = map floor
+  function disc(x, y, z, r, h, color) {                  // flat cylinder, visual only
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 40), k.mat(color));
+    m.position.set(x, y, z);
+    m.receiveShadow = true;
+    scene.add(m);
+  }
+  disc(0, 0.008, 0, 8.7, 0.016, SIDEWALK);               // apron ring around the circle
+  disc(0, 0.022, 0, 7.2, 0.026, ASPHALT);                // cul-de-sac circle
+  k.box(0, 0.02, 11.5, 7.2, 0.024, 10.6, ASPHALT, nsf);  // street: circle -> south barricade
+  k.box(0, 0.014, -11.9, 6.5, 0.028, 10.0, CONCRETE, nsf); // driveway: circle -> facility
+  for (const s of [-1, 1]) {
+    k.box(3.72 * s, 0.034, 11.6, 0.26, 0.052, 10.2, CURB, nsf);   // curb strips
+    k.box(4.55 * s, 0.02, 11.7, 1.4, 0.03, 10.4, SIDEWALK, nsf);  // sidewalks
+  }
+  for (const z of [9.7, 12.4, 15.1])
+    k.box(0, 0.045, z, 0.22, 0.02, 1.4, 0xd8c860, nsf);  // lane dashes (south street only)
 
   // ---- perimeter fence + invisible walls
   k.wall('z', -D, D, -W, 2.4, T, wood);
@@ -188,10 +206,22 @@ function buildNuketown(scene, colliders) {
     // staircase along the south wall
     for (let i = 0; i < 7; i++)
       t.box(-8.865 - 0.53 * i, 0.2 * (i + 1), -4.75, 0.53, 0.4 * (i + 1), 1.15, 0x7a6248);
-    // roof + chimney
-    t.box(-12.5, TOP + 0.14, -9, 9.8, 0.28, 10.8, roofC);
-    t.box(-12.5, TOP + 0.42, -9, 6.2, 0.28, 10.8, roofC);
+    // roof + chimney (wide eaves so the roofs dominate from above)
+    t.box(-12.5, TOP + 0.14, -9, 10.6, 0.28, 11.6, roofC);
+    t.box(-12.5, TOP + 0.42, -9, 7.0, 0.28, 11.6, roofC);
     t.box(-14.8, TOP + 0.95, -12, 0.8, 1.5, 0.8, 0x8a5a4a);
+    // white trim: floor-line band, corner boards, fascia, window sills
+    t.box(-12.5, H1, -3.82, 9.4, 0.36, 0.12, TRIM, ns);
+    t.box(-12.5, H1, -14.18, 9.4, 0.36, 0.12, TRIM, ns);
+    t.box(-7.82, H1, -9, 0.12, 0.36, 10.4, TRIM, ns);
+    t.box(-17.18, H1, -9, 0.12, 0.36, 10.4, TRIM, ns);
+    for (const [cx, cz] of [[-8, -4], [-8, -14], [-17, -4], [-17, -14]])
+      t.box(cx, TOP / 2, cz, 0.44, TOP, 0.44, TRIM, ns);
+    t.box(-12.5, TOP - 0.1, -9, 10.8, 0.2, 11.8, TRIM, ns);      // fascia under roof
+    t.box(-7.8, 1.08, -11.5, 0.12, 0.14, 2.5, TRIM, ns);         // picture window sill
+    t.box(-7.8, 2.52, -11.5, 0.12, 0.14, 2.5, TRIM, ns);         // ...and header
+    t.box(-7.8, H1 + 0.83, -12.0, 0.12, 0.14, 2.4, TRIM, ns);    // upstairs sills
+    t.box(-7.8, H1 + 0.83, -6.6, 0.12, 0.14, 2.0, TRIM, ns);
     // porch
     t.box(-7.1, 0.05, -6.9, 1.8, 0.1, 2.6, 0x9b9890, { solid: false });
     t.box(-6.35, 1.2, -5.75, 0.16, 2.4, 0.16, 0xe6e4da);
@@ -203,8 +233,8 @@ function buildNuketown(scene, colliders) {
     t.box(-15.8, H1 + 0.3, -12.6, 2.2, 0.6, 1.7, 0x6a7a94);  // bed
     t.box(-16.3, H1 + 0.35, -6.2, 1.1, 0.7, 1.4, 0x84765a);  // dresser
   }
-  house(1, 0x4fb3a5, 0xcfc7b2, 0x55504a);   // teal house, west (shifted north)
-  house(-1, 0xd8c052, 0xcfc7b2, 0x4e4a44);  // yellow house, east (shifted south)
+  house(1, TEAL, 0xcfc7b2, 0x55504a);   // teal house, west (shifted north)
+  house(-1, YELLOW, 0xcfc7b2, 0x4e4a44); // yellow house, east (shifted south)
 
   function pickup(t, cx, cz, col) {
     t.box(cx, 0.8, cz, 1.9, 0.9, 4.4, col);
@@ -238,7 +268,11 @@ function buildNuketown(scene, colliders) {
     for (const [px, pz] of [[-14, 1], [-14, 6], [-9, 1], [-9, 6]])
       t.box(px, 1.3, pz, 0.22, 2.6, 0.22, wood);
     t.box(-11.5, 2.7, 3.5, 5.6, 0.2, 5.6, 0x74707a);
-    pickup(t, -11.5, 3.5, s > 0 ? 0x6a7a94 : 0xa08040);
+    pickup(t, -11.5, 3.5, s > 0 ? 0xd8d5c8 : 0xa08040); // pale car by the teal carport
+    // backyard garden shed by the rear gate
+    t.box(-22.9, 1.05, -3.9, 1.8, 2.1, 1.7, 0xdad7cc);
+    t.box(-22.9, 2.2, -3.9, 2.1, 0.2, 2.0, wood, ns);
+    t.box(-21.98, 0.95, -3.9, 0.06, 1.7, 0.7, 0x8a8478, ns);
     // hedges: one by the driveway entrance, one row on the corner lawn
     t.box(-6.1, 0.85, 0.2, 1.3, 1.7, 3.6, hedge);
     t.box(-11, 0.85, 8.6, 5.0, 1.7, 1.2, hedge);
@@ -252,15 +286,41 @@ function buildNuketown(scene, colliders) {
   yard(1);
   yard(-1);
 
-  // ---- pink garage building capping the north end of the street
-  k.box(0, 2.1, -18.5, 16, 4.2, 3, 0xd8a8b8);
-  k.box(0, 4.32, -18.5, 16.8, 0.24, 3.6, 0x6a6660);
+  // ---- teal-side dressing: concrete front patio, stepping-stone arc
+  // toward the driveway, slab path across the southwest lawn
+  k.box(-6.55, 0.012, -9.5, 2.6, 0.024, 9.4, CONCRETE, nsf);
+  for (const [sx, sz] of [[-4.6, -3.0], [-5.4, -2.4], [-6.3, -2.1], [-7.3, -2.0],
+                          [-8.3, -2.1], [-9.2, -2.4], [-10.0, -2.9]])
+    k.box(sx, 0.03, sz, 0.75, 0.05, 0.75, CONCRETE, nsf);
+  for (let i = 0; i < 4; i++)
+    k.box(-13.8 - 1.55 * i, 0.03, 9.8, 1.15, 0.05, 0.9, CONCRETE, nsf);
+
+  // ---- yellow-side dressing: wooden front deck with pergola, hedges
+  k.box(6.9, 0.09, 10.7, 2.1, 0.18, 3.6, 0x9a7a55, ns);        // deck boards
+  for (const [px, pz] of [[6.05, 9.2], [6.05, 12.2], [7.68, 9.2], [7.68, 12.2]])
+    k.box(px, 1.25, pz, 0.18, 2.5, 0.18, TRIM);                // pergola posts
+  k.box(6.87, 2.56, 10.7, 2.05, 0.12, 3.7, 0x9a7a55, ns);      // pergola cap
+  for (let i = 0; i < 5; i++)
+    k.box(6.87, 2.7, 9.3 + 0.7 * i, 2.3, 0.08, 0.16, wood, ns); // slats
+  k.box(5.9, 0.75, 13.6, 1.3, 1.5, 1.3, hedge);                // front hedges
+  k.box(10.8, 0.8, 13.6, 1.3, 1.6, 1.3, hedge);
+
+  // ---- far red/white facility capping the north end of the street:
+  // pink hall, two red roll-up doors, wide grey roof with a carport
+  // overhang on white posts, rooftop vent, concrete forecourt
+  k.box(0, 2.1, -18.5, 18, 4.2, 3, PINK);
+  k.box(0, 4.32, -18.05, 20.6, 0.24, 5.3, 0x6a6660);      // main roof + front overhang
+  k.box(0, 4.62, -18.4, 13.5, 0.36, 3.2, 0x6a6660);       // upper roof step
+  k.box(2.5, 4.95, -18.6, 1.7, 0.9, 1.3, 0x5c5852, ns);   // rooftop vent box
   for (const sx of [-1, 1]) {
-    k.box(sx * 4, 1.5, -16.96, 5.4, 3.0, 0.08, 0xb03030, { solid: false });  // red door
-    k.box(sx * 4, 3.1, -16.94, 5.6, 0.25, 0.06, 0xe8e6e0, { solid: false }); // white trim
-    k.box(sx * 4, 1.5, -16.93, 0.22, 3.0, 0.06, 0xe8e6e0, { solid: false });
+    k.box(sx * 4.4, 1.5, -16.96, 5.6, 3.0, 0.08, RED, ns);   // red roll-up door
+    k.box(sx * 4.4, 3.12, -16.94, 5.8, 0.25, 0.06, TRIM, ns);
+    k.box(sx * 8.85, 2.1, -16.9, 0.3, 4.2, 0.3, TRIM, ns);   // corner boards
+    k.box(sx * 8.2, 2.05, -15.6, 0.24, 4.1, 0.24, TRIM);     // carport posts
   }
-  k.box(0, 0.02, -15.8, 14, 0.04, 2.4, 0x8f8d86, { solid: false, shadow: false });
+  k.box(0, 1.5, -16.95, 0.9, 3.0, 0.1, TRIM, ns);         // pier between the doors
+  k.box(0, 4.2, -16.9, 18.2, 0.28, 0.14, TRIM, ns);       // fascia line
+  k.box(0, 0.02, -15.6, 15, 0.04, 2.8, CONCRETE, nsf);    // forecourt slab
 
   // ---- sandbag + barbed-wire barricade sealing the south end
   k.box(0, 0.55, 16.4, 10.5, 1.1, 1.0, 0x8f8060);
@@ -279,29 +339,49 @@ function buildNuketown(scene, colliders) {
   k.blocker(-15, 4, 16.5, 18, 8, 0.4);
   k.blocker(15, 4, -16.5, 18, 8, 0.4);
 
-  // ---- school bus on the circle (nose toward the barricade)
-  const BX = -2.1, BZ = 1.9;
-  k.box(BX, 1.7, BZ, 2.5, 2.4, 8.4, 0xe8b820);                        // body
-  k.box(BX, 3.02, BZ, 2.55, 0.2, 8.5, 0xf0eee4);                      // roof
-  k.box(BX, 1.05, BZ + 4.9, 2.3, 1.1, 1.5, 0xe8b820);                 // hood
-  k.box(BX, 0.62, BZ + 5.75, 2.3, 0.5, 0.2, 0x3a3d42);                // bumper
-  k.box(BX, 2.32, BZ + 4.24, 2.2, 1.0, 0.1, 0x262a30, { solid: false }); // windshield
+  // ---- school bus on the circle, angled with its nose toward the
+  // southwest (as in the reference). Visuals live in a rotated group;
+  // collision is four axis-aligned blockers tracking the hull.
+  const busG = new THREE.Group();
+  function bpart(x, y, z, w, h, d, color) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), k.mat(color));
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    busG.add(m);
+  }
+  bpart(0, 1.7, 0, 2.5, 2.4, 8.4, 0xe8b820);        // body
+  bpart(0, 3.02, 0, 2.55, 0.2, 8.5, 0xf0eee4);      // white roof
+  bpart(0, 1.05, 4.9, 2.3, 1.1, 1.5, 0xe8b820);     // hood
+  bpart(0, 0.62, 5.75, 2.3, 0.5, 0.2, 0x3a3d42);    // bumper
+  bpart(0, 2.32, 4.24, 2.2, 1.0, 0.1, GLASS);       // windshield
   for (const sx of [-1, 1]) {
-    k.box(BX + sx * 1.28, 2.35, BZ - 0.4, 0.06, 0.85, 6.8, 0x262a30, { solid: false }); // window band
-    k.box(BX + sx * 1.28, 0.95, BZ - 0.4, 0.06, 0.35, 6.8, 0x1c1e22, { solid: false }); // black stripe
+    bpart(sx * 1.28, 2.35, -0.4, 0.06, 0.85, 6.8, GLASS);    // window band
+    bpart(sx * 1.28, 0.95, -0.4, 0.06, 0.35, 6.8, 0x1c1e22); // black stripe
     for (const zw of [-2.9, 2.9]) {
       const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 12), k.mat(0x1c1e22));
       wheel.rotation.z = Math.PI / 2;
-      wheel.position.set(BX + sx * 1.15, 0.5, BZ + zw);
+      wheel.position.set(sx * 1.15, 0.5, zw);
       wheel.castShadow = true;
-      scene.add(wheel);
+      busG.add(wheel);
     }
   }
+  const BUSX = -2.8, BUSZ = 1.8, BUSA = -0.25; // centre + yaw (nose swings west)
+  busG.position.set(BUSX, 0, BUSZ);
+  busG.rotation.y = BUSA;
+  scene.add(busG);
+  const busSin = Math.sin(BUSA), busCos = Math.cos(BUSA);
+  for (const off of [-2.8, 0, 2.8])
+    k.blocker(BUSX + off * busSin, 1.55, BUSZ + off * busCos, 3.15, 3.1, 3.42);
+  k.blocker(BUSX + 5.0 * busSin, 0.85, BUSZ + 5.0 * busCos, 2.65, 1.7, 2.25); // hood/bumper
 
-  // ---- semi truck beside the bus (cab toward the barricade)
+  // ---- white moving truck beside the bus (red cab toward the barricade)
   k.box(2.35, 1.85, -1.4, 2.3, 3.0, 6.6, 0xd8d5cc);                  // trailer
+  k.box(2.35, 3.42, -1.4, 2.4, 0.14, 6.7, 0xe8e6df, ns);             // roof cap
+  k.box(2.35, 1.85, -4.72, 2.2, 2.8, 0.08, 0xb9b6ad, ns);            // rear doors
   k.box(2.35, 1.15, 3.2, 2.2, 1.9, 2.6, 0xb03028);                   // cab
-  k.box(2.35, 1.75, 4.52, 1.9, 0.7, 0.06, 0x262a30, { solid: false }); // windshield
+  k.box(2.35, 2.2, 3.3, 2.0, 0.22, 2.2, 0x8a231e, ns);               // cab roof
+  k.box(2.35, 1.75, 4.52, 1.9, 0.7, 0.06, GLASS, { solid: false });  // windshield
   for (const sx of [-1, 1])
     for (const zw of [-3.8, -0.4, 3.9]) {
       const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.3, 12), k.mat(0x1c1e22));
@@ -311,12 +391,39 @@ function buildNuketown(scene, colliders) {
       scene.add(wheel);
     }
 
-  // cars: burnt wreck south of the circle, parked car by the garage
-  k.car(0.7, 9.8, 0x33343a);
+  // ---- cars: burnt wreck at the south road entrance, white car parked
+  // by the facility driveway
+  k.box(0.5, 0.5, 10.6, 1.8, 1.0, 4.0, 0x2e2f33);              // wreck shell
+  k.box(0.5, 1.25, 10.8, 1.7, 0.55, 1.9, 0x232529);            // caved-in cabin
+  k.box(0.5, 1.02, 9.0, 1.6, 0.3, 0.8, 0x1a1c1f, ns);          // crumpled hood
   k.car(-2.2, -12.6, 0xd8d5c8);
 
+  // ---- street furniture: power poles and lamp posts along the road
+  function powerPole(x, z) {
+    k.box(x, 2.6, z, 0.24, 5.2, 0.24, POLE);
+    k.box(x, 4.75, z, 0.16, 0.16, 2.4, POLE, ns);              // crossarm
+    k.box(x, 4.35, z, 0.14, 0.5, 0.14, 0x3a3d42, ns);          // transformer can
+  }
+  powerPole(-5.4, 7.4);
+  powerPole(5.4, -7.4);
+  powerPole(-5.5, -11.5);
+  powerPole(5.5, 11.5);
+  function lamp(x, z, armDir) {
+    k.box(x, 1.9, z, 0.18, 3.8, 0.18, 0x8a8d90);
+    k.box(x + armDir * 0.55, 3.75, z, 1.1, 0.1, 0.12, 0x8a8d90, ns);
+    k.box(x + armDir * 1.05, 3.62, z, 0.45, 0.16, 0.3, 0xf0e8c0, ns);
+  }
+  lamp(4.6, 10.5, -1);
+  lamp(-4.6, -10.5, 1);
+
+  // ---- small utility sheds in the far lawn corners
+  for (const s of [-1, 1]) {
+    k.box(s * -21.9, 1.15, s * 14.0, 2.6, 2.3, 2.2, s > 0 ? 0xdad7cc : 0x9ab08a);
+    k.box(s * -21.9, 2.42, s * 14.0, 2.9, 0.24, 2.5, 0x6a6660, ns);
+  }
+
   // ---- mannequins in the yards (visual only)
-  function mannequin(x, z) {
+  function mannequin(x, z, y = 0) {
     const m = k.mat(0xe8e0d2);
     const g = new THREE.Group();
     const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.1, 0.72, 8), m);
@@ -326,13 +433,15 @@ function buildNuketown(scene, colliders) {
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), m);
     head.position.y = 1.52;
     for (const p of [legs, torso, head]) { p.castShadow = true; g.add(p); }
-    g.position.set(x, 0, z);
+    g.position.set(x, y, z);
     scene.add(g);
   }
   for (const [mx, mz] of [[-6.4, -11.8], [-6.2, -5.2], [-4.5, 7.8], [-14.5, 11.5], [-19.8, -18.6]]) {
     mannequin(mx, mz);
     mannequin(-mx, -mz);
   }
+  mannequin(-7.0, -7.6, 0.1); // on the teal porch
+  mannequin(6.9, 11.3, 0.18); // on the yellow deck
 
   // ---- radio tower on the horizon (visual only, out of bounds NW)
   for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
@@ -372,7 +481,7 @@ function buildNuketown(scene, colliders) {
     [-15.6, 3.5], [-7.7, 3.5],             // carport sides
     [-11.5, -0.6], [-11.5, 7.4],           // carport front/back
     [-6.1, -2.6], [-8.6, 0.3],             // hedge/picket gaps
-    [-4.1, 2.2],                            // squeeze west of the bus
+    [-4.9, 1.0], [-5.8, 5.0],              // lane west of the angled bus
     [0.15, 0.5], [0.15, 4.8], [0.15, -4.2], // lane between bus and truck
     [-1.6, 9.8], [-2.5, 12.5],             // street south lane
     [-1.5, 15.2],                           // barricade front
