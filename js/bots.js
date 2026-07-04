@@ -116,6 +116,7 @@ class Bot {
     this.burstPause = 0;
     this.strafeDir = 1; this.strafeT = 0;
     this.lastKnown = null; this.lostT = 0;
+    this.canSee = false;
     this.scanT = Math.random() * 0.15;
     this.stuckT = 0; this.lastPos = new THREE.Vector3();
     this.respawnT = 1 + Math.random() * 2;
@@ -195,6 +196,7 @@ class Bot {
       if (!losClear(eye, chest, this.world.colliders)) continue;
       if (d < bestD) { bestD = d; best = e; }
     }
+    this.canSee = !!best;
     if (best) {
       if (this.target !== best) {
         let react = this.skill.react;
@@ -217,12 +219,16 @@ class Bot {
     const dist = this.pos.distanceTo(t.pos);
     const muzzle = new THREE.Vector3(this.pos.x, this.pos.y + 1.45, this.pos.z);
 
+    // hard wall check per shot — a blocked line of fire can never damage
+    const chestCheck = new THREE.Vector3(t.pos.x, t.pos.y + 1.2, t.pos.z);
+    const blocked = !losClear(muzzle, chestCheck, this.world.colliders);
+
     // skill roll
     let chance = this.skill.acc * THREE.MathUtils.clamp(1.55 - dist / 45, 0.25, 1.2);
     if (t.speedNow > 4) chance *= 0.72;
     if (t.crouched) chance *= 0.85;
     if (w.model === 'sniper') chance *= 1.25;
-    const hit = Math.random() < chance;
+    const hit = !blocked && Math.random() < chance;
 
     // damage with falloff
     const fall = THREE.MathUtils.clamp((dist - w.range[0]) / (w.range[1] - w.range[0]), 0, 1);
@@ -300,8 +306,9 @@ class Bot {
         moveZ = pz * this.strafeDir * 0.55;
         if (dist > 26) { moveX += Math.sin(wantYaw) * 0.5; moveZ += Math.cos(wantYaw) * 0.5; }
       }
-      // firing
-      if (this.reactT <= 0 && this.reloadT <= 0) {
+      // firing — only while the target is actually visible (canSee is
+      // refreshed by the perception scan; _fireShot re-verifies per shot)
+      if (this.reactT <= 0 && this.reloadT <= 0 && this.canSee) {
         this.shotT -= dt;
         if (this.burstLeft <= 0) {
           this.burstPause -= dt;
