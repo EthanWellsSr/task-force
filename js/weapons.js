@@ -8,7 +8,7 @@
 const WEAPONS = {
   // ---------- PRIMARY: ASSAULT RIFLES ----------
   m4a1: { slot:'primary', cat:'Assault Rifle', name:'M4A1',
-    dmg:30, minDmg:20, head:1.4, rpm:780, mag:30, reserve:120, reload:2.05, mode:'auto',
+    dmg:30, minDmg:20, head:1.4, rpm:780, mag:30, reserve:180, reload:2.05, mode:'auto',
     spreadHip:.030, spreadAds:.0035, recoil:.0135, bloom:.0042, zoom:1.35, adsTime:.24,
     speed:.95, range:[26,52], model:'ar' },
   scar: { slot:'primary', cat:'Assault Rifle', name:'FN SCAR-H',
