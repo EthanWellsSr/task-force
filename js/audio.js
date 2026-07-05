@@ -191,6 +191,51 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 0.08);
   },
 
+  // incoming napalm canister: short descending whistle
+  incoming(dist = 0, pan = 0) {
+    if (!this.ensure()) return;
+    const atten = dist <= 0 ? 1 : Math.max(0.06, 1 - dist / 80);
+    const t = this.ctx.currentTime;
+    const out = this._dest(pan);
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1500, t);
+    osc.frequency.exponentialRampToValueAtTime(400, t + 0.5);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.06 * atten, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    osc.connect(g); g.connect(out);
+    osc.start(t); osc.stop(t + 0.55);
+  },
+
+  // napalm impact: noise rumble + deep boom, attenuated & panned
+  explosion(dist = 0, pan = 0) {
+    if (!this.ensure()) return;
+    const atten = dist <= 0 ? 1 : Math.max(0.06, 1 - dist / 90);
+    const t = this.ctx.currentTime;
+    const out = this._dest(pan);
+    // rumble
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(900, t);
+    lp.frequency.exponentialRampToValueAtTime(120, t + 0.5);
+    const g = this.ctx.createGain();
+    this._env(g, 0.9 * atten, 0.6);
+    src.connect(lp); lp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + 0.7);
+    // boom
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(35, t + 0.35);
+    const g2 = this.ctx.createGain();
+    this._env(g2, 0.7 * atten, 0.4);
+    osc.connect(g2); g2.connect(out);
+    osc.start(t); osc.stop(t + 0.45);
+  },
+
   // killstreak reward earned (banked, not yet deployed): two bright notes
   streakReady() {
     if (!this.ensure()) return;

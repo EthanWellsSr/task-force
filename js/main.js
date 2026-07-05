@@ -211,10 +211,10 @@ function buildViewModel(w) {
 // ============================================================
 // Effects — pooled tracers & impact sparks
 // ============================================================
-const FX = { tracers: [], sparks: [] };
+const FX = { tracers: [], sparks: [], fires: [] };
 
 function initFxPools(scene) {
-  FX.tracers = []; FX.sparks = [];
+  FX.tracers = []; FX.sparks = []; FX.fires = [];
   for (let i = 0; i < 30; i++) {
     const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
     const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffdf9a, transparent: true, opacity: 0.85 }));
@@ -240,6 +240,25 @@ function initFxPools(scene) {
     scene.add(sp);
     FX.sparks.push({ sp, ttl: 0 });
   }
+  // napalm flames: additive fire sprites that linger and flicker
+  const fcv = document.createElement('canvas');
+  fcv.width = fcv.height = 64;
+  const fcx = fcv.getContext('2d');
+  const fgrad = fcx.createRadialGradient(32, 32, 2, 32, 32, 32);
+  fgrad.addColorStop(0, 'rgba(255,240,170,1)');
+  fgrad.addColorStop(0.35, 'rgba(255,140,40,0.85)');
+  fgrad.addColorStop(0.7, 'rgba(200,60,20,0.4)');
+  fgrad.addColorStop(1, 'rgba(120,30,10,0)');
+  fcx.fillStyle = fgrad;
+  fcx.fillRect(0, 0, 64, 64);
+  const fireTex = new THREE.CanvasTexture(fcv);
+  for (let i = 0; i < 40; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: fireTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sp.visible = false;
+    scene.add(sp);
+    FX.fires.push({ sp, ttl: 0, max: 1, size: 1, seed: 0 });
+  }
 }
 function fxTracer(from, to) {
   const t = FX.tracers.find(t => t.ttl <= 0) || FX.tracers[0];
@@ -258,12 +277,29 @@ function fxSpark(at, red) {
   s.sp.visible = true;
   s.ttl = 0.14;
 }
+function fxFire(at, ttl, size) {
+  const f = FX.fires.find(f => f.ttl <= 0) || FX.fires[0];
+  f.sp.position.copy(at);
+  f.ttl = f.max = ttl;
+  f.size = size;
+  f.seed = Math.random() * 10;
+  f.sp.visible = true;
+}
 function fxUpdate(dt) {
   for (const t of FX.tracers) if (t.ttl > 0) { t.ttl -= dt; if (t.ttl <= 0) t.line.visible = false; }
   for (const s of FX.sparks) if (s.ttl > 0) {
     s.ttl -= dt;
     s.sp.scale.multiplyScalar(0.88);
     if (s.ttl <= 0) s.sp.visible = false;
+  }
+  for (const f of FX.fires) if (f.ttl > 0) {
+    f.ttl -= dt;
+    if (f.ttl <= 0) { f.sp.visible = false; continue; }
+    const life = f.ttl / f.max;
+    const flick = 0.85 + 0.3 * Math.sin((f.max - f.ttl) * 23 + f.seed);
+    const s = f.size * (0.55 + life * 0.45) * flick;
+    f.sp.scale.set(s, s * 1.25, 1);
+    f.sp.material.opacity = Math.min(1, life * 2.5);
   }
 }
 
@@ -386,7 +422,88 @@ const KILLSTREAKS = [
       AudioSys.uav();
     },
   },
+  {
+    id: 'napalm', name: 'NAPALM STRIKE', kills: 10,
+    deploy() { deployNapalm(); },
+  },
 ];
+
+// ---- napalm strike (#7b): random bombardment across the map ----
+// Canisters rain down staggered over ~5 s; each impact burns a radius
+// with distance falloff, blocked by walls (losClear). Team-safe: only
+// enemies of the owner take damage — never the owner or teammates.
+// Like the UAV, an in-flight strike keeps falling through the owner's
+// death (updateNapalm runs while the match is live, not per-life).
+const NAPALM = { count: 16, radius: 6.5, dmg: 155, minDmg: 35 };
+const _napalmDrops = [];
+const _dropDown = new THREE.Vector3(0, -1, 0);
+const _dropProbe = new THREE.Vector3();
+const _impactAt = new THREE.Vector3();
+const _burnAt = new THREE.Vector3();
+const _fallA = new THREE.Vector3();
+const _fallB = new THREE.Vector3();
+
+function deployNapalm() {
+  const bx = Math.max(2, G.map.bounds.x - 2), bz = Math.max(2, G.map.bounds.z - 2);
+  for (let i = 0; i < NAPALM.count; i++) {
+    const x = (Math.random() * 2 - 1) * bx;
+    const z = (Math.random() * 2 - 1) * bz;
+    // land on whatever is under the sky at this point (roofs count)
+    _dropProbe.set(x, 40, z);
+    const hit = rayWorld(_dropProbe, _dropDown, 40, G.colliders);
+    _napalmDrops.push({
+      x, y: hit ? hit.point.y : 0, z,
+      t: 0.8 + i * 0.27 + Math.random() * 0.2, // staggered impacts
+      fall: 0.5, // canister streak visible this long before impact
+      whistled: false,
+    });
+  }
+}
+
+function napalmImpact(d) {
+  _impactAt.set(d.x, d.y + 0.5, d.z);
+  // flash + lingering flames
+  fxFire(_impactAt, 0.3, 4.5);
+  for (let i = 0; i < 5; i++) {
+    const a = Math.random() * Math.PI * 2, r = Math.random() * 2.4;
+    _burnAt.set(d.x + Math.sin(a) * r, d.y + 0.5 + Math.random() * 0.5, d.z + Math.cos(a) * r);
+    fxFire(_burnAt, 2.2 + Math.random() * 1.6, 1.4 + Math.random() * 1.2);
+  }
+  AudioSys.explosion(Math.hypot(d.x - player.pos.x, d.z - player.pos.z), audioPan(_impactAt));
+  for (const b of G.bots) {
+    if (!b.alive || b.team === player.team) continue; // team-safe
+    const dist = Math.hypot(b.pos.x - d.x, b.pos.z - d.z);
+    if (dist > NAPALM.radius || Math.abs(b.pos.y - d.y) > 3.5) continue;
+    _burnAt.set(b.pos.x, b.pos.y + 1.2, b.pos.z);
+    if (!losClear(_impactAt, _burnAt, G.colliders)) continue; // cover protects
+    const dmg = THREE.MathUtils.lerp(NAPALM.dmg, NAPALM.minDmg, dist / NAPALM.radius);
+    b.hurt(Math.round(dmg), player, 'NAPALM', false);
+  }
+}
+
+function updateNapalm(dt) {
+  for (let i = _napalmDrops.length - 1; i >= 0; i--) {
+    const d = _napalmDrops[i];
+    d.t -= dt;
+    if (d.t <= 0) {
+      _napalmDrops.splice(i, 1);
+      napalmImpact(d);
+    } else if (d.t < d.fall) {
+      if (!d.whistled) {
+        d.whistled = true;
+        AudioSys.incoming(Math.hypot(d.x - player.pos.x, d.z - player.pos.z),
+          audioPan(_fallB.set(d.x, d.y, d.z)));
+      }
+      // canister streak: accelerating in on a fixed diagonal from the sky
+      const sx = d.x + 16, sy = d.y + 30, sz = d.z + 11;
+      const u = 1 - d.t / d.fall, e = u * u;
+      const trail = Math.max(0, e - 0.15);
+      _fallA.set(sx + (d.x - sx) * trail, sy + (d.y - sy) * trail, sz + (d.z - sz) * trail);
+      _fallB.set(sx + (d.x - sx) * e, sy + (d.y - sy) * e, sz + (d.z - sz) * e);
+      fxTracer(_fallA, _fallB);
+    }
+  }
+}
 
 // selector under the minimap: what's banked, what's selected, how to deploy
 function refreshStreakTag() {
@@ -486,6 +603,7 @@ function startMatch(mapId) {
   player._bankedStreaks = []; player._streakSel = 0;
   refreshStreakTag();
   G.uavUntil = 0; // G.time restarts at 0, so a stale value would be a free UAV
+  _napalmDrops.length = 0; // no strikes carry across a rematch
   player.alive = false;
   G.bots = [];
 
@@ -1117,6 +1235,7 @@ function loop() {
     }
 
     fxUpdate(dt);
+    updateNapalm(dt);
 
     // HUD
     if (player.alive) {
