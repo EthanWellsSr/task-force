@@ -172,6 +172,12 @@
   <div id="pauseScreen" class="screen hidden">
     <div class="panel">
       <h2>PAUSED</h2>
+      <div class="setting-row"><label>MOUSE SENSITIVITY</label>
+        <input id="pauseSens" type="range" min="0.2" max="3" step="0.1"><span id="pauseSensVal"></span></div>
+      <div class="setting-row"><label>FIELD OF VIEW</label>
+        <input id="pauseFov" type="range" min="60" max="110" step="1"><span id="pauseFovVal"></span></div>
+      <div class="setting-row"><label>VOLUME</label>
+        <input id="pauseVol" type="range" min="0" max="1" step="0.05"><span id="pauseVolVal"></span></div>
       <div class="panel-buttons vertical">
         <button id="btnResume" class="menu-btn deploy">RESUME</button>
         <button id="btnChangeClass" class="menu-btn">CHANGE CLASS (ON RESPAWN)</button>

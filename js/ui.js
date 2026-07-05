@@ -45,6 +45,7 @@ const UI = {
   show(id) {
     for (const s of ['menu', 'classScreen', 'settingsScreen', 'spawnScreen', 'pauseScreen', 'endScreen', 'hud', 'scoreboard'])
       this.$(s).classList.add('hidden');
+    if (id === 'pauseScreen') this.renderPauseSettings();
     if (id) this.$(id).classList.remove('hidden');
   },
 
@@ -80,6 +81,10 @@ const UI = {
     bindRange('setSens', 'sens', 'setSensVal', v => v.toFixed(1));
     bindRange('setFov', 'fov', 'setFovVal', v => v.toFixed(0));
     bindRange('setVol', 'volume', 'setVolVal', v => Math.round(v * 100) + '%');
+    // same settings, reachable mid-match from the pause menu
+    bindRange('pauseSens', 'sens', 'pauseSensVal', v => v.toFixed(1));
+    bindRange('pauseFov', 'fov', 'pauseFovVal', v => v.toFixed(0));
+    bindRange('pauseVol', 'volume', 'pauseVolVal', v => Math.round(v * 100) + '%');
     this.$('setDiff').addEventListener('change', e => { this.settings.difficulty = e.target.value; this.saveSettings(); });
     this.$('setTeamSize').addEventListener('change', e => { this.settings.teamSize = parseInt(e.target.value); this.saveSettings(); });
     this.$('setScoreLimit').addEventListener('change', e => { this.settings.scoreLimit = parseInt(e.target.value); this.saveSettings(); });
@@ -101,6 +106,13 @@ const UI = {
     this.$('setTeamSize').value = String(s.teamSize);
     this.$('setScoreLimit').value = String(s.scoreLimit);
     this.$('setTimeLimit').value = String(s.timeLimit);
+  },
+
+  renderPauseSettings() {
+    const s = this.settings;
+    this.$('pauseSens').value = s.sens; this.$('pauseSensVal').textContent = s.sens.toFixed(1);
+    this.$('pauseFov').value = s.fov; this.$('pauseFovVal').textContent = s.fov.toFixed(0);
+    this.$('pauseVol').value = s.volume; this.$('pauseVolVal').textContent = Math.round(s.volume * 100) + '%';
   },
 
   // ---------- create-a-class ----------
