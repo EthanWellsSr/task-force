@@ -272,6 +272,25 @@ const UI = {
     this._hmT = setTimeout(() => hm.classList.add('hidden'), kill ? 160 : 90);
   },
 
+  // killstreak announce banner at the top of the screen — earned
+  // ("UAV READY — PRESS [G]") and deployed ("UAV ONLINE") both flow through it
+  showStreakBanner(text) {
+    const el = this.$('streakBanner');
+    el.textContent = text;
+    el.classList.remove('hidden');
+    clearTimeout(this._sbT);
+    this._sbT = setTimeout(() => el.classList.add('hidden'), 2500);
+  },
+
+  // banked-killstreak selector under the minimap (null hides it)
+  setStreakTag(text) {
+    const el = this.$('streakTag');
+    if (text) {
+      el.textContent = text;
+      el.classList.remove('hidden');
+    } else el.classList.add('hidden');
+  },
+
   showKillMsg(text, streak = false) {
     const el = this.$('killMsg');
     el.textContent = text;

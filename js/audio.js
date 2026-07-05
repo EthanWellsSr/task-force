@@ -191,6 +191,21 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 0.08);
   },
 
+  // killstreak reward earned (banked, not yet deployed): two bright notes
+  streakReady() {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    [523, 784].forEach((f, i) => {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine'; osc.frequency.value = f;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.14, t + i * 0.09);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.09 + 0.14);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t + i * 0.09); osc.stop(t + i * 0.09 + 0.18);
+    });
+  },
+
   // UAV online: three quick ascending radar pings
   uav() {
     if (!this.ensure()) return;

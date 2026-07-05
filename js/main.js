@@ -93,6 +93,7 @@ const player = {
   vault: null, forceCrouch: false,
   lastShotTime: -99,
   _stepT: 0, _killStreakCount: 0, _lastKillTime: -99, _streakKills: 0,
+  _bankedStreaks: [], _streakSel: 0,
 };
 
 const keys = {};
@@ -271,8 +272,7 @@ function fxUpdate(dt) {
 // ============================================================
 const mmCanvas = document.getElementById('minimap');
 const mmCtx = mmCanvas.getContext('2d');
-const uavTag = document.getElementById('uavTag');
-let mmBg = null, mmScale = 1, mmUavShown = false;
+let mmBg = null, mmScale = 1;
 
 function buildMinimapBg() {
   mmBg = document.createElement('canvas');
@@ -293,7 +293,6 @@ function buildMinimapBg() {
 function drawMinimap() {
   if (!mmBg) return;
   const uav = G.time < G.uavUntil;
-  if (uav !== mmUavShown) { mmUavShown = uav; uavTag.classList.toggle('hidden', !uav); }
   const half = Math.max(G.map.bounds.x, G.map.bounds.z) + 1;
   const toMap = (x, z) => [(x + half) * mmScale, (z + half) * mmScale];
   mmCtx.clearRect(0, 0, 150, 150);
@@ -374,6 +373,54 @@ function audioPan(srcPos) {
   return 0.9 * (dx * Math.cos(player.yaw) - dz * Math.sin(player.yaw)) / d;
 }
 
+// ---------- killstreak rewards (COD-style, manual deploy) ----------
+// Earned once per life at a kills-since-death threshold, banked (banked
+// rewards survive death), cycled with [3] and deployed with [G].
+const KILLSTREAKS = [
+  {
+    id: 'uav', name: 'UAV', kills: 5,
+    deploy() {
+      // 20 s of all living enemies on the minimap (drawMinimap);
+      // the UAV keeps flying through the owner's death, COD-style
+      G.uavUntil = G.time + 20;
+      AudioSys.uav();
+    },
+  },
+];
+
+// selector under the minimap: what's banked, what's selected, how to deploy
+function refreshStreakTag() {
+  const b = player._bankedStreaks;
+  if (!b.length) { UI.setStreakTag(null); return; }
+  let txt = '▲ ' + b[player._streakSel].name + ' — [G]';
+  if (b.length > 1) txt += '  ' + (player._streakSel + 1) + '/' + b.length + ' [3]';
+  UI.setStreakTag(txt);
+}
+
+function earnKillstreak(ks) {
+  player._bankedStreaks.push(ks);
+  player._streakSel = player._bankedStreaks.length - 1; // select the newest
+  UI.showStreakBanner(ks.name + ' READY — PRESS [G]');
+  AudioSys.streakReady();
+  refreshStreakTag();
+}
+
+function cycleKillstreak() {
+  if (player._bankedStreaks.length < 2) return;
+  player._streakSel = (player._streakSel + 1) % player._bankedStreaks.length;
+  refreshStreakTag();
+}
+
+function deployKillstreak() {
+  const b = player._bankedStreaks;
+  if (!b.length) return;
+  const ks = b.splice(player._streakSel, 1)[0];
+  if (player._streakSel >= b.length) player._streakSel = 0;
+  ks.deploy();
+  UI.showStreakBanner(ks.name + ' ONLINE');
+  refreshStreakTag();
+}
+
 function registerKill(killer, victim, weaponName, headshot) {
   if (killer && killer.team !== victim.team) {
     G.scores[killer.team]++;
@@ -391,18 +438,14 @@ function registerKill(killer, victim, weaponName, headshot) {
       const streakLabels = [null, null, 'DOUBLE KILL!', 'TRIPLE KILL!', 'MULTI KILL!', 'RAMPAGE!', 'UNSTOPPABLE!'];
       const streakMsg = streakLabels[Math.min(killer._killStreakCount, streakLabels.length - 1)];
       const hsTag = headshot ? 'HEADSHOT! ' : '';
-      // killstreak reward: every 3rd kill without dying (kills-since-death,
-      // not the 4 s multi-kill window above) flies a UAV — all enemies on
-      // the minimap for the next 20 s
+      // killstreak rewards: kills-since-death (not the 4 s multi-kill
+      // window above) hitting a threshold banks that reward for manual
+      // deploy — announced on its own banner, not in the kill message
       killer._streakKills++;
-      let uavTagMsg = '';
-      if (killer._streakKills % 3 === 0) {
-        G.uavUntil = G.time + 20;
-        uavTagMsg = ' — UAV ONLINE';
-        AudioSys.uav();
-      }
-      if (streakMsg || uavTagMsg) {
-        UI.showKillMsg(hsTag + (streakMsg || 'YOU KILLED ' + victim.name) + uavTagMsg, true);
+      for (const ks of KILLSTREAKS)
+        if (killer._streakKills === ks.kills) earnKillstreak(ks);
+      if (streakMsg) {
+        UI.showKillMsg(hsTag + streakMsg, true);
       } else {
         UI.showKillMsg(hsTag + 'YOU KILLED ' + victim.name, false);
       }
@@ -440,6 +483,8 @@ function startMatch(mapId) {
   G.time = 0;
   player.kills = 0; player.deaths = 0;
   player._streakKills = 0;
+  player._bankedStreaks = []; player._streakSel = 0;
+  refreshStreakTag();
   G.uavUntil = 0; // G.time restarts at 0, so a stale value would be a free UAV
   player.alive = false;
   G.bots = [];
@@ -519,7 +564,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot) {
     player.alive = false;
     player.deaths++;
     player._killStreakCount = 0; // reset streak on death
-    player._streakKills = 0;     // UAV progress resets too (the UAV itself keeps flying)
+    player._streakKills = 0;     // streak progress resets; banked rewards survive death
     if (attacker) attacker.kills++;
     registerKill(attacker, player, weaponName, headshot);
     if (G.state === 'end') return;
@@ -605,6 +650,8 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Digit2') switchWeapon(1);
   if (e.code === 'KeyV') tryMelee();
   if (e.code === 'KeyX') player.adsToggle = !player.adsToggle;
+  if (e.code === 'KeyG') deployKillstreak();
+  if (e.code === 'Digit3') cycleKillstreak();
 });
 document.addEventListener('keyup', e => {
   keys[e.code] = false;
