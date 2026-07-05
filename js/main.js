@@ -89,6 +89,7 @@ const player = {
   adsHeld: false, adsToggle: false, adsAmt: 0, bloom: 0,
   meleeT: 0, sinceDamage: 99, respawnT: 0,
   speedNow: 0, onGround: true,
+  vault: null, forceCrouch: false,
   lastShotTime: -99,
 };
 
@@ -428,6 +429,8 @@ function deploy() {
   player.hp = 100;
   player.stamina = 1;
   player.sinceDamage = 99;
+  player.vault = null;
+  player.forceCrouch = false;
   player.pos.copy(pickSpawn(player.team));
   player.vel.set(0, 0, 0);
   player.yaw = player.team === 'tf' ? (G.mapId === 'rust' ? Math.PI * 1.25 : Math.PI) : 0;
@@ -601,12 +604,66 @@ function tryMelee() {
 // ============================================================
 function eyeHeight() { return THREE.MathUtils.lerp(1.62, 1.12, player.crouchAmt); }
 
+// ---- window vaulting: airborne movement into a window opening gets
+// carried through with a short assisted mantle instead of a wall hit.
+// vx/vz are the current input velocities in world units/s.
+function tryStartVault(vx, vz) {
+  const wins = G.map && G.map.windows;
+  if (!wins || !wins.length) return;
+  const p = player.pos;
+  for (const wz of wins) {
+    const alongX = wz.axis === 'x'; // wall spans x, crossing moves along z
+    const span = alongX ? p.x : p.z;
+    const perp = alongX ? p.z : p.x;
+    const vperp = alongX ? vz : vx;
+    if (span < wz.a + 0.35 || span > wz.b - 0.35) continue;
+    if (Math.abs(perp - wz.at) > 0.85) continue;
+    if (p.y < wz.sill - 0.95 || p.y > wz.sill + 0.6) continue;
+    const side = perp > wz.at ? 1 : -1;
+    if (vperp * -side < 1.0) continue;  // must be moving into the opening
+    // steer the crossing onto a lane clear of the frame, exit past the wall
+    const lane = THREE.MathUtils.clamp(span, wz.a + 0.45, wz.b - 0.45);
+    const exit = wz.at - side * 0.8;
+    player.vault = {
+      t: 0, dur: 0.42,
+      sx: p.x, sy: p.y, sz: p.z,
+      ex: alongX ? lane : exit,
+      ey: wz.sill + 0.12,
+      ez: alongX ? exit : lane,
+    };
+    player.vel.y = 0;
+    player.onGround = false;
+    return;
+  }
+}
+
+function updateVault(dt) {
+  const v = player.vault;
+  v.t += dt;
+  const u = Math.min(1, v.t / v.dur);
+  const e = u * u * (3 - 2 * u);
+  player.pos.x = THREE.MathUtils.lerp(v.sx, v.ex, e);
+  player.pos.z = THREE.MathUtils.lerp(v.sz, v.ez, e);
+  // feet clear the sill early in the crossing, then hold
+  const uy = Math.min(1, u / 0.6);
+  player.pos.y = THREE.MathUtils.lerp(v.sy, v.ey, uy * uy * (3 - 2 * uy));
+  if (u >= 1) {
+    player.vault = null;
+    player.forceCrouch = true; // stay low until there's headroom to stand
+    player.vel.y = 0;
+  }
+}
+
 function updatePlayer(dt) {
   const w = curW();
   const def = w.def;
 
-  // ---- crouch smoothing
-  player.crouchAmt += ((player.crouched ? 1 : 0) - player.crouchAmt) * Math.min(1, dt * 10);
+  // ---- crouch smoothing (vaulting forces a low profile; after a vault
+  // the player stays low until there is headroom to stand)
+  if (player.forceCrouch && _fitsAt(player.pos, player.pos.y, 0.38, 1.75, G.colliders))
+    player.forceCrouch = false;
+  const lowWant = (player.crouched || player.vault || player.forceCrouch) ? 1 : 0;
+  player.crouchAmt += (lowWant - player.crouchAmt) * Math.min(1, dt * (player.vault ? 14 : 10));
 
   // ---- sprint & stamina (sprinting breaks an ADS toggle)
   const wantSprint = keys['ShiftLeft'] && keys['KeyW'] && !player.adsHeld && !firing && !player.crouched;
@@ -653,17 +710,24 @@ function updatePlayer(dt) {
   }
   player.speedNow = Math.hypot(vx, vz);
 
-  // gravity & jump
-  player.vel.y -= 13 * dt;
-  if (keys['Space'] && player.onGround) {
-    player.vel.y = 5.5;
-    player.onGround = false;
+  if (player.vault) {
+    // assisted mantle through a window: scripted arc, no wall collision
+    updateVault(dt);
+  } else {
+    // gravity & jump
+    player.vel.y -= 13 * dt;
+    if (keys['Space'] && player.onGround) {
+      player.vel.y = 5.5;
+      player.onGround = false;
+    }
+    const height = THREE.MathUtils.lerp(1.75, 1.25, player.crouchAmt);
+    // step assist: on the ground it climbs low ledges; mid-jump it vaults crate tops
+    const stepUp = player.onGround ? 0.55 : (player.vel.y > -3 ? 0.6 : 0);
+    player.onGround = moveEntity(player.pos, 0.38, height, vx * dt, player.vel.y * dt, vz * dt, G.colliders, stepUp);
+    if (player.onGround && player.vel.y < 0) player.vel.y = 0;
+    // airborne movement into a window opening starts an assisted vault
+    if (!player.onGround) tryStartVault(vx, vz);
   }
-  const height = THREE.MathUtils.lerp(1.75, 1.25, player.crouchAmt);
-  // step assist: on the ground it climbs low ledges; mid-jump it vaults crate tops
-  const stepUp = player.onGround ? 0.55 : (player.vel.y > -3 ? 0.6 : 0);
-  player.onGround = moveEntity(player.pos, 0.38, height, vx * dt, player.vel.y * dt, vz * dt, G.colliders, stepUp);
-  if (player.onGround && player.vel.y < 0) player.vel.y = 0;
 
   // ---- health regen
   player.sinceDamage += dt;

@@ -34,6 +34,7 @@ class MapKit {
   constructor(scene, colliders) {
     this.scene = scene;
     this.colliders = colliders;
+    this.windows = []; // vault-through traversal zones, filled by wall()
     this._mats = {};
   }
   mat(color) {
@@ -71,6 +72,10 @@ class MapKit {
       if (o.a > cursor) segs.push({ a: cursor, b: o.a, y0: 0, y1: height });
       const bottom = o.bottom !== undefined ? o.bottom : 0;
       const top = o.top !== undefined ? o.top : 2.2;
+      // window-sized openings (raised sill, room for a crouched player)
+      // double as vault traversal zones
+      if (bottom > 0.4 && top - bottom >= 1.3 && o.b - o.a >= 1.1)
+        this.windows.push({ axis, a: o.a, b: o.b, at, sill: y0 + bottom, top: y0 + top });
       if (bottom > 0) segs.push({ a: o.a, b: o.b, y0: 0, y1: bottom });
       if (top < height) segs.push({ a: o.a, b: o.b, y0: top, y1: height });
       cursor = o.b;
@@ -183,14 +188,14 @@ function buildNuketown(scene, colliders) {
     // ground floor shell
     t.wall('z', -14, -4, -8, H1, T, wallC, [
       { a: -7.5, b: -6.3, top: 2.2 },                  // front door
-      { a: -12.6, b: -10.4, bottom: 1.15, top: 2.45 }, // picture window
+      { a: -12.6, b: -10.4, bottom: 1.15, top: 2.6 },  // picture window
     ]);
     t.wall('z', -14, -4, -17, H1, T, wallC, [
       { a: -11.7, b: -10.5, top: 2.2 },                // back door -> backyard spawn
-      { a: -7.0, b: -5.5, bottom: 1.15, top: 2.3 },    // kitchen window
+      { a: -7.2, b: -5.4, bottom: 1.15, top: 2.6 },    // kitchen window
     ]);
-    t.wall('x', -17, -8, -14, H1, T, wallC, [{ a: -14.6, b: -13.0, bottom: 1.15, top: 2.3 }]);
-    t.wall('x', -17, -8, -4, H1, T, wallC, [{ a: -16.0, b: -14.5, bottom: 1.15, top: 2.3 }]);
+    t.wall('x', -17, -8, -14, H1, T, wallC, [{ a: -14.8, b: -13.0, bottom: 1.15, top: 2.6 }]);
+    t.wall('x', -17, -8, -4, H1, T, wallC, [{ a: -16.2, b: -14.4, bottom: 1.15, top: 2.6 }]);
     t.wall('z', -14, -7, -12.5, H1, T, innerC, [{ a: -10.4, b: -9.2, top: 2.2 }]); // kitchen wall
     // second storey
     t.wall('z', -14, -4, -8, H2, T, wallC, [
@@ -224,7 +229,7 @@ function buildNuketown(scene, colliders) {
       t.box(cx, TOP / 2, cz, 0.44, TOP, 0.44, TRIM, ns);
     t.box(-12.5, TOP - 0.1, -9, 10.8, 0.2, 11.8, TRIM, ns);      // fascia under roof
     t.box(-7.8, 1.08, -11.5, 0.12, 0.14, 2.5, TRIM, ns);         // picture window sill
-    t.box(-7.8, 2.52, -11.5, 0.12, 0.14, 2.5, TRIM, ns);         // ...and header
+    t.box(-7.8, 2.67, -11.5, 0.12, 0.14, 2.5, TRIM, ns);         // ...and header
     t.box(-7.8, H1 + 0.83, -12.0, 0.12, 0.14, 2.4, TRIM, ns);    // upstairs sills
     t.box(-7.8, H1 + 0.83, -6.6, 0.12, 0.14, 2.0, TRIM, ns);
     // porch
@@ -509,6 +514,7 @@ function buildNuketown(scene, colliders) {
       sp: [[20.5, 8], [19, 12.5], [21.5, 13.5], [19, 4.5], [22, 6], [21, 10.5]],
     },
     waypointSeeds: grid.concat(extra),
+    windows: k.windows,
   };
 }
 
@@ -593,6 +599,7 @@ function buildRust(scene, colliders) {
       sp: [[14, 14], [10, 15], [15, 10], [14, 5], [5, 14.5], [12, 12]],
     },
     waypointSeeds: grid.concat(extra),
+    windows: k.windows,
   };
 }
 
