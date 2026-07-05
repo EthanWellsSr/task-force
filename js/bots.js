@@ -119,6 +119,8 @@ class Bot {
     this.canSee = false;
     this.scanT = Math.random() * 0.15;
     this.stuckT = 0; this.lastPos = new THREE.Vector3();
+    this.lastUnstickWp = -1; this.unstickN = 0;
+    this.wanderT = 0; this.wanderDir = { x: 0, z: 0 };
     this.respawnT = 1 + Math.random() * 2;
     this.deathAnimT = 0;
     this.walkPhase = Math.random() * 10;
@@ -162,16 +164,46 @@ class Bot {
   _pickNewPath() {
     const g = this.world.graph;
     if (!g.points.length) return;
-    const from = nearestWaypoint(g, this.pos);
+    const from = nearestWaypoint(g, this.pos, this.world.colliders);
     let to;
     if (this.lastKnown && Math.random() < 0.75) {
-      to = nearestWaypoint(g, this.lastKnown);
+      to = nearestWaypoint(g, this.lastKnown, this.world.colliders);
     } else {
       to = Math.floor(Math.random() * g.points.length);
     }
     const path = navPath(g, from, to);
-    if (path && path.length > 1) { this.path = path; this.pathIdx = 1; }
-    else { this.path = path; this.pathIdx = 0; }
+    this.path = path;
+    // walk to the entry waypoint first unless already standing on it —
+    // heading straight for the second node can cut through geometry
+    this.pathIdx = (path && path.length > 1 && this.pos.distanceTo(g.points[from]) < 1.1) ? 1 : 0;
+  }
+
+  // Stuck against geometry: pull back onto the graph by walking straight
+  // at a nearby visible waypoint instead of re-rolling the same path.
+  // Rotates among a few candidates because "visible" is a zero-width ray:
+  // a snag dead-ahead (post edge, low furniture) can block the body while
+  // LOS stays clear, so retrying the same waypoint would loop forever.
+  _unstick() {
+    this.path = null;
+    if (this.target && this.target.alive) return; // combat strafing self-corrects
+    const g = this.world.graph;
+    if (!g.points.length) return;
+    if (this.unstickN >= 2) {
+      // straight walks at visible waypoints keep clipping the same snag
+      // (all candidates can be collinear, e.g. a corridor) — wander a
+      // random direction instead until some angle slides the bot free
+      const a = Math.random() * Math.PI * 2;
+      this.wanderDir = { x: Math.sin(a), z: Math.cos(a) };
+      this.wanderT = 0.4 + Math.random() * 0.5;
+      return;
+    }
+    let cands = visibleWaypoints(g, this.pos, this.world.colliders, 4);
+    if (cands.length > 1) cands = cands.filter(i => i !== this.lastUnstickWp);
+    const wp = cands.length ? cands[Math.floor(Math.random() * cands.length)]
+                            : nearestWaypoint(g, this.pos);
+    this.lastUnstickWp = wp;
+    this.path = [wp];
+    this.pathIdx = 0;
   }
 
   _scanForTarget() {
@@ -326,6 +358,11 @@ class Bot {
           this._fireShot();
         }
       }
+    } else if (this.wanderT > 0) {
+      // ---- unstick wander (see _unstick)
+      this.wanderT -= dt;
+      moveX = this.wanderDir.x; moveZ = this.wanderDir.z;
+      wantYaw = Math.atan2(moveX, moveZ);
     } else {
       // ---- patrol
       if (!this.path || this.pathIdx >= this.path.length) this._pickNewPath();
@@ -360,7 +397,8 @@ class Bot {
       // stuck detection while pathing
       this.stuckT += dt;
       if (this.stuckT > 1.2) {
-        if (this.pos.distanceTo(this.lastPos) < 0.35) this.path = null;
+        if (this.pos.distanceTo(this.lastPos) < 0.35) { this.unstickN++; this._unstick(); }
+        else this.unstickN = 0;
         this.lastPos.copy(this.pos);
         this.stuckT = 0;
       }

@@ -481,7 +481,7 @@ function buildNuketown(scene, colliders) {
     [-4.2, -6.9], [-6.0, -6.9],           // front gate out/in
     [-6.3, -10.5], [-6.3, -4.5],          // front yard corners
     [-9.3, -6.9],                          // inside the front door
-    [-10.2, -9.5], [-10.2, -12.8],         // living room
+    [-10.2, -9.5], [-10.2, -12.0],         // living room (clear of the sofa)
     [-11.6, -9.8], [-13.6, -9.8],          // kitchen doorway
     [-14.8, -7.2], [-14.6, -12.3],         // kitchen
     [-15.9, -11.1], [-18.3, -11.1],        // back door in/out
@@ -660,11 +660,36 @@ function navPath(graph, from, to) {
   return null;
 }
 
-function nearestWaypoint(graph, pos) {
+// Up to `max` waypoint indices visible from pos at waist height,
+// nearest first. Scans only the closest candidates to bound cost.
+const _nwA = new THREE.Vector3(), _nwB = new THREE.Vector3();
+function visibleWaypoints(graph, pos, colliders, max = 1) {
+  const order = graph.points
+    .map((p, i) => [pos.distanceTo(p), i])
+    .sort((a, b) => a[0] - b[0]);
+  const out = [];
+  _nwA.set(pos.x, 1.1, pos.z);
+  const tries = Math.min(order.length, 16);
+  for (let k = 0; k < tries && out.length < max; k++) {
+    const i = order[k][1];
+    _nwB.copy(graph.points[i]); _nwB.y = 1.1;
+    if (losClear(_nwA, _nwB, colliders)) out.push(i);
+  }
+  return out;
+}
+
+// With colliders, prefers the nearest waypoint that is visible at waist
+// height — a position pushed off the graph (e.g. wall-adjacent) must not
+// resolve to a node on the far side of that wall, or every path starts
+// from an unreachable node. Falls back to pure distance if nothing among
+// the closest candidates is visible.
+function nearestWaypoint(graph, pos, colliders) {
   let best = 0, bd = Infinity;
   for (let i = 0; i < graph.points.length; i++) {
     const d = pos.distanceTo(graph.points[i]);
     if (d < bd) { bd = d; best = i; }
   }
-  return best;
+  if (!colliders) return best;
+  const vis = visibleWaypoints(graph, pos, colliders, 1);
+  return vis.length ? vis[0] : best;
 }
