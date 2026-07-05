@@ -73,6 +73,7 @@ const G = {
   bots: [], combatants: [],
   scores: { tf: 0, sp: 0 },
   timeLeft: 600, time: 0,
+  uavUntil: 0,
   pointerLocked: false,
 };
 
@@ -91,7 +92,7 @@ const player = {
   speedNow: 0, onGround: true,
   vault: null, forceCrouch: false,
   lastShotTime: -99,
-  _stepT: 0, _killStreakCount: 0, _lastKillTime: -99,
+  _stepT: 0, _killStreakCount: 0, _lastKillTime: -99, _streakKills: 0,
 };
 
 const keys = {};
@@ -270,7 +271,8 @@ function fxUpdate(dt) {
 // ============================================================
 const mmCanvas = document.getElementById('minimap');
 const mmCtx = mmCanvas.getContext('2d');
-let mmBg = null, mmScale = 1;
+const uavTag = document.getElementById('uavTag');
+let mmBg = null, mmScale = 1, mmUavShown = false;
 
 function buildMinimapBg() {
   mmBg = document.createElement('canvas');
@@ -290,6 +292,8 @@ function buildMinimapBg() {
 }
 function drawMinimap() {
   if (!mmBg) return;
+  const uav = G.time < G.uavUntil;
+  if (uav !== mmUavShown) { mmUavShown = uav; uavTag.classList.toggle('hidden', !uav); }
   const half = Math.max(G.map.bounds.x, G.map.bounds.z) + 1;
   const toMap = (x, z) => [(x + half) * mmScale, (z + half) * mmScale];
   mmCtx.clearRect(0, 0, 150, 150);
@@ -300,7 +304,7 @@ function drawMinimap() {
     if (b.team === player.team) {
       mmCtx.fillStyle = '#5aa0e0';
       mmCtx.beginPath(); mmCtx.arc(x, y, 2.5, 0, 7); mmCtx.fill();
-    } else if (G.time - b.lastShotTime < 1.8) {
+    } else if (uav || G.time - b.lastShotTime < 1.8) {
       mmCtx.fillStyle = '#e05a4a';
       mmCtx.beginPath(); mmCtx.arc(x, y, 2.5, 0, 7); mmCtx.fill();
     }
@@ -387,8 +391,18 @@ function registerKill(killer, victim, weaponName, headshot) {
       const streakLabels = [null, null, 'DOUBLE KILL!', 'TRIPLE KILL!', 'MULTI KILL!', 'RAMPAGE!', 'UNSTOPPABLE!'];
       const streakMsg = streakLabels[Math.min(killer._killStreakCount, streakLabels.length - 1)];
       const hsTag = headshot ? 'HEADSHOT! ' : '';
-      if (streakMsg) {
-        UI.showKillMsg(hsTag + streakMsg, true);
+      // killstreak reward: every 3rd kill without dying (kills-since-death,
+      // not the 4 s multi-kill window above) flies a UAV — all enemies on
+      // the minimap for the next 20 s
+      killer._streakKills++;
+      let uavTagMsg = '';
+      if (killer._streakKills % 3 === 0) {
+        G.uavUntil = G.time + 20;
+        uavTagMsg = ' — UAV ONLINE';
+        AudioSys.uav();
+      }
+      if (streakMsg || uavTagMsg) {
+        UI.showKillMsg(hsTag + (streakMsg || 'YOU KILLED ' + victim.name) + uavTagMsg, true);
       } else {
         UI.showKillMsg(hsTag + 'YOU KILLED ' + victim.name, false);
       }
@@ -425,6 +439,8 @@ function startMatch(mapId) {
   G.timeLeft = UI.settings.timeLimit > 0 ? UI.settings.timeLimit : Infinity;
   G.time = 0;
   player.kills = 0; player.deaths = 0;
+  player._streakKills = 0;
+  G.uavUntil = 0; // G.time restarts at 0, so a stale value would be a free UAV
   player.alive = false;
   G.bots = [];
 
@@ -503,6 +519,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot) {
     player.alive = false;
     player.deaths++;
     player._killStreakCount = 0; // reset streak on death
+    player._streakKills = 0;     // UAV progress resets too (the UAV itself keeps flying)
     if (attacker) attacker.kills++;
     registerKill(attacker, player, weaponName, headshot);
     if (G.state === 'end') return;

@@ -191,6 +191,21 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 0.08);
   },
 
+  // UAV online: three quick ascending radar pings
+  uav() {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    [660, 880, 1175].forEach((f, i) => {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine'; osc.frequency.value = f;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.14, t + i * 0.11);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.11 + 0.16);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t + i * 0.11); osc.stop(t + i * 0.11 + 0.2);
+    });
+  },
+
   matchEnd(win) {
     if (!this.ensure()) return;
     const t = this.ctx.currentTime;

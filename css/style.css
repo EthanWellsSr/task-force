@@ -204,6 +204,11 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
   position:absolute; top:14px; left:16px; border:1px solid rgba(255,255,255,.2);
   background:rgba(10,12,8,.7);
 }
+#uavTag {
+  position:absolute; top:170px; left:16px; width:152px; text-align:center;
+  font-size:10px; font-weight:700; letter-spacing:2px;
+  color:#e8a33d; text-shadow:0 1px 3px #000;
+}
 #ammoBox { position:absolute; right:24px; bottom:22px; text-align:right; text-shadow:0 1px 3px #000; }
 #weaponName { font-size:13px; letter-spacing:2px; color:#c8c5b8; font-weight:700; }
 #ammoCount { font-size:34px; font-weight:800; }
