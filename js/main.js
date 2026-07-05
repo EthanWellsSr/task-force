@@ -863,6 +863,13 @@ function currentSpread() {
 
 const _shotDir = new THREE.Vector3();
 const _muzzleWorld = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _right = new THREE.Vector3();
+const _realUp = new THREE.Vector3();
+const _shotOrigin = new THREE.Vector3();
+const _shotEnd = new THREE.Vector3();
+const _bodyBox = new THREE.Box3();
+const _headBox = new THREE.Box3();
 
 function firePlayerShot(w) {
   const def = w.def;
@@ -895,44 +902,41 @@ function firePlayerShot(w) {
   const spread = currentSpread();
   const pellets = def.pellets || 1;
   let anyHit = false, anyKill = false;
+  _shotOrigin.copy(G.camera.position);
 
   for (let p = 0; p < pellets; p++) {
     // direction with spread
     G.camera.getWorldDirection(_shotDir);
     const s1 = (Math.random() - 0.5) * 2 * spread;
     const s2 = (Math.random() - 0.5) * 2 * spread;
-    const up = new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(_shotDir, up).normalize();
-    const realUp = new THREE.Vector3().crossVectors(right, _shotDir).normalize();
-    _shotDir.addScaledVector(right, s1).addScaledVector(realUp, s2).normalize();
+    _right.crossVectors(_shotDir, _up).normalize();
+    _realUp.crossVectors(_right, _shotDir).normalize();
+    _shotDir.addScaledVector(_right, s1).addScaledVector(_realUp, s2).normalize();
 
-    const origin = G.camera.position.clone();
-    const wall = rayWorld(origin, _shotDir, 150, G.colliders);
+    const wall = rayWorld(_shotOrigin, _shotDir, 150, G.colliders);
     let bestT = wall ? wall.dist : 150;
     let hitBot = null, hitHead = false;
 
     for (const b of G.bots) {
       if (!b.alive || b.team === player.team) continue;
-      const body = new THREE.Box3(
-        new THREE.Vector3(b.pos.x - 0.36, b.pos.y, b.pos.z - 0.36),
-        new THREE.Vector3(b.pos.x + 0.36, b.pos.y + 1.44, b.pos.z + 0.36));
-      const head = new THREE.Box3(
-        new THREE.Vector3(b.pos.x - 0.2, b.pos.y + 1.44, b.pos.z - 0.2),
-        new THREE.Vector3(b.pos.x + 0.2, b.pos.y + 1.85, b.pos.z + 0.2));
-      _ray.origin.copy(origin); _ray.direction.copy(_shotDir);
-      const hHit = _ray.intersectBox(head, _hitVec);
+      _bodyBox.min.set(b.pos.x - 0.36, b.pos.y, b.pos.z - 0.36);
+      _bodyBox.max.set(b.pos.x + 0.36, b.pos.y + 1.44, b.pos.z + 0.36);
+      _headBox.min.set(b.pos.x - 0.2, b.pos.y + 1.44, b.pos.z - 0.2);
+      _headBox.max.set(b.pos.x + 0.2, b.pos.y + 1.85, b.pos.z + 0.2);
+      _ray.origin.copy(_shotOrigin); _ray.direction.copy(_shotDir);
+      const hHit = _ray.intersectBox(_headBox, _hitVec);
       if (hHit) {
-        const d = hHit.distanceTo(origin);
+        const d = hHit.distanceTo(_shotOrigin);
         if (d < bestT) { bestT = d; hitBot = b; hitHead = true; continue; }
       }
-      const bHit = _ray.intersectBox(body, _hitVec);
+      const bHit = _ray.intersectBox(_bodyBox, _hitVec);
       if (bHit) {
-        const d = bHit.distanceTo(origin);
+        const d = bHit.distanceTo(_shotOrigin);
         if (d < bestT) { bestT = d; hitBot = b; hitHead = false; }
       }
     }
 
-    const end = origin.clone().addScaledVector(_shotDir, bestT);
+    const end = _shotEnd.copy(_shotOrigin).addScaledVector(_shotDir, bestT);
     if (pellets === 1 || p % 2 === 0) fxTracer(_muzzleWorld, end);
 
     if (hitBot) {
@@ -1002,19 +1006,17 @@ function updateTargetName(dt) {
   if (nameT > 0) return;
   nameT = 0.1;
   const el = document.getElementById('targetName');
-  const dir = new THREE.Vector3();
-  G.camera.getWorldDirection(dir);
+  const dir = G.camera.getWorldDirection(_shotDir);
   const origin = G.camera.position;
   const wall = rayWorld(origin, dir, 90, G.colliders);
   const maxT = wall ? wall.dist : 90;
   let found = null;
   for (const b of G.bots) {
     if (!b.alive || b.team === player.team) continue;
-    const box = new THREE.Box3(
-      new THREE.Vector3(b.pos.x - 0.45, b.pos.y, b.pos.z - 0.45),
-      new THREE.Vector3(b.pos.x + 0.45, b.pos.y + 1.85, b.pos.z + 0.45));
+    _bodyBox.min.set(b.pos.x - 0.45, b.pos.y, b.pos.z - 0.45);
+    _bodyBox.max.set(b.pos.x + 0.45, b.pos.y + 1.85, b.pos.z + 0.45);
     _ray.origin.copy(origin); _ray.direction.copy(dir);
-    const h = _ray.intersectBox(box, _hitVec);
+    const h = _ray.intersectBox(_bodyBox, _hitVec);
     if (h && h.distanceTo(origin) < maxT) { found = b; break; }
   }
   if (found) {

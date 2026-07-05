@@ -230,27 +230,38 @@ const UI = {
     setTimeout(() => { if (div.parentNode) div.parentNode.removeChild(div); }, 5000);
   },
 
+  // Called every frame — only touch the DOM when a value actually changed.
+  _hudCache: {},
   updateHud(p, weapon, state) {
-    this.$('ammoMag').textContent = state.mag;
-    this.$('ammoReserve').textContent = state.reserve;
-    this.$('weaponName').textContent = weapon.name;
-    this.$('fireMode').textContent = fireModeLabel(weapon);
-    this.$('ammoCount').classList.toggle('low', state.mag <= Math.max(3, weapon.mag * 0.2));
-    const hb = this.$('healthBar');
-    hb.style.width = Math.max(0, p.hp) + '%';
-    hb.style.background = p.hp > 55 ? '#7fb069' : p.hp > 25 ? '#d9a13d' : '#d05040';
-    this.$('vignette').style.opacity = p.hp < 100 ? Math.min(0.9, (100 - p.hp) / 90) * (p.hp < 40 ? 1 : 0.6) : 0;
+    const c = this._hudCache;
+    if (c.mag !== state.mag) { c.mag = state.mag; this.$('ammoMag').textContent = state.mag; }
+    if (c.reserve !== state.reserve) { c.reserve = state.reserve; this.$('ammoReserve').textContent = state.reserve; }
+    if (c.weapon !== weapon.name) { c.weapon = weapon.name; this.$('weaponName').textContent = weapon.name; }
+    const mode = fireModeLabel(weapon);
+    if (c.mode !== mode) { c.mode = mode; this.$('fireMode').textContent = mode; }
+    const low = state.mag <= Math.max(3, weapon.mag * 0.2);
+    if (c.low !== low) { c.low = low; this.$('ammoCount').classList.toggle('low', low); }
+    if (c.hp !== p.hp) {
+      c.hp = p.hp;
+      const hb = this.$('healthBar');
+      hb.style.width = Math.max(0, p.hp) + '%';
+      hb.style.background = p.hp > 55 ? '#7fb069' : p.hp > 25 ? '#d9a13d' : '#d05040';
+      this.$('vignette').style.opacity = p.hp < 100 ? Math.min(0.9, (100 - p.hp) / 90) * (p.hp < 40 ? 1 : 0.6) : 0;
+    }
   },
 
   updateScores(tf, sp, timeLeft) {
-    this.$('scoreTF').textContent = tf;
-    this.$('scoreSP').textContent = sp;
+    const c = this._hudCache;
+    if (c.tf !== tf) { c.tf = tf; this.$('scoreTF').textContent = tf; }
+    if (c.sp !== sp) { c.sp = sp; this.$('scoreSP').textContent = sp; }
+    let timer;
     if (!isFinite(timeLeft)) {
-      this.$('matchTimer').textContent = '∞';
+      timer = '∞';
     } else {
       const m = Math.floor(Math.max(0, timeLeft) / 60), s = Math.floor(Math.max(0, timeLeft) % 60);
-      this.$('matchTimer').textContent = m + ':' + String(s).padStart(2, '0');
+      timer = m + ':' + String(s).padStart(2, '0');
     }
+    if (c.timer !== timer) { c.timer = timer; this.$('matchTimer').textContent = timer; }
   },
 
   showHitmarker(kill) {
