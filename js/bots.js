@@ -296,7 +296,7 @@ class Bot {
 
     this.magLeft--;
     if (this.magLeft <= 0) {
-      this.reloadT = 1.0; // flat 1s reload, same rule as the player
+      this.reloadT = w.reload; // per-weapon reload, same rule as the player
       this.magLeft = w.mag;
       this.burstLeft = 0;
     }

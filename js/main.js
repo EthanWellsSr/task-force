@@ -591,8 +591,7 @@ function startReload() {
   const w = curW();
   if (player.reloadT > 0 || player.switchT > 0) return;
   if (w.mag >= w.def.mag || w.reserve <= 0) return;
-  // flat 1s reload for the player regardless of weapon (0.5s with Sleight of Hand)
-  player.reloadT = 1.0 * (player.perks.has('soh') ? 0.5 : 1);
+  player.reloadT = w.def.reload * (player.perks.has('soh') ? 0.5 : 1);
   player.burstQueue = 0;
   AudioSys.reload();
 }
@@ -799,6 +798,8 @@ function updatePlayer(dt) {
         if (def.mode === 'burst') {
           player.burstQueue--;
           player.fireCooldown = player.burstQueue > 0 ? 60 / def.rpm : def.burstDelay;
+        } else if (def.mode === 'pump') {
+          player.fireCooldown = def.pumpTime;
         } else {
           player.fireCooldown = 60 / def.rpm;
         }
