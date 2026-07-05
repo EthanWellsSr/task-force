@@ -324,14 +324,23 @@ function drawMinimap() {
 function pickSpawn(team) {
   const pts = G.map.spawns[team];
   const enemies = G.combatants.filter(c => c.team !== team && c.alive);
-  let best = null, bestScore = -1;
+  const mates = G.combatants.filter(c => c.team === team && c.alive);
+  let best = null, bestScore = -1e9;
   for (const [x, z] of pts) {
-    let minD = 999;
+    let minE = 999;
     for (const e of enemies) {
       const d = Math.hypot(e.pos.x - x, e.pos.z - z);
-      if (d < minD) minD = d;
+      if (d < minE) minE = d;
     }
-    const score = minD + Math.random() * 8;
+    let minM = 999;
+    for (const m of mates) {
+      const d = Math.hypot(m.pos.x - x, m.pos.z - z);
+      if (d < minM) minM = d;
+    }
+    // reward distance from enemies; heavily penalize spawning on top of a
+    // living teammate so two bots respawning the same frame don't overlap
+    let score = minE + Math.random() * 8;
+    if (minM < 3) score -= (3 - minM) * 20;
     if (score > bestScore) { bestScore = score; best = [x, z]; }
   }
   return new THREE.Vector3(best[0], 0, best[1]);
@@ -413,7 +422,7 @@ function startMatch(mapId) {
 
   // combatants
   G.scores = { tf: 0, sp: 0 };
-  G.timeLeft = 600;
+  G.timeLeft = UI.settings.timeLimit > 0 ? UI.settings.timeLimit : Infinity;
   G.time = 0;
   player.kills = 0; player.deaths = 0;
   player.alive = false;

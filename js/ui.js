@@ -4,7 +4,7 @@
 // ============================================================
 
 const UI = {
-  settings: { sens: 1.0, fov: 80, volume: 0.7, difficulty: 'regular', teamSize: 6, scoreLimit: 75 },
+  settings: { sens: 1.0, fov: 80, volume: 0.7, difficulty: 'regular', teamSize: 6, scoreLimit: 75, timeLimit: 600 },
   classes: [],
   editIdx: 0,        // class being edited
   selectedClass: 0,  // class chosen on spawn screen
@@ -83,6 +83,7 @@ const UI = {
     this.$('setDiff').addEventListener('change', e => { this.settings.difficulty = e.target.value; this.saveSettings(); });
     this.$('setTeamSize').addEventListener('change', e => { this.settings.teamSize = parseInt(e.target.value); this.saveSettings(); });
     this.$('setScoreLimit').addEventListener('change', e => { this.settings.scoreLimit = parseInt(e.target.value); this.saveSettings(); });
+    this.$('setTimeLimit').addEventListener('change', e => { this.settings.timeLimit = parseInt(e.target.value); this.saveSettings(); });
 
     this.$('className').addEventListener('input', e => {
       this.classes[this.editIdx].name = e.target.value.toUpperCase() || 'CUSTOM ' + (this.editIdx + 1);
@@ -99,6 +100,7 @@ const UI = {
     this.$('setDiff').value = s.difficulty;
     this.$('setTeamSize').value = String(s.teamSize);
     this.$('setScoreLimit').value = String(s.scoreLimit);
+    this.$('setTimeLimit').value = String(s.timeLimit);
   },
 
   // ---------- create-a-class ----------
@@ -231,8 +233,12 @@ const UI = {
   updateScores(tf, sp, timeLeft) {
     this.$('scoreTF').textContent = tf;
     this.$('scoreSP').textContent = sp;
-    const m = Math.floor(Math.max(0, timeLeft) / 60), s = Math.floor(Math.max(0, timeLeft) % 60);
-    this.$('matchTimer').textContent = m + ':' + String(s).padStart(2, '0');
+    if (!isFinite(timeLeft)) {
+      this.$('matchTimer').textContent = '∞';
+    } else {
+      const m = Math.floor(Math.max(0, timeLeft) / 60), s = Math.floor(Math.max(0, timeLeft) % 60);
+      this.$('matchTimer').textContent = m + ':' + String(s).padStart(2, '0');
+    }
   },
 
   showHitmarker(kill) {

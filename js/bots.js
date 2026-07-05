@@ -88,6 +88,7 @@ class Bot {
     this.isPlayer = false;
     this.pos = new THREE.Vector3();
     this.yaw = 0;
+    this.lastShotTime = -99; // minimap does G.time - lastShotTime; keep it a number pre-first-shot
     this.velY = 0;
     this.onGround = true;
     this.alive = false;
@@ -133,6 +134,8 @@ class Bot {
   spawn() {
     const p = this.world.api.pickSpawn(this.team);
     this.pos.copy(p);
+    // face the map center rather than whatever yaw we died holding
+    this.yaw = Math.atan2(-p.x, -p.z);
     this.velY = 0;
     this.onGround = true;
     this.hp = 100;
@@ -140,6 +143,7 @@ class Bot {
     this.magLeft = this.weapon.mag;
     this.reloadT = 0;
     this.target = null; this.lastKnown = null;
+    this.lastShotTime = -99; // don't let a pre-death shot flash our new spot on the minimap
     this.path = null;
     this.mesh.visible = true;
     this.mesh.rotation.set(0, this.yaw, 0);
