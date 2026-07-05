@@ -30,6 +30,33 @@ function losClear(a, b, colliders) {
   return !rayWorld(a, _losDir, len - 0.01, colliders);
 }
 
+// Body-width walkability check: center ray plus two shoulder rays offset
+// by the bot's half-width. A zero-width LOS that threads a doorway or a
+// rail end at a steep angle is not traversable for a 0.76-wide body —
+// nav edges built from it strand bots against the frame.
+const _corA = new THREE.Vector3(), _corB = new THREE.Vector3();
+function _laneClear(a, b, ox, oz, dy, colliders) {
+  _corA.set(a.x + ox, a.y + dy, a.z + oz);
+  _corB.set(b.x + ox, b.y + dy, b.z + oz);
+  return losClear(_corA, _corB, colliders);
+}
+function corridorClear(a, b, colliders) {
+  const dx = b.x - a.x, dz = b.z - a.z;
+  const len = Math.hypot(dx, dz);
+  const px = len < 0.001 ? 0.38 : -dz / len * 0.38;
+  const pz = len < 0.001 ? 0 : dx / len * 0.38;
+  // knee-height pass catches low blockers (rails, sofas, tall crates) that
+  // sit below the eye ray but are too tall to step over; skipped on
+  // climbing links (stairs), where rays must glide above the rising treads
+  const heights = Math.abs(a.y - b.y) < 0.5 ? [0, -0.45] : [0];
+  for (const dy of heights) {
+    if (!_laneClear(a, b, 0, 0, dy, colliders)) return false;
+    if (!_laneClear(a, b, px, pz, dy, colliders)) return false;
+    if (!_laneClear(a, b, -px, -pz, dy, colliders)) return false;
+  }
+  return true;
+}
+
 class MapKit {
   constructor(scene, colliders) {
     this.scene = scene;
@@ -500,9 +527,15 @@ function buildNuketown(scene, colliders) {
     [-1.5, 15.2],                           // barricade front
     [-11, 10.6], [-6.9, 12],               // corner lawn lanes
     [-18.5, 15.2],                          // behind the camper
+    // upstairs: stair mount (on the first tread) -> top landing, then rooms
+    [-8.72, -4.75, 0.4], [-13.4, -4.7, 2.8],
+    [-10.4, -6.9, 2.8],                     // hall by the stair rail
+    [-9.3, -10.5, 2.8], [-9.3, -13.0, 2.8], // street-side window room
+    [-14.0, -8.3, 2.8], [-14.0, -9.7, 2.8], // bedroom door out/in
+    [-15.3, -10.5, 2.8],                    // bedroom
   ];
   const extra = [];
-  for (const [x, z] of half) extra.push([x, z], [-x, -z]);
+  for (const [x, z, y] of half) extra.push([x, z, y], [-x, -z, y]);
 
   return {
     name: 'NUKETOWN',
@@ -608,19 +641,22 @@ const MAPS = { nuketown: buildNuketown, rust: buildRust };
 // ============================================================
 // Waypoint graph — filter seeds that land inside geometry, then
 // connect pairs with clear waist-height line of sight.
+// Seeds are [x, z] (ground) or [x, z, y] (elevated: stairs, floors).
 // ============================================================
 function buildNavGraph(seeds, colliders) {
   const pts = [];
   const testMin = new THREE.Vector3(), testMax = new THREE.Vector3();
   const testBox = new THREE.Box3(testMin, testMax);
-  for (const [x, z] of seeds) {
-    testMin.set(x - 0.45, 0.2, z - 0.45);
-    testMax.set(x + 0.45, 1.6, z + 0.45);
+  for (const [x, z, y = 0] of seeds) {
+    // test box bottom sits above step-up height so climbable ledges
+    // (stair treads) don't reject a seed; width matches the bot body
+    testMin.set(x - 0.38, y + 0.56, z - 0.38);
+    testMax.set(x + 0.38, y + 1.6, z + 0.38);
     let blocked = false;
     for (const c of colliders) {
       if (c.intersectsBox(testBox)) { blocked = true; break; }
     }
-    if (!blocked) pts.push(new THREE.Vector3(x, 0, z));
+    if (!blocked) pts.push(new THREE.Vector3(x, y, z));
   }
   const edges = pts.map(() => []);
   const a = new THREE.Vector3(), b = new THREE.Vector3();
@@ -628,9 +664,9 @@ function buildNavGraph(seeds, colliders) {
     for (let j = i + 1; j < pts.length; j++) {
       const d = pts[i].distanceTo(pts[j]);
       if (d > 8.6) continue;
-      a.copy(pts[i]); a.y = 1.1;
-      b.copy(pts[j]); b.y = 1.1;
-      if (losClear(a, b, colliders)) { edges[i].push(j); edges[j].push(i); }
+      a.copy(pts[i]); a.y += 1.1;
+      b.copy(pts[j]); b.y += 1.1;
+      if (corridorClear(a, b, colliders)) { edges[i].push(j); edges[j].push(i); }
     }
   }
   return { points: pts, edges };
@@ -668,12 +704,12 @@ function visibleWaypoints(graph, pos, colliders, max = 1) {
     .map((p, i) => [pos.distanceTo(p), i])
     .sort((a, b) => a[0] - b[0]);
   const out = [];
-  _nwA.set(pos.x, 1.1, pos.z);
+  _nwA.set(pos.x, pos.y + 1.1, pos.z);
   const tries = Math.min(order.length, 16);
   for (let k = 0; k < tries && out.length < max; k++) {
     const i = order[k][1];
-    _nwB.copy(graph.points[i]); _nwB.y = 1.1;
-    if (losClear(_nwA, _nwB, colliders)) out.push(i);
+    _nwB.copy(graph.points[i]); _nwB.y += 1.1;
+    if (corridorClear(_nwA, _nwB, colliders)) out.push(i);
   }
   return out;
 }

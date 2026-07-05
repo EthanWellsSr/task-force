@@ -88,6 +88,8 @@ class Bot {
     this.isPlayer = false;
     this.pos = new THREE.Vector3();
     this.yaw = 0;
+    this.velY = 0;
+    this.onGround = true;
     this.alive = false;
     this.hp = 100;
     this.kills = 0; this.deaths = 0;
@@ -130,6 +132,8 @@ class Bot {
   spawn() {
     const p = this.world.api.pickSpawn(this.team);
     this.pos.copy(p);
+    this.velY = 0;
+    this.onGround = true;
     this.hp = 100;
     this.alive = true;
     this.magLeft = this.weapon.mag;
@@ -370,7 +374,10 @@ class Bot {
         const wp = this.world.graph.points[this.path[this.pathIdx]];
         const dx = wp.x - this.pos.x, dz = wp.z - this.pos.z;
         const d = Math.sqrt(dx * dx + dz * dz);
-        if (d < 0.9) this.pathIdx++;
+        // reached only when at the waypoint's level too — standing under an
+        // upstairs node must not count, and a stair node must not register
+        // from halfway up the flight (turning early clips the hole rail)
+        if (d < 0.9 && Math.abs(wp.y - this.pos.y) < 0.5) this.pathIdx++;
         else {
           moveX = dx / d; moveZ = dz / d;
           wantYaw = Math.atan2(dx, dz);
@@ -385,15 +392,22 @@ class Bot {
     while (dy < -Math.PI) dy += Math.PI * 2;
     this.yaw += THREE.MathUtils.clamp(dy, -8 * dt, 8 * dt);
 
-    // ---- move with collisions
+    // ---- move with collisions (same physics as the player: gravity +
+    // step-up so bots climb stairs and low ledges, and fall off edges)
     const speed = 4.6;
     const len = Math.sqrt(moveX * moveX + moveZ * moveZ);
     this.speedNow = len * speed;
+    let sx = 0, sz = 0;
     if (len > 0.01) {
       // partial-length move vectors (strafing) keep their reduced speed
-      const sx = (moveX / len) * speed * Math.min(1, len) * dt;
-      const sz = (moveZ / len) * speed * Math.min(1, len) * dt;
-      moveEntity(this.pos, 0.38, 1.7, sx, 0, sz, this.world.colliders);
+      sx = (moveX / len) * speed * Math.min(1, len) * dt;
+      sz = (moveZ / len) * speed * Math.min(1, len) * dt;
+    }
+    this.velY -= 13 * dt;
+    this.onGround = moveEntity(this.pos, 0.38, 1.7, sx, this.velY * dt, sz,
+      this.world.colliders, this.onGround ? 0.55 : 0);
+    if (this.onGround && this.velY < 0) this.velY = 0;
+    if (len > 0.01) {
       // stuck detection while pathing
       this.stuckT += dt;
       if (this.stuckT > 1.2) {

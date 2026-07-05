@@ -604,6 +604,7 @@ function tryMelee() {
   const fwd = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
   for (const b of G.bots) {
     if (!b.alive || b.team === player.team) continue;
+    if (Math.abs(b.pos.y - player.pos.y) > 1.8) continue; // no knifing through floors
     const to = b.pos.clone().sub(player.pos); to.y = 0;
     const d = to.length();
     if (d > range) continue;
