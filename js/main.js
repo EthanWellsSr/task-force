@@ -543,7 +543,6 @@ canvas.addEventListener('click', () => {
 
 document.addEventListener('mousemove', e => {
   if (!G.pointerLocked || (G.state !== 'playing')) return;
-  const w = curW().def;
   const fovScale = G.camera.fov / UI.settings.fov;
   const s = 0.0021 * UI.settings.sens * fovScale;
   player.yaw -= e.movementX * s;
@@ -566,6 +565,7 @@ document.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('keydown', e => {
   if (e.code === 'Tab' && (G.state === 'playing' || G.state === 'dead')) {
     e.preventDefault();
+    if (e.repeat) return;
     UI.buildScoreboard(G.combatants, G.scores.tf, G.scores.sp);
     UI.$('scoreboard').classList.remove('hidden');
   }
@@ -583,6 +583,14 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => {
   keys[e.code] = false;
   if (e.code === 'Tab') UI.$('scoreboard').classList.add('hidden');
+});
+// Losing window focus never fires keyup/mouseup, so held inputs would stick
+// (e.g. alt-tab while holding W = infinite auto-run). Clear everything on blur.
+window.addEventListener('blur', () => {
+  for (const k in keys) keys[k] = false;
+  firing = false;
+  player.adsHeld = false;
+  UI.$('scoreboard').classList.add('hidden');
 });
 
 function toggleCrouch() {
