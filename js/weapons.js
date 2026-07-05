@@ -108,7 +108,7 @@ const PERKS = {
   ],
   3: [
     { id:'steadyaim', name:'STEADY AIM', desc:'35% tighter hip fire' },
-    { id:'ninja',     name:'NINJA',      desc:'Bots react to you 40% slower' },
+    { id:'ninja',     name:'NINJA',      desc:'Silent steps, quieter shots, bots react 40% slower' },
     { id:'commando',  name:'COMMANDO',   desc:'Extended melee lunge range' },
   ],
 };

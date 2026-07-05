@@ -341,7 +341,25 @@ function getEnemies(team) {
   return G.combatants.filter(c => c.team !== team);
 }
 
-function noteShot(ent) { ent.lastShotTime = G.time; }
+function noteShot(ent) {
+  ent.lastShotTime = G.time;
+  // gunfire is loud: enemy bots within earshot learn the shooter's position
+  // (Bot.hearShot halves the radius through walls). Ninja fires quieter.
+  let earshot = 25;
+  if (ent.isPlayer && ent.perks.has('ninja')) earshot *= 0.6;
+  for (const b of G.bots) b.hearShot(ent, earshot);
+}
+
+// Stereo pan (-1..1) of a world position from the player's point of view:
+// dot of the flat direction-to-source with the camera's right vector
+// (right = (cos yaw, -sin yaw), matching the movement basis).
+// Scaled to ±0.9 so a source dead to the side keeps a trace in the far ear.
+function audioPan(srcPos) {
+  const dx = srcPos.x - player.pos.x, dz = srcPos.z - player.pos.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 0.001) return 0;
+  return 0.9 * (dx * Math.cos(player.yaw) - dz * Math.sin(player.yaw)) / d;
+}
 
 function registerKill(killer, victim, weaponName, headshot) {
   if (killer && killer.team !== victim.team) {
@@ -405,9 +423,10 @@ function startMatch(mapId) {
     scene: G.scene, colliders: G.colliders, graph: G.graph,
     api: {
       difficulty: UI.settings.difficulty,
-      pickSpawn, getEnemies, registerKill, noteShot,
+      pickSpawn, getEnemies, registerKill, noteShot, audioPan,
       tracer: fxTracer,
       playerPos: () => player.pos,
+      playerTeam: player.team,
       playerDamage: damagePlayer,
       matchLive: () => G.state === 'playing' || G.state === 'dead',
     },
@@ -752,7 +771,8 @@ function updatePlayer(dt) {
     player._stepT -= dt;
     if (player._stepT <= 0) {
       player._stepT = stepInterval;
-      AudioSys.footstep(player.sprinting);
+      // Ninja: silent footsteps
+      if (!player.perks.has('ninja')) AudioSys.footstep(player.sprinting);
     }
   } else if (!player.onGround) {
     player._stepT = 0; // reset so first step after landing plays immediately

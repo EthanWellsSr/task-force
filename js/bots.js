@@ -127,6 +127,7 @@ class Bot {
     this.deathAnimT = 0;
     this.walkPhase = Math.random() * 10;
     this.flashT = 0;
+    this._stepT = 0;
   }
 
   spawn() {
@@ -145,6 +146,24 @@ class Bot {
     this.mesh.position.copy(this.pos);
     this.lastPos.copy(this.pos);
     this.stuckT = 0;
+  }
+
+  // A shot rang out: enemies within earshot learn the shooter's position
+  // and go investigate. Walls muffle — a blocked line halves the radius.
+  hearShot(shooter, radius) {
+    if (!this.alive || shooter === this || shooter.team === this.team) return;
+    const d = this.pos.distanceTo(shooter.pos);
+    if (d > radius) return;
+    if (d > radius * 0.5) {
+      const ear = new THREE.Vector3(this.pos.x, this.pos.y + 1.6, this.pos.z);
+      const src = new THREE.Vector3(shooter.pos.x, shooter.pos.y + 1.2, shooter.pos.z);
+      if (!losClear(ear, src, this.world.colliders)) return;
+    }
+    // re-path only toward a genuinely new position — automatics call this
+    // ~10×/s and re-rolling the path every shot would jitter and cost
+    const fresh = !this.lastKnown || this.lastKnown.distanceTo(shooter.pos) > 4;
+    this.lastKnown = shooter.pos.clone();
+    if (fresh && !this.target) this.path = null;
   }
 
   hurt(dmg, attacker, weaponName, headshot) {
@@ -286,7 +305,8 @@ class Bot {
     this.world.api.tracer(muzzle, end);
     this.flashT = 0.05;
 
-    AudioSys.shot(w.model, this.pos.distanceTo(this.world.api.playerPos()));
+    AudioSys.shot(w.model, this.pos.distanceTo(this.world.api.playerPos()),
+      this.world.api.audioPan(this.pos));
     this.world.api.noteShot(this);
 
     if (hit) {
@@ -415,6 +435,18 @@ class Bot {
         else this.unstickN = 0;
         this.lastPos.copy(this.pos);
         this.stuckT = 0;
+      }
+    }
+
+    // ---- footstep audio: enemy steps only, panned + attenuated, so the
+    // player can track unseen hostiles by ear (teammates would be noise)
+    if (this.team !== this.world.api.playerTeam && this.onGround && this.speedNow > 0.5) {
+      this._stepT -= dt;
+      if (this._stepT <= 0) {
+        this._stepT = this.speedNow > 3.5 ? 0.38 : 0.5;
+        AudioSys.footstep(this.speedNow > 3.5,
+          this.pos.distanceTo(this.world.api.playerPos()),
+          this.world.api.audioPan(this.pos));
       }
     }
 

@@ -37,6 +37,16 @@ const AudioSys = {
     gainNode.gain.exponentialRampToValueAtTime(0.001, t + decay);
   },
 
+  // Destination for a positional sound: a StereoPannerNode into master,
+  // or master itself when centered / panning is unsupported
+  _dest(pan) {
+    if (!pan || !this.ctx.createStereoPanner) return this.master;
+    const p = this.ctx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    p.connect(this.master);
+    return p;
+  },
+
   // Rate-limit distant bot gunfire so 12 bots don't destroy the mix
   _allowShot() {
     const now = performance.now();
@@ -46,7 +56,8 @@ const AudioSys = {
   },
 
   // type: 'ar' | 'smg' | 'lmg' | 'sniper' | 'pistol' | 'shotgun'
-  shot(type, dist = 0) {
+  // pan: -1 (left) .. 1 (right) from the listener's perspective
+  shot(type, dist = 0, pan = 0) {
     if (!this.ensure()) return;
     if (dist > 0 && !this._allowShot()) return;
     const atten = dist <= 0 ? 1 : Math.max(0.04, 1 - dist / 85);
@@ -60,6 +71,7 @@ const AudioSys = {
     }[type] || { freq: 900, decay: 0.12, gain: 0.5, thump: 130 };
 
     const t = this.ctx.currentTime;
+    const out = this._dest(pan);
     // noise crack
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
@@ -67,7 +79,7 @@ const AudioSys = {
     bp.type = 'bandpass'; bp.frequency.value = cfg.freq; bp.Q.value = 0.6;
     const g = this.ctx.createGain();
     this._env(g, cfg.gain * atten, cfg.decay);
-    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.connect(bp); bp.connect(g); g.connect(out);
     src.start(t); src.stop(t + cfg.decay + 0.05);
     // low thump
     const osc = this.ctx.createOscillator();
@@ -76,7 +88,7 @@ const AudioSys = {
     osc.frequency.exponentialRampToValueAtTime(40, t + 0.08);
     const g2 = this.ctx.createGain();
     this._env(g2, 0.4 * atten, 0.09);
-    osc.connect(g2); g2.connect(this.master);
+    osc.connect(g2); g2.connect(out);
     osc.start(t); osc.stop(t + 0.12);
   },
 
@@ -149,18 +161,23 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 0.07);
   },
 
-  footstep(sprint) {
+  // dist > 0: an enemy's step — attenuated, inaudible past ~18 m,
+  // boosted vs the player's own so it reads as an awareness cue
+  footstep(sprint, dist = 0, pan = 0) {
     if (!this.ensure()) return;
+    const atten = dist <= 0 ? 1 : Math.min(1.3, 1.6 * (1 - dist / 18));
+    if (atten <= 0.02) return;
     const t = this.ctx.currentTime;
+    const out = this._dest(pan);
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     const lp = this.ctx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = sprint ? 420 : 290;
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(sprint ? 0.055 : 0.038, t);
+    g.gain.setValueAtTime((sprint ? 0.055 : 0.038) * atten, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
-    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.connect(lp); lp.connect(g); g.connect(out);
     src.start(t); src.stop(t + 0.12);
     // subtle heel click
     const osc = this.ctx.createOscillator();
@@ -168,9 +185,9 @@ const AudioSys = {
     osc.frequency.setValueAtTime(sprint ? 220 : 160, t);
     osc.frequency.exponentialRampToValueAtTime(60, t + 0.06);
     const g2 = this.ctx.createGain();
-    g2.gain.setValueAtTime(0.04, t);
+    g2.gain.setValueAtTime(0.04 * atten, t);
     g2.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
-    osc.connect(g2); g2.connect(this.master);
+    osc.connect(g2); g2.connect(out);
     osc.start(t); osc.stop(t + 0.08);
   },
 
