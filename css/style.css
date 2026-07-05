@@ -228,6 +228,11 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
 #killMsg {
   position:absolute; left:50%; top:64%; transform:translateX(-50%);
   font-size:14px; font-weight:700; letter-spacing:2px; color:#e8a33d; text-shadow:0 1px 3px #000;
+  transition: color .1s;
+}
+#killMsg.streak {
+  font-size:18px; color:#ff5c5c; text-shadow:0 0 12px rgba(255,80,50,.6), 0 1px 3px #000;
+  letter-spacing:3px;
 }
 #scopeOverlay { position:absolute; inset:0; }
 .scope-circle {

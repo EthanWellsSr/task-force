@@ -149,6 +149,31 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 0.07);
   },
 
+  footstep(sprint) {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = sprint ? 420 : 290;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(sprint ? 0.055 : 0.038, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + 0.12);
+    // subtle heel click
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(sprint ? 220 : 160, t);
+    osc.frequency.exponentialRampToValueAtTime(60, t + 0.06);
+    const g2 = this.ctx.createGain();
+    g2.gain.setValueAtTime(0.04, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    osc.connect(g2); g2.connect(this.master);
+    osc.start(t); osc.stop(t + 0.08);
+  },
+
   matchEnd(win) {
     if (!this.ensure()) return;
     const t = this.ctx.currentTime;

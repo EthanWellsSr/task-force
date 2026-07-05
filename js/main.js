@@ -91,6 +91,7 @@ const player = {
   speedNow: 0, onGround: true,
   vault: null, forceCrouch: false,
   lastShotTime: -99,
+  _stepT: 0, _killStreakCount: 0, _lastKillTime: -99,
 };
 
 const keys = {};
@@ -348,7 +349,22 @@ function registerKill(killer, victim, weaponName, headshot) {
     UI.killfeed(killer.name, killer.team, victim.name, victim.team, weaponName, headshot);
     if (killer.isPlayer) {
       AudioSys.hit(true);
-      UI.showKillMsg((headshot ? 'HEADSHOT! ' : '') + 'YOU KILLED ' + victim.name);
+      // kill streak tracking (resets if more than 4 s between kills)
+      const STREAK_WINDOW = 4.0;
+      if (G.time - killer._lastKillTime <= STREAK_WINDOW) {
+        killer._killStreakCount++;
+      } else {
+        killer._killStreakCount = 1;
+      }
+      killer._lastKillTime = G.time;
+      const streakLabels = [null, null, 'DOUBLE KILL!', 'TRIPLE KILL!', 'MULTI KILL!', 'RAMPAGE!', 'UNSTOPPABLE!'];
+      const streakMsg = streakLabels[Math.min(killer._killStreakCount, streakLabels.length - 1)];
+      const hsTag = headshot ? 'HEADSHOT! ' : '';
+      if (streakMsg) {
+        UI.showKillMsg(hsTag + streakMsg, true);
+      } else {
+        UI.showKillMsg(hsTag + 'YOU KILLED ' + victim.name, false);
+      }
     }
   }
   UI.updateScores(G.scores.tf, G.scores.sp, G.timeLeft);
@@ -458,6 +474,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot) {
     player.hp = 0;
     player.alive = false;
     player.deaths++;
+    player._killStreakCount = 0; // reset streak on death
     if (attacker) attacker.kills++;
     registerKill(attacker, player, weaponName, headshot);
     if (G.state === 'end') return;
@@ -727,6 +744,18 @@ function updatePlayer(dt) {
     if (player.onGround && player.vel.y < 0) player.vel.y = 0;
     // airborne movement into a window opening starts an assisted vault
     if (!player.onGround) tryStartVault(vx, vz);
+  }
+
+  // ---- footstep audio
+  if (player.onGround && player.speedNow > 0.5 && !player.vault) {
+    const stepInterval = player.sprinting ? 0.33 : 0.50;
+    player._stepT -= dt;
+    if (player._stepT <= 0) {
+      player._stepT = stepInterval;
+      AudioSys.footstep(player.sprinting);
+    }
+  } else if (!player.onGround) {
+    player._stepT = 0; // reset so first step after landing plays immediately
   }
 
   // ---- health regen

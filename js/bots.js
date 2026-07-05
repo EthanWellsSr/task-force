@@ -319,7 +319,7 @@ class Bot {
 
     if (this.reactT > 0) this.reactT -= dt;
     if (this.reloadT > 0) this.reloadT -= dt;
-    if (this.flashT > 0) { this.flashT -= dt; ud.flash.visible = this.flashT > 0; ud.flash.rotation.z = Math.random() * 3; }
+    if (this.flashT > 0) { this.flashT -= dt; ud.flash.visible = this.flashT > 0; ud.flash.rotation.z = Math.random() * Math.PI * 2; }
 
     const w = this.weapon;
     let moveX = 0, moveZ = 0, wantYaw = this.yaw;

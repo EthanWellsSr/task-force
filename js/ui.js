@@ -17,6 +17,11 @@ const UI = {
     this.bindMenus();
     this.renderClassEditor();
     AudioSys.setVolume(this.settings.volume);
+    // cache crosshair line elements so crosshairSpread() avoids per-frame querySelector calls
+    this._chT = document.querySelector('.ch-t');
+    this._chB = document.querySelector('.ch-b');
+    this._chL = document.querySelector('.ch-l');
+    this._chR = document.querySelector('.ch-r');
   },
 
   // ---------- persistence ----------
@@ -238,12 +243,13 @@ const UI = {
     this._hmT = setTimeout(() => hm.classList.add('hidden'), kill ? 160 : 90);
   },
 
-  showKillMsg(text) {
+  showKillMsg(text, streak = false) {
     const el = this.$('killMsg');
     el.textContent = text;
     el.classList.remove('hidden');
+    el.classList.toggle('streak', streak);
     clearTimeout(this._kmT);
-    this._kmT = setTimeout(() => el.classList.add('hidden'), 2000);
+    this._kmT = setTimeout(() => { el.classList.add('hidden'); el.classList.remove('streak'); }, 2000);
   },
 
   damageDirection(angle) {
@@ -255,12 +261,10 @@ const UI = {
   },
 
   crosshairSpread(px, visible) {
-    const set = (cls, x, y) => {
-      const el = document.querySelector(cls);
-      el.style.transform = `translate(${x}px, ${y}px)`;
-    };
-    set('.ch-t', 0, -px); set('.ch-b', 0, px);
-    set('.ch-l', -px, 0); set('.ch-r', px, 0);
+    this._chT.style.transform = `translate(0px,${-px}px)`;
+    this._chB.style.transform = `translate(0px,${px}px)`;
+    this._chL.style.transform = `translate(${-px}px,0px)`;
+    this._chR.style.transform = `translate(${px}px,0px)`;
     this.$('crosshair').style.opacity = visible ? 1 : 0;
   },
 
@@ -268,14 +272,17 @@ const UI = {
     this.$('sbScoreTF').textContent = tf;
     this.$('sbScoreSP').textContent = sp;
     for (const team of ['tf', 'sp']) {
-      const tbody = this.$(team === 'tf' ? 'sbTableTF' : 'sbTableSP').querySelector('tbody');
+      const table = this.$(team === 'tf' ? 'sbTableTF' : 'sbTableSP');
+      table.querySelector('thead tr').innerHTML = '<th>NAME</th><th>K</th><th>D</th><th>K/D</th>';
+      const tbody = table.querySelector('tbody');
       tbody.innerHTML = '';
       combatants.filter(c => c.team === team)
         .sort((a, b) => b.kills - a.kills)
         .forEach(c => {
+          const kd = c.deaths > 0 ? (c.kills / c.deaths).toFixed(2) : c.kills.toFixed(2);
           const tr = document.createElement('tr');
           if (c.isPlayer) tr.className = 'me';
-          tr.innerHTML = `<td>${c.name}</td><td>${c.kills}</td><td>${c.deaths}</td>`;
+          tr.innerHTML = `<td>${c.name}</td><td>${c.kills}</td><td>${c.deaths}</td><td>${kd}</td>`;
           tbody.appendChild(tr);
         });
     }
@@ -290,17 +297,18 @@ const UI = {
     const boards = this.$('endBoards');
     boards.innerHTML = `
       <div class="sb-team"><div class="sb-head tf">TASK FORCE</div>
-        <table><thead><tr><th>NAME</th><th>KILLS</th><th>DEATHS</th></tr></thead><tbody id="endTF"></tbody></table></div>
+        <table><thead><tr><th>NAME</th><th>K</th><th>D</th><th>K/D</th></tr></thead><tbody id="endTF"></tbody></table></div>
       <div class="sb-team"><div class="sb-head sp">SPETSNAZ</div>
-        <table><thead><tr><th>NAME</th><th>KILLS</th><th>DEATHS</th></tr></thead><tbody id="endSP"></tbody></table></div>`;
+        <table><thead><tr><th>NAME</th><th>K</th><th>D</th><th>K/D</th></tr></thead><tbody id="endSP"></tbody></table></div>`;
     for (const team of ['tf', 'sp']) {
       const tbody = this.$(team === 'tf' ? 'endTF' : 'endSP');
       combatants.filter(c => c.team === team)
         .sort((a, b) => b.kills - a.kills)
         .forEach(c => {
+          const kd = c.deaths > 0 ? (c.kills / c.deaths).toFixed(2) : c.kills.toFixed(2);
           const tr = document.createElement('tr');
           if (c.isPlayer) tr.className = 'me';
-          tr.innerHTML = `<td>${c.name}</td><td>${c.kills}</td><td>${c.deaths}</td>`;
+          tr.innerHTML = `<td>${c.name}</td><td>${c.kills}</td><td>${c.deaths}</td><td>${kd}</td>`;
           tbody.appendChild(tr);
         });
     }
