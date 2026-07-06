@@ -153,7 +153,7 @@ function buildViewModel(w) {
   };
   const dark = 0x26282c, mid = 0x3a3d42, wood = 0x6e5637;
   const type = w.model;
-  let len = 0.62;
+  let len = 0.62, flashSize = 0.12;
   if (type === 'ar') {
     part(0.055, 0.085, 0.62, dark, 0, 0, -0.31);
     part(0.03, 0.03, 0.3, mid, 0, 0.005, -0.68);         // barrel
@@ -168,14 +168,14 @@ function buildViewModel(w) {
     part(0.038, 0.16, 0.08, mid, 0, -0.11, -0.12);
     part(0.014, 0.04, 0.02, dark, 0, 0.062, -0.38);
     part(0.014, 0.036, 0.02, dark, 0, 0.058, -0.06);
-    len = 0.57;
+    len = 0.57; flashSize = 0.1;
   } else if (type === 'lmg') {
     part(0.065, 0.1, 0.7, dark, 0, 0, -0.35);
     part(0.034, 0.034, 0.3, mid, 0, 0.005, -0.83);
     part(0.12, 0.12, 0.1, mid, 0, -0.1, -0.25);          // drum
     part(0.05, 0.08, 0.14, wood, 0, -0.01, 0.04);
     part(0.014, 0.05, 0.02, dark, 0, 0.07, -0.62);
-    len = 0.99;
+    len = 0.99; flashSize = 0.15;
   } else if (type === 'sniper') {
     part(0.05, 0.075, 0.9, dark, 0, 0, -0.45);
     part(0.026, 0.026, 0.32, mid, 0, 0.006, -1.0);
@@ -184,24 +184,24 @@ function buildViewModel(w) {
     scope.position.set(0, 0.07, -0.3);
     g.add(scope);
     part(0.045, 0.09, 0.2, wood, 0, -0.015, 0.05);
-    len = 1.17;
+    len = 1.17; flashSize = 0.13;
   } else if (type === 'shotgun') {
     part(0.05, 0.08, 0.7, dark, 0, 0, -0.35);
     part(0.03, 0.03, 0.24, mid, 0, -0.045, -0.5);        // tube
     part(0.045, 0.05, 0.14, wood, 0, -0.045, -0.42);     // pump
     part(0.05, 0.075, 0.16, wood, 0, -0.005, 0.03);
     part(0.014, 0.04, 0.02, dark, 0, 0.056, -0.66);
-    len = 0.72;
+    len = 0.72; flashSize = 0.14;
   } else { // pistol
     part(0.04, 0.07, 0.24, dark, 0, 0.03, -0.1);
     part(0.036, 0.13, 0.06, mid, 0, -0.05, -0.02);
     part(0.012, 0.03, 0.015, dark, 0, 0.078, -0.2);
-    len = 0.24;
+    len = 0.24; flashSize = 0.08;
   }
   // muzzle flash quad
   const flash = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.22, 0.22),
-    new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
+    new THREE.PlaneGeometry(flashSize, flashSize),
+    new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide }));
   flash.position.set(0, 0.005, -len);
   flash.visible = false;
   g.add(flash);
@@ -1723,10 +1723,12 @@ function firePlayerShot(w) {
   AudioSys.shot(def.model, 0);
 
   // muzzle flash
-  muzzleLight.intensity = 2.2;
+  muzzleLight.intensity = 1.4;
   if (vmGun) {
-    vmGun.userData.flash.visible = true;
-    vmGun.userData.flash.rotation.z = Math.random() * 3;
+    const fl = vmGun.userData.flash;
+    fl.visible = true;
+    fl.rotation.z = Math.random() * 3;
+    fl.scale.setScalar(0.75 + Math.random() * 0.5);
     setTimeout(() => { if (vmGun) vmGun.userData.flash.visible = false; }, 45);
   }
   vmKick = Math.min(1, vmKick + 0.6);
