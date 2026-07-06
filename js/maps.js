@@ -602,25 +602,53 @@ function buildRust(scene, colliders) {
   k.box(W + 1.4, 1.8, 13.6, 0.55, 3.6, 0.55, 0x5c5852);
   k.box(W + 1.4, 1.8, 17.9, 0.55, 3.6, 0.55, 0x5c5852);
 
-  // ---- central tower: legs to ~9.6 m, mid platform ~3.3, railed top
-  // platform, under-tower machinery, south exhaust-chute mass. Masses
-  // only — walkable climb routes (chute steps, east crate/ladder chain)
-  // are #8c.
+  // ---- central tower (#8c): multi-level derrick. Legs to 9.6 m, mid
+  // platform at 3.3, railed top platform at 9.6, machinery maze between
+  // the legs. Three walkable climb routes, every riser ≤ 0.53 (player
+  // and bot step-up both handle ≤ 0.55):
+  //   east crate-step chain (from the Red Containers side) -> mid platform,
+  //   open stair up the west face: mid platform -> top through the NW
+  //   rail gap (the reference's "pathways winding around the tower"),
+  //   south exhaust chute: stepped duct, ground -> top (south rail gap).
   for (const [lx, lz] of [[-2.8, -2.8], [2.8, -2.8], [-2.8, 2.8], [2.8, 2.8]])
     k.box(lx, 4.8, lz, 0.55, 9.6, 0.55, rust);
   k.box(0, 3.3, 0, 6.6, 0.3, 6.6, DECK);            // mid platform
   k.box(0, 9.6, 0, 5.8, 0.3, 5.8, DECK);            // top platform
-  k.box(0, 10.05, -2.9, 5.8, 0.6, 0.15, rust);      // top rails
-  k.box(0, 10.05, 2.9, 5.8, 0.6, 0.15, rust);
-  k.box(-2.9, 10.05, 0, 0.15, 0.6, 5.8, rust);
-  k.box(2.9, 10.05, 0, 0.15, 0.6, 5.8, rust);
-  k.box(0.9, 0.8, -0.8, 1.7, 1.6, 1.5, MACHINE);    // under-tower machinery
-  k.box(-1.0, 0.6, 1.1, 1.4, 1.2, 1.6, MACHINE);
+  k.box(0, 10.05, 2.9, 5.8, 0.6, 0.15, rust);       // top rails: east full,
+  k.box(2.9, 10.05, 0, 0.15, 0.6, 5.8, rust);       // north full,
+  k.box(-0.8, 10.05, -2.9, 4.2, 0.6, 0.15, rust);   // west (stair gap x 1.3..2.9 —
+                                                    // open to the corner, so an
+                                                    // arrival onto a leg top self-recovers),
+  k.box(-2.9, 10.05, -1.25, 0.15, 0.6, 3.3, rust);  // south (chute gap z 0.4..2.9)
+  // east crate-step chain: ground -> mid platform (risers 0.5, last 0.45)
+  for (let i = 0; i < 6; i++) {
+    const top = 0.5 * (i + 1);
+    k.box(1.2, top / 2, 9.9 - 1.2 * i, 1.2, top, 1.2, i % 2 ? 0x6e5e40 : 0x7a6a4a);
+  }
+  // west stair: mid platform -> top, a steep open flight hung off the
+  // frame on posts. Mount landing and arrival tread both sit between the
+  // tower legs (|x| 2.525..3.075, they block a crossing player box), and
+  // the landing is a full player-width deep — a sideways mount step onto
+  // a tread-deep box can't fit, the next tread up occupies the head space.
+  k.box(-1.95, 3.7125, -3.65, 1.1, 0.525, 1.1, DECK);   // mount landing, top 3.975
+  for (let i = 2; i <= 11; i++)
+    k.box(-1.22 + 0.36 * (i - 2), 3.45 + 0.2625 * i, -3.65, 0.36, 0.525 * i, 1.1, DECK);
+  for (const px of [-1.6, 0.2, 1.8])
+    k.box(px, 1.725, -3.65, 0.35, 3.45, 0.35, rust);
+  // south exhaust chute: stepped duct from the ground to the top platform;
+  // thin non-solid lips along both edges read as the duct walls
+  for (let i = 1; i <= 18; i++) {
+    const top = 0.53 * i, cx = -3.175 - 0.5 * (18 - i);
+    k.box(cx, top / 2, 1.5, 0.5, top, 2.0, rust);
+    k.box(cx, top + 0.2, 0.57, 0.5, 0.4, 0.14, DECK, { solid: false });
+    k.box(cx, top + 0.2, 2.43, 0.5, 0.4, 0.14, DECK, { solid: false });
+  }
+  // under-tower machinery maze — one anchor per quadrant forces doglegs;
+  // anything denser pinches the through-lanes under the 0.76 player width
+  k.box(1.05, 0.8, -0.8, 1.4, 1.6, 1.5, MACHINE);
+  k.box(-1.55, 0.6, 1.1, 1.4, 1.2, 1.6, MACHINE);
+  k.box(2.4, 0.7, 2.4, 1.2, 1.4, 1.2, MACHINE);
   k.barrel(-1.2, -1.3);
-  for (let i = 0; i < 6; i++)                        // south exhaust chute
-    k.box(-3.7 - 1.25 * i, 8.5 - 1.55 * i, 0.8, 1.7, 0.55, 2.0, rust);
-  k.crate(1.2, 4.6, 1.1);                            // east climb-route hint (#8c)
-  k.box(-0.4, 0.85, 4.6, 1.5, 1.7, 1.5, 0x6e5e40);
 
   // ---- Pipeline: elevated pipe run covering the north edge, playable
   // over and under, with a spur toward the tower (visual cylinders +
