@@ -813,9 +813,11 @@ const THROWABLES = {
   // it lands. Tactical slot: thrown with [T], frags keep [F].
   // noCookOff: a real flashbang can't cook off — the fuse holds while in
   // hand ([T] holds forever) and only burns after release.
+  // model: 'flashbang' gives it its own mesh (cylinder, no bulge) so it
+  // reads as a stun in flight, not a recolored frag.
   stun: {
     name: 'STUN', count: 2, fuse: 1.8, radius: 8, dmg: 0, minDmg: 0,
-    stunMax: 4, stunMin: 1.2, noCookOff: true,
+    stunMax: 4, stunMin: 1.2, noCookOff: true, model: 'flashbang',
     color: 0x5a6a72, throwSpeed: 17, throwUp: 3.0,
     detonate: stunDetonate,
   },
@@ -834,10 +836,28 @@ const _throwables = [];
 const _blastAt = new THREE.Vector3();
 const _victimAt = new THREE.Vector3();
 
-function buildGrenadeMesh(color) {
+// Branched on the def's model, not a kind check (defs carry behavior):
+// default is the frag/smoke sphere-and-cap silhouette; 'flashbang' is the
+// stun's — straight cylinder body, lighter band, dark top cap.
+function buildGrenadeMesh(def) {
   const g = new THREE.Group();
+  if (def.model === 'flashbang') {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 10),
+      new THREE.MeshLambertMaterial({ color: def.color }));
+    body.position.y = 0.08;
+    g.add(body);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.053, 0.053, 0.035, 10),
+      new THREE.MeshLambertMaterial({ color: 0x9fb2c0 }));
+    band.position.y = 0.11;
+    g.add(band);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.045, 8),
+      new THREE.MeshLambertMaterial({ color: 0x2f363c }));
+    cap.position.y = 0.182;
+    g.add(cap);
+    return g;
+  }
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6),
-    new THREE.MeshLambertMaterial({ color }));
+    new THREE.MeshLambertMaterial({ color: def.color }));
   body.scale.y = 1.25;
   body.position.y = 0.08;
   g.add(body);
@@ -854,7 +874,7 @@ function spawnThrowable(def, fuse, speed, up) {
     .addScaledVector(dir, 0.35);
   const vel = new THREE.Vector3().copy(dir).multiplyScalar(speed);
   vel.y += up; // lob arc
-  const mesh = buildGrenadeMesh(def.color);
+  const mesh = buildGrenadeMesh(def);
   mesh.position.copy(pos);
   G.scene.add(mesh);
   _throwables.push({ def, mesh, pos, vel, fuse,
