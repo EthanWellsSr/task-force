@@ -141,6 +141,218 @@ const VM_POS = {
   ads: new THREE.Vector3(0, -0.082, -0.38),
 };
 
+// Muzzle-flash quad size per weapon class (#15b tuning)
+const VM_FLASH = { ar: 0.12, smg: 0.1, lmg: 0.15, sniper: 0.13, shotgun: 0.14, pistol: 0.08 };
+
+// Per-weapon viewmodel recipes: each builds the real gun's silhouette from
+// part()/cyl() primitives and returns the muzzle distance (len). Sight line
+// stays at local y ~0.06 so the shared VM_POS.ads still centers the irons.
+// Weapons without a recipe fall back to the generic per-class body below.
+const VM_RECIPES = {
+  m4a1({ p, dark, mid, black }) {
+    p(0.055, 0.085, 0.46, dark, 0, 0, -0.23);        // receiver
+    p(0.058, 0.068, 0.24, mid, 0, -0.005, -0.55);    // round handguard
+    p(0.045, 0.016, 0.34, black, 0, 0.051, -0.29);   // flat-top rail
+    p(0.024, 0.024, 0.18, mid, 0, 0.005, -0.72);     // barrel
+    p(0.038, 0.14, 0.09, mid, 0, -0.1, -0.18);       // straight STANAG mag
+    p(0.034, 0.045, 0.14, mid, 0, 0.008, 0.05);      // buffer tube
+    p(0.05, 0.08, 0.06, dark, 0, -0.002, 0.14);      // collapsible stock pad
+    p(0.03, 0.07, 0.035, dark, 0, -0.072, -0.05);    // pistol grip
+    p(0.014, 0.045, 0.02, dark, 0, 0.062, -0.58);    // front post
+    p(0.02, 0.032, 0.025, dark, 0, 0.058, -0.12);    // rear sight
+    return 0.82;
+  },
+  scar({ p, black }) {
+    const tan = 0x8d7c58, tanDk = 0x6f6248;
+    p(0.055, 0.1, 0.56, tan, 0, 0.005, -0.27);       // tall slab receiver
+    p(0.026, 0.026, 0.22, black, 0, 0.012, -0.65);   // barrel
+    p(0.04, 0.12, 0.085, tanDk, 0, -0.095, -0.16);   // 20-rd box mag
+    p(0.05, 0.09, 0.16, tan, 0, 0.005, 0.09);        // wide stock
+    p(0.04, 0.028, 0.1, tanDk, 0, 0.062, 0.08);      // cheek riser
+    p(0.03, 0.07, 0.035, black, 0, -0.07, -0.02);    // grip
+    p(0.014, 0.042, 0.02, black, 0, 0.062, -0.54);   // folding front sight
+    p(0.018, 0.034, 0.02, black, 0, 0.058, -0.08);
+    return 0.78;
+  },
+  acr({ p, dark, mid }) {
+    const poly = 0x454a52;
+    p(0.055, 0.082, 0.4, poly, 0, 0, -0.22);         // upper
+    p(0.06, 0.07, 0.26, dark, 0, -0.008, -0.5);      // wide handguard
+    p(0.024, 0.024, 0.16, mid, 0, 0.006, -0.7);      // barrel
+    p(0.038, 0.13, 0.09, dark, 0, -0.1, -0.17);      // mag
+    p(0.046, 0.085, 0.18, poly, 0, -0.005, 0.08);    // folding stock
+    p(0.03, 0.07, 0.035, dark, 0, -0.072, -0.04);    // grip
+    p(0.014, 0.042, 0.02, dark, 0, 0.06, -0.56);
+    p(0.018, 0.034, 0.02, dark, 0, 0.056, -0.1);
+    return 0.78;
+  },
+  tar21({ p, dark }) {
+    const olive = 0x565e49;
+    p(0.06, 0.095, 0.62, olive, 0, 0, -0.19);        // one-piece bullpup body
+    p(0.055, 0.075, 0.14, olive, 0, -0.028, -0.53);  // sloped fore-end
+    p(0.026, 0.026, 0.16, dark, 0, 0.01, -0.62);     // barrel
+    p(0.038, 0.12, 0.08, dark, 0, -0.1, 0.04);       // mag BEHIND the grip
+    p(0.03, 0.062, 0.04, dark, 0, -0.072, -0.24);    // grip well forward
+    p(0.014, 0.04, 0.02, dark, 0, 0.062, -0.44);
+    p(0.018, 0.032, 0.02, dark, 0, 0.058, 0);
+    return 0.7;
+  },
+  famas({ p, dark, mid }) {
+    p(0.055, 0.08, 0.56, dark, 0, -0.005, -0.15);    // bullpup body
+    p(0.026, 0.026, 0.26, mid, 0, 0.008, -0.55);     // barrel
+    p(0.022, 0.022, 0.46, mid, 0, 0.055, -0.13);     // full-length carry handle
+    p(0.016, 0.03, 0.02, mid, 0, 0.038, 0.07);       // handle posts
+    p(0.016, 0.03, 0.02, mid, 0, 0.038, -0.33);
+    p(0.038, 0.115, 0.075, mid, 0, -0.1, 0.06);      // mag behind grip
+    p(0.03, 0.062, 0.04, dark, 0, -0.075, -0.2);     // grip
+    p(0.012, 0.03, 0.018, dark, 0, 0.062, -0.34);    // sights at the handle ends
+    p(0.014, 0.026, 0.018, dark, 0, 0.06, 0.08);
+    return 0.7;
+  },
+  fal({ p, dark, mid, wood }) {
+    p(0.05, 0.08, 0.5, dark, 0, 0, -0.25);           // long slim receiver
+    p(0.022, 0.022, 0.4, mid, 0, 0.008, -0.66);      // slim barrel
+    p(0.036, 0.12, 0.085, mid, 0, -0.095, -0.16);    // 20-rd mag
+    p(0.05, 0.085, 0.18, wood, 0, -0.005, 0.08);     // wood stock
+    p(0.03, 0.068, 0.04, wood, 0, -0.07, -0.04);     // wood grip
+    p(0.054, 0.06, 0.18, wood, 0, -0.012, -0.44);    // wood handguard
+    p(0.014, 0.05, 0.02, dark, 0, 0.062, -0.78);     // tall front sight
+    p(0.016, 0.032, 0.02, dark, 0, 0.055, -0.06);
+    return 0.88;
+  },
+  mp5k({ p, dark, mid }) {
+    p(0.05, 0.085, 0.3, dark, 0, 0, -0.13);          // stubby receiver
+    p(0.026, 0.026, 0.07, mid, 0, 0.008, -0.3);      // snub barrel
+    p(0.05, 0.07, 0.1, mid, 0, -0.02, -0.23);        // fat handguard
+    p(0.034, 0.095, 0.045, dark, 0, -0.1, -0.23);    // vertical foregrip
+    p(0.034, 0.1, 0.06, mid, 0, -0.09, -0.08);       // curved mag, upper...
+    const m2 = p(0.032, 0.09, 0.055, mid, 0, -0.165, -0.095); // ...and curl
+    m2.rotation.x = 0.35;
+    p(0.045, 0.075, 0.04, dark, 0, 0, 0.04);         // receiver end cap
+    p(0.02, 0.04, 0.02, dark, 0, 0.06, -0.27);       // front ring sight
+    p(0.022, 0.034, 0.02, dark, 0, 0.058, 0);        // rear drum
+    return 0.35;
+  },
+  ump45({ p, dark }) {
+    const poly = 0x3d4148;
+    p(0.052, 0.09, 0.4, poly, 0, 0, -0.17);          // polymer receiver
+    p(0.024, 0.024, 0.13, dark, 0, 0.008, -0.43);    // barrel
+    const mag = p(0.034, 0.13, 0.07, dark, 0, -0.105, -0.1); // raked mag
+    mag.rotation.x = 0.22;
+    p(0.032, 0.022, 0.16, poly, 0, 0.025, 0.1);      // folding stock bar
+    p(0.038, 0.065, 0.028, poly, 0, 0, 0.19);        // butt pad
+    p(0.03, 0.065, 0.038, dark, 0, -0.07, -0.05);    // grip
+    p(0.013, 0.038, 0.02, dark, 0, 0.062, -0.36);
+    p(0.015, 0.032, 0.02, dark, 0, 0.058, -0.02);
+    return 0.5;
+  },
+  vector({ p, dark, mid }) {
+    p(0.05, 0.06, 0.42, dark, 0, 0.02, -0.17);       // upper rail/receiver
+    p(0.052, 0.085, 0.2, dark, 0, -0.045, -0.27);    // deep recoil housing
+    const grip = p(0.036, 0.13, 0.05, mid, 0, -0.095, -0.03); // mag-in-grip
+    grip.rotation.x = -0.12;
+    p(0.028, 0.045, 0.14, dark, 0, 0.025, 0.06);     // thin stock bar
+    p(0.036, 0.06, 0.03, dark, 0, 0.01, 0.13);       // butt pad
+    p(0.024, 0.024, 0.07, mid, 0, 0.02, -0.41);      // barrel
+    p(0.012, 0.034, 0.018, dark, 0, 0.062, -0.36);
+    p(0.014, 0.03, 0.018, dark, 0, 0.058, 0);
+    return 0.46;
+  },
+  p90({ p, dark }) {
+    const shell = 0x3c4038, magc = 0x6a7562;
+    p(0.055, 0.09, 0.52, shell, 0, -0.025, -0.11);   // one-piece bullpup shell
+    p(0.045, 0.028, 0.36, magc, 0, 0.038, -0.14);    // top-mounted mag
+    p(0.05, 0.06, 0.06, shell, 0, 0.03, 0.12);       // humped butt
+    p(0.024, 0.024, 0.09, dark, 0, 0.02, -0.41);     // barrel stub
+    p(0.04, 0.06, 0.05, shell, 0, -0.095, -0.2);     // trigger-loop grip
+    p(0.026, 0.03, 0.05, dark, 0, 0.062, -0.2);      // reflex sight block
+    p(0.012, 0.024, 0.016, dark, 0, 0.06, -0.32);
+    return 0.46;
+  },
+  rpd({ p, dark, mid, wood }) {
+    p(0.06, 0.09, 0.5, dark, 0, 0, -0.25);           // receiver
+    p(0.028, 0.028, 0.42, mid, 0, 0.008, -0.68);     // long barrel
+    p(0.11, 0.11, 0.1, mid, 0, -0.09, -0.22);        // belt drum
+    p(0.048, 0.08, 0.16, wood, 0, -0.005, 0.06);     // wood stock
+    p(0.03, 0.065, 0.04, wood, 0, -0.07, -0.06);     // wood grip
+    p(0.054, 0.055, 0.14, wood, 0, -0.015, -0.47);   // wood handguard
+    p(0.012, 0.012, 0.22, dark, 0.02, -0.035, -0.76);  // folded bipod legs
+    p(0.012, 0.012, 0.22, dark, -0.02, -0.035, -0.76);
+    p(0.014, 0.05, 0.02, dark, 0, 0.065, -0.84);     // tall front sight
+    p(0.016, 0.034, 0.02, dark, 0, 0.058, -0.1);
+    return 0.9;
+  },
+  intervention({ p, cyl, dark, mid }) {
+    p(0.045, 0.07, 0.6, dark, 0, 0, -0.3);           // chassis
+    p(0.024, 0.024, 0.46, mid, 0, 0.006, -0.83);     // long fluted barrel
+    p(0.04, 0.04, 0.08, dark, 0, 0.006, -1.09);      // muzzle brake
+    cyl(0.034, 0.24, 0x1c1e22, 0, 0.072, -0.26);     // scope
+    p(0.028, 0.024, 0.22, dark, 0, 0.028, 0.12);     // skeleton stock spine
+    p(0.024, 0.02, 0.18, dark, 0, -0.042, 0.13);     // skeleton lower rail
+    p(0.034, 0.1, 0.035, dark, 0, -0.005, 0.24);     // butt plate
+    p(0.03, 0.07, 0.04, mid, 0, -0.075, -0.1);       // grip
+    p(0.034, 0.055, 0.08, mid, 0, -0.06, -0.32);     // box mag
+    p(0.012, 0.012, 0.16, dark, 0.02, -0.03, -0.85); // folded bipod
+    p(0.012, 0.012, 0.16, dark, -0.02, -0.03, -0.85);
+    return 1.15;
+  },
+  barrett({ p, cyl, dark, mid }) {
+    p(0.058, 0.09, 0.72, dark, 0, 0, -0.28);         // thick receiver
+    p(0.03, 0.03, 0.3, mid, 0, 0.008, -0.78);        // barrel
+    p(0.062, 0.055, 0.14, dark, 0, 0.008, -0.99);    // huge arrow muzzle brake
+    p(0.095, 0.035, 0.07, mid, 0, 0.008, -0.97);     // brake side fins
+    p(0.042, 0.1, 0.15, mid, 0, -0.095, -0.3);       // long box mag
+    cyl(0.032, 0.22, 0x1c1e22, 0, 0.075, -0.18);     // scope
+    p(0.05, 0.09, 0.045, dark, 0, -0.005, 0.1);      // butt pad
+    p(0.03, 0.07, 0.04, dark, 0, -0.075, -0.04);     // grip
+    p(0.02, 0.05, 0.3, mid, 0, -0.062, -0.55);       // lower spring housing
+    return 1.06;
+  },
+  usp({ p, dark, mid }) {
+    p(0.04, 0.052, 0.25, dark, 0, 0.036, -0.105);    // squared slide
+    p(0.038, 0.028, 0.2, mid, 0, 0, -0.1);           // frame w/ rail
+    p(0.036, 0.115, 0.06, mid, 0, -0.055, -0.01);    // grip
+    p(0.012, 0.01, 0.05, dark, 0, -0.022, -0.16);    // trigger guard
+    p(0.012, 0.026, 0.015, dark, 0, 0.075, -0.21);
+    p(0.016, 0.024, 0.015, dark, 0, 0.073, -0.01);
+    return 0.24;
+  },
+  deagle({ p, dark }) {
+    const steel = 0x565b63;
+    p(0.05, 0.06, 0.31, steel, 0, 0.03, -0.135);     // huge slab slide
+    p(0.028, 0.018, 0.3, steel, 0, 0.066, -0.13);    // flat top rib
+    p(0.044, 0.03, 0.22, dark, 0, -0.005, -0.1);     // frame
+    p(0.04, 0.12, 0.065, dark, 0, -0.062, 0);        // big grip
+    p(0.014, 0.012, 0.05, dark, 0, -0.028, -0.17);   // trigger guard
+    p(0.012, 0.024, 0.015, dark, 0, 0.085, -0.26);   // sights on the rib
+    p(0.018, 0.022, 0.015, dark, 0, 0.083, -0.02);
+    return 0.29;
+  },
+  g18({ p, dark, mid }) {
+    const poly = 0x33363b;
+    p(0.038, 0.048, 0.22, dark, 0, 0.032, -0.095);   // compact slide
+    p(0.036, 0.026, 0.17, poly, 0, -0.002, -0.085);  // frame
+    p(0.034, 0.1, 0.055, poly, 0, -0.052, 0);        // grip
+    p(0.026, 0.1, 0.038, mid, 0, -0.15, 0.005);      // 33-rd extended mag
+    p(0.011, 0.024, 0.014, dark, 0, 0.068, -0.185);
+    p(0.014, 0.022, 0.014, dark, 0, 0.066, 0);
+    return 0.22;
+  },
+  spas12({ p, dark, mid }) {
+    const poly = 0x2c2f34;
+    p(0.05, 0.08, 0.34, dark, 0, 0, -0.11);          // receiver
+    p(0.038, 0.042, 0.42, mid, 0, 0.03, -0.44);      // barrel + heat shield
+    p(0.028, 0.028, 0.4, dark, 0, -0.028, -0.43);    // mag tube below
+    p(0.05, 0.052, 0.15, poly, 0, -0.028, -0.4);     // pump sleeve
+    p(0.026, 0.02, 0.16, mid, 0, 0.035, 0.1);        // folding-stock top bar
+    p(0.04, 0.062, 0.03, dark, 0, 0.01, 0.19);       // butt pad
+    p(0.03, 0.065, 0.04, dark, 0, -0.068, -0.03);    // grip
+    p(0.014, 0.036, 0.02, dark, 0, 0.062, -0.62);
+    p(0.016, 0.03, 0.02, dark, 0, 0.058, -0.04);
+    return 0.68;
+  },
+};
+
 function buildViewModel(w) {
   if (vmGun) { vmRoot.remove(vmGun); }
   const g = new THREE.Group();
@@ -151,10 +363,21 @@ function buildViewModel(w) {
     g.add(m);
     return m;
   };
-  const dark = 0x26282c, mid = 0x3a3d42, wood = 0x6e5637;
+  const cyl = (r, l, c, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, 10), mat(c));
+    m.rotation.x = Math.PI / 2;
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  };
+  const dark = 0x26282c, mid = 0x3a3d42, wood = 0x6e5637, black = 0x1a1c1f;
   const type = w.model;
-  let len = 0.62, flashSize = 0.12;
-  if (type === 'ar') {
+  const flashSize = VM_FLASH[type] || 0.12;
+  let len = 0.62;
+  const recipe = VM_RECIPES[w.key];
+  if (recipe) {
+    len = recipe({ p: part, cyl, dark, mid, wood, black });
+  } else if (type === 'ar') {
     part(0.055, 0.085, 0.62, dark, 0, 0, -0.31);
     part(0.03, 0.03, 0.3, mid, 0, 0.005, -0.68);         // barrel
     part(0.04, 0.14, 0.1, mid, 0, -0.1, -0.2);           // mag
@@ -168,35 +391,32 @@ function buildViewModel(w) {
     part(0.038, 0.16, 0.08, mid, 0, -0.11, -0.12);
     part(0.014, 0.04, 0.02, dark, 0, 0.062, -0.38);
     part(0.014, 0.036, 0.02, dark, 0, 0.058, -0.06);
-    len = 0.57; flashSize = 0.1;
+    len = 0.57;
   } else if (type === 'lmg') {
     part(0.065, 0.1, 0.7, dark, 0, 0, -0.35);
     part(0.034, 0.034, 0.3, mid, 0, 0.005, -0.83);
     part(0.12, 0.12, 0.1, mid, 0, -0.1, -0.25);          // drum
     part(0.05, 0.08, 0.14, wood, 0, -0.01, 0.04);
     part(0.014, 0.05, 0.02, dark, 0, 0.07, -0.62);
-    len = 0.99; flashSize = 0.15;
+    len = 0.99;
   } else if (type === 'sniper') {
     part(0.05, 0.075, 0.9, dark, 0, 0, -0.45);
     part(0.026, 0.026, 0.32, mid, 0, 0.006, -1.0);
-    const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.2, 10), mat(0x1c1e22));
-    scope.rotation.x = Math.PI / 2;
-    scope.position.set(0, 0.07, -0.3);
-    g.add(scope);
+    cyl(0.032, 0.2, 0x1c1e22, 0, 0.07, -0.3);
     part(0.045, 0.09, 0.2, wood, 0, -0.015, 0.05);
-    len = 1.17; flashSize = 0.13;
+    len = 1.17;
   } else if (type === 'shotgun') {
     part(0.05, 0.08, 0.7, dark, 0, 0, -0.35);
     part(0.03, 0.03, 0.24, mid, 0, -0.045, -0.5);        // tube
     part(0.045, 0.05, 0.14, wood, 0, -0.045, -0.42);     // pump
     part(0.05, 0.075, 0.16, wood, 0, -0.005, 0.03);
     part(0.014, 0.04, 0.02, dark, 0, 0.056, -0.66);
-    len = 0.72; flashSize = 0.14;
+    len = 0.72;
   } else { // pistol
     part(0.04, 0.07, 0.24, dark, 0, 0.03, -0.1);
     part(0.036, 0.13, 0.06, mid, 0, -0.05, -0.02);
     part(0.012, 0.03, 0.015, dark, 0, 0.078, -0.2);
-    len = 0.24; flashSize = 0.08;
+    len = 0.24;
   }
   // muzzle flash quad
   const flash = new THREE.Mesh(

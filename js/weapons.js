@@ -90,6 +90,10 @@ const WEAPONS = {
     speed:.98, range:[8,22], model:'shotgun' },
 };
 
+// Annotate each def with its own key so per-weapon systems (viewmodel
+// recipes, attachments) can branch on identity without a reverse lookup.
+for (const k in WEAPONS) WEAPONS[k].key = k;
+
 // Fire mode label shown on the HUD
 function fireModeLabel(w) {
   return { auto:'AUTO', semi:'SEMI', burst:'3-RND BURST', bolt:'BOLT ACTION', pump:'PUMP' }[w.mode];
