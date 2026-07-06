@@ -811,9 +811,11 @@ const THROWABLES = {
   // the bang is stunned; duration scales with proximity (stunMax at
   // ground zero, stunMin at the edge). Short fuse so it pops near where
   // it lands. Tactical slot: thrown with [T], frags keep [F].
+  // noCookOff: a real flashbang can't cook off — the fuse holds while in
+  // hand ([T] holds forever) and only burns after release.
   stun: {
     name: 'STUN', count: 2, fuse: 1.8, radius: 8, dmg: 0, minDmg: 0,
-    stunMax: 4, stunMin: 1.2,
+    stunMax: 4, stunMin: 1.2, noCookOff: true,
     color: 0x5a6a72, throwSpeed: 17, throwUp: 3.0,
     detonate: stunDetonate,
   },
@@ -1639,7 +1641,7 @@ function updatePlayer(dt) {
   if (player.meleeT > 0) player.meleeT -= dt;
   if (player.throwT > 0) player.throwT -= dt;
   if (player.stunT > 0) player.stunT -= dt;
-  if (player.cooking !== null) {
+  if (player.cooking !== null && !THROWABLES[player.cookKind].noCookOff) {
     player.cooking -= dt;
     if (player.cooking <= 0) { // cooked too long: it goes off in hand
       const cdef = THROWABLES[player.cookKind];
