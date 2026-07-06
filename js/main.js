@@ -212,6 +212,44 @@ function buildViewModel(w) {
   vmRoot.add(g);
 }
 
+// melee knife viewmodel — built once, shown only during the meleeT swing
+const vmKnife = (() => {
+  const g = new THREE.Group();
+  const mat = c => new THREE.MeshLambertMaterial({ color: c });
+  const part = (wd, h, d, c, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(wd, h, d), mat(c));
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  };
+  part(0.023, 0.033, 0.094, 0x2a2620, 0, 0, 0.053);     // grip
+  part(0.045, 0.04, 0.015, 0x3a3d42, 0, 0, 0);          // guard
+  part(0.01, 0.032, 0.17, 0xb9c0c8, 0, 0.003, -0.094);  // blade
+  part(0.01, 0.017, 0.05, 0xb9c0c8, 0, 0.01, -0.2);     // tip
+  part(0.011, 0.008, 0.145, 0x878f98, 0, -0.014, -0.085); // edge
+  g.visible = false;
+  vmRoot.add(g);
+  return g;
+})();
+
+// swing keyframes (camera-space pos + euler), meleeT-relative: raise from
+// off-screen bottom-right, slash across to low-left, drop out. The blade
+// stays in left profile (rot.y ~ -1.1..-1.4) so it reads as a blade, not a
+// grip-on box; the slash itself is the rot.x sweep tip-up -> tip-down
+const KNIFE_POSES = {
+  start:  { p: new THREE.Vector3(0.45, -0.55, -0.5),  r: new THREE.Vector3(0.3, -1.4, 0.4) },
+  windup: { p: new THREE.Vector3(0.3, -0.14, -0.44),  r: new THREE.Vector3(0.6, -1.35, 0.4) },
+  end:    { p: new THREE.Vector3(-0.3, -0.35, -0.48), r: new THREE.Vector3(-0.7, -1.1, -0.3) },
+  exit:   { p: new THREE.Vector3(-0.32, -0.62, -0.5), r: new THREE.Vector3(-1.0, -1.1, -0.3) },
+};
+function poseKnife(a, b, u) {
+  vmKnife.position.lerpVectors(a.p, b.p, u);
+  vmKnife.rotation.set(
+    THREE.MathUtils.lerp(a.r.x, b.r.x, u),
+    THREE.MathUtils.lerp(a.r.y, b.r.y, u),
+    THREE.MathUtils.lerp(a.r.z, b.r.z, u));
+}
+
 // ============================================================
 // Effects — pooled tracers & impact sparks
 // ============================================================
@@ -661,6 +699,7 @@ function startNukeCinematic(endWin) {
   UI.show(null); // no HUD, no menus — the world is the whole screen
   document.exitPointerLock && document.exitPointerLock();
   if (vmGun) vmGun.visible = false;
+  vmKnife.visible = false;
   document.getElementById('scopeOverlay').classList.add('hidden');
   G.camera.fov = UI.settings.fov; // undo any ADS zoom
   G.camera.updateProjectionMatrix();
@@ -1276,7 +1315,7 @@ function deploy() {
   };
   player.weapons = [mkState(cls.primary), mkState(cls.secondary)];
   player.cur = 0;
-  player.reloadT = 0; player.switchT = 0; player.burstQueue = 0;
+  player.reloadT = 0; player.switchT = 0; player.burstQueue = 0; player.meleeT = 0;
   player.equipLeft = THROWABLES[player.equip].count;
   player.equipTacLeft = THROWABLES[player.equipTac].count;
   player.equipSmokeLeft = THROWABLES[player.equipSmoke].count;
@@ -1846,6 +1885,20 @@ function updateCameraAndViewmodel(dt) {
   G.camera.position.set(player.pos.x, player.pos.y + eyeHeight(), player.pos.z);
   G.camera.rotation.set(pitch, yaw, 0);
 
+  // melee: quick-swap to the knife and slash across the screen — pure lerp
+  // keyframes off meleeT; the knife hides exactly when canFire's melee gate
+  // (meleeT <= 0.5) reopens, so the gun is never hidden while fireable
+  const melee = player.meleeT > 0.5;
+  vmKnife.visible = melee;
+  if (melee) {
+    const t = player.meleeT;
+    if (t > 0.8) poseKnife(KNIFE_POSES.start, KNIFE_POSES.windup, (0.9 - t) / 0.1);
+    else if (t > 0.62) {
+      const u = (0.8 - t) / 0.18;
+      poseKnife(KNIFE_POSES.windup, KNIFE_POSES.end, u * u * (3 - 2 * u));
+    } else poseKnife(KNIFE_POSES.end, KNIFE_POSES.exit, (0.62 - t) / 0.12);
+  }
+
   // viewmodel position: hip <-> ads, bob, kick
   if (vmGun) {
     const target = new THREE.Vector3().lerpVectors(VM_POS.hip, VM_POS.ads, player.adsAmt);
@@ -1869,13 +1922,16 @@ function updateCameraAndViewmodel(dt) {
       target.x += dip * 0.16;
       target.y -= dip * 0.2;
     }
+    // while the knife is out the gun hides lowered, so the return lerp
+    // reads as re-raising it
+    if (melee) target.y -= 0.3;
     vmGun.position.lerp(target, Math.min(1, dt * 16));
     vmGun.rotation.x = vmKick * 0.09 + (player.sprinting ? -0.5 : 0) - dip * 0.25;
     vmGun.rotation.y = player.sprinting ? 0.4 : 0;
     vmGun.rotation.z = dip * 0.5;
     // hide gun when fully scoped
     const scoped = player.adsAmt > 0.85 && def.zoom > 3;
-    vmGun.visible = !scoped;
+    vmGun.visible = !scoped && !melee;
     document.getElementById('scopeOverlay').classList.toggle('hidden', !scoped);
   }
   muzzleLight.intensity = Math.max(0, muzzleLight.intensity - dt * 22);
