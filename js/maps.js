@@ -552,75 +552,210 @@ function buildNuketown(scene, colliders) {
 }
 
 // ============================================================
-// RUST — desert oil yard with a central tower
+// RUST — desert oil yard, MW2 layout per docs/rust-reference.md.
+// Compass: +x = north, +z = east (top-down renders +x up). Zones:
+// central multi-level tower, Pipeline along the north edge (over/
+// under + spur), Oil Derrick NW, Front Gate NE (sp spawn) with the
+// Comms Station shed, Red Containers + fuel tank on the east edge,
+// Fuel Depot SE with the south barricade CQB pocket, Control Room
+// and Maintenance south-center, Generators splitting mid west of
+// the tower, Loading Dock SW (tf spawn), Blue Containers mid-west.
+// #8b blockout: proportions + masses; tower climb routes are #8c,
+// detail/cover/pit are #8d, y-aware nav is #8e.
 // ============================================================
 function buildRust(scene, colliders) {
   const k = new MapKit(scene, colliders);
-  const W = 17;
+  const W = 26; // 52×52 m playable square
+  const rust = 0x8a5a3a, DECK = 0x6e4a2e, PIPE = 0x9a7a5a,
+        DUNE = 0xa9885a, DUNE2 = 0xb59767, SHED = 0x7a6a55,
+        MACHINE = 0x5a5e52, SANDBAG = 0x8f8060;
 
   scene.background = new THREE.Color(0xdcb887);
-  scene.fog = new THREE.Fog(0xdcb887, 45, 110);
+  scene.fog = new THREE.Fog(0xdcb887, 70, 150);
 
-  // sand
-  k.box(0, -0.5, 0, W * 2 + 2, 1, W * 2 + 2, 0xc2a36b);
+  // sand: desert plain beyond the dunes, solid slab inside
+  k.box(0, -0.55, 0, 160, 1, 160, 0xbf9f68, { solid: false, shadow: false });
+  k.box(0, -0.5, 0, W * 2 + 4, 1, W * 2 + 4, 0xc2a36b);
 
-  // perimeter berms + invisible walls
-  k.wall('z', -W, W, -W, 3.0, 0.8, 0xa9885a);
-  k.wall('z', -W, W, W, 3.0, 0.8, 0xa9885a);
-  k.wall('x', -W, W, -W, 3.0, 0.8, 0xa9885a);
-  k.wall('x', -W, W, W, 3.0, 0.8, 0xa9885a);
-  k.blocker(-W, 6, 0, 1, 12, W * 2);
-  k.blocker(W, 6, 0, 1, 12, W * 2);
-  k.blocker(0, 6, -W, W * 2, 12, 1);
-  k.blocker(0, 6, W, W * 2, 12, 1);
-
-  // ---- central tower (player can climb the crate steps)
-  const rust = 0x8a5a3a;
-  for (const [lx, lz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]])
-    k.box(lx, 1.4, lz, 0.45, 2.8, 0.45, rust);
-  k.box(0, 2.95, 0, 5, 0.3, 5, 0x6e4a2e);          // platform
-  k.box(0, 3.35, -2.4, 5, 0.5, 0.2, rust);          // rails
-  k.box(0, 3.35, 2.4, 5, 0.5, 0.2, rust);
-  k.box(-2.4, 3.35, 0, 0.2, 0.5, 5, rust);
-  k.box(3.6, 0.45, 2.8, 1.5, 0.9, 1.5, 0x7a6a4a);   // step 1
-  k.box(3.6, 1.0, 1.0, 1.5, 2.0, 1.5, 0x6e5e40);    // step 2
-  k.box(0, 4.2, 0, 0.35, 2.2, 0.35, rust);          // derrick pole
-
-  // ---- containers
-  k.box(-9, 1.3, -7, 6, 2.6, 2.5, 0x8a4a35);
-  k.box(8, 1.3, 6.5, 6, 2.6, 2.5, 0x4a6a8a);
-  k.box(-6, 1.3, 9.5, 6, 2.6, 2.5, 0x5a7a4a);
-  k.box(9, 1.3, -8, 2.5, 2.6, 6, 0x8a8a45);
-
-  // ---- shed (three walls + roof)
-  k.wall('x', 9.5, 13.5, -3, 2.6, 0.25, 0x7a6a55);
-  k.wall('z', -3, 0.5, 13.5, 2.6, 0.25, 0x7a6a55);
-  k.wall('x', 9.5, 13.5, 0.5, 2.6, 0.25, 0x7a6a55, [{ a: 10.2, b: 11.6, top: 2.2 }]);
-  k.box(11.5, 2.75, -1.25, 4.4, 0.3, 3.9, 0x5a4a3a);
-
-  // ---- pipes (visual cylinders + box colliders)
-  for (const [px, pz, py] of [[-8, 3, 0.55], [-8, 3, 1.6]]) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 7, 12), k.mat(0x9a7a5a));
-    m.rotation.z = Math.PI / 2;
-    m.position.set(px, py, pz);
-    m.castShadow = true; m.receiveShadow = true;
-    scene.add(m);
+  // ---- perimeter: two-tier sand dunes (low foothill inside, taller
+  // crest outside fake a slope) + wrecked-fence posts on the crest;
+  // invisible walls do the real containment. The north crest has the
+  // Front Gate opening (NE) — visual landmark, blocker keeps it shut.
+  for (const s of [-1, 1]) {
+    const gateOps = s > 0 ? [{ a: 14, b: 17.5, top: 2.6 }] : [];
+    k.wall('z', -W - 3, W + 3, s * (W + 1.4), 3.2, 3.0, DUNE, gateOps); // N/S crest
+    k.wall('x', -W - 3, W + 3, s * (W + 1.4), 3.2, 3.0, DUNE);         // E/W crest
+    k.wall('z', -W, W, s * (W - 0.5), 1.3, 1.6, DUNE2,
+      s > 0 ? [{ a: 13.5, b: 18, top: 1.3 }] : []);                    // foothills
+    k.wall('x', -W, W, s * (W - 0.5), 1.3, 1.6, DUNE2);
+    k.blocker(s * (W + 0.6), 6, 0, 1, 12, W * 2 + 6);
+    k.blocker(0, 6, s * (W + 0.6), W * 2 + 6, 12, 1);
   }
-  k.blocker(-8, 1.1, 3, 7, 2.2, 1.1);
+  for (let i = -24; i <= 24; i += 5) {
+    if ((i + 24) % 20 === 0) continue; // gaps read as wrecked fence
+    for (const s of [-1, 1]) {
+      k.box(s * (W + 1.4), 3.75, i, 0.14, 1.1, 0.14, 0x4a4a44, { solid: false });
+      k.box(i, 3.75, s * (W + 1.4), 0.14, 1.1, 0.14, 0x4a4a44, { solid: false });
+    }
+  }
+  // Front Gate posts flanking the crest opening
+  k.box(W + 1.4, 1.8, 13.6, 0.55, 3.6, 0.55, 0x5c5852);
+  k.box(W + 1.4, 1.8, 17.9, 0.55, 3.6, 0.55, 0x5c5852);
 
-  // scattered cover
-  k.crate(-3, -8, 1.3, 0x6e5e40); k.crate(-4.4, -8.4, 1.0, 0x7a6a4a);
-  k.crate(4, 9, 1.3, 0x6e5e40);
-  k.crate(-12, 5, 1.2); k.crate(12, -12.5, 1.2);
-  k.crate(0, -12.5, 1.4, 0x7a5a3a);
-  k.barrel(-11, -2); k.barrel(-10.2, -3.2); k.barrel(5, -5); k.barrel(11, 10);
-  k.barrel(2.5, 5.5); k.barrel(-2.5, -5.2, 0x5a6a45);
+  // ---- central tower: legs to ~9.6 m, mid platform ~3.3, railed top
+  // platform, under-tower machinery, south exhaust-chute mass. Masses
+  // only — walkable climb routes (chute steps, east crate/ladder chain)
+  // are #8c.
+  for (const [lx, lz] of [[-2.8, -2.8], [2.8, -2.8], [-2.8, 2.8], [2.8, 2.8]])
+    k.box(lx, 4.8, lz, 0.55, 9.6, 0.55, rust);
+  k.box(0, 3.3, 0, 6.6, 0.3, 6.6, DECK);            // mid platform
+  k.box(0, 9.6, 0, 5.8, 0.3, 5.8, DECK);            // top platform
+  k.box(0, 10.05, -2.9, 5.8, 0.6, 0.15, rust);      // top rails
+  k.box(0, 10.05, 2.9, 5.8, 0.6, 0.15, rust);
+  k.box(-2.9, 10.05, 0, 0.15, 0.6, 5.8, rust);
+  k.box(2.9, 10.05, 0, 0.15, 0.6, 5.8, rust);
+  k.box(0.9, 0.8, -0.8, 1.7, 1.6, 1.5, MACHINE);    // under-tower machinery
+  k.box(-1.0, 0.6, 1.1, 1.4, 1.2, 1.6, MACHINE);
+  k.barrel(-1.2, -1.3);
+  for (let i = 0; i < 6; i++)                        // south exhaust chute
+    k.box(-3.7 - 1.25 * i, 8.5 - 1.55 * i, 0.8, 1.7, 0.55, 2.0, rust);
+  k.crate(1.2, 4.6, 1.1);                            // east climb-route hint (#8c)
+  k.box(-0.4, 0.85, 4.6, 1.5, 1.7, 1.5, 0x6e5e40);
 
+  // ---- Pipeline: elevated pipe run covering the north edge, playable
+  // over and under, with a spur toward the tower (visual cylinders +
+  // one box collider each, supports every ~8 m)
+  function pipeRun(cx, cz, len, alongZ) {
+    for (const [oy, oa] of [[2.85, -0.45], [2.85, 0.45]]) {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, len, 12), k.mat(PIPE));
+      if (alongZ) { m.rotation.x = Math.PI / 2; m.position.set(cx + oa, oy, cz); }
+      else { m.rotation.z = Math.PI / 2; m.position.set(cx, oy, cz + oa); }
+      m.castShadow = true; m.receiveShadow = true;
+      scene.add(m);
+    }
+    if (alongZ) k.blocker(cx, 3.0, cz, 2.0, 1.5, len);
+    else k.blocker(cx, 3.0, cz, len, 1.5, 2.0);
+  }
+  pipeRun(21.5, 0, 48, true);                        // main run along the north edge
+  pipeRun(14.5, -2, 14, false);                      // spur toward the tower
+  for (const pz of [-22, -14, -6, 2, 10, 18])
+    k.box(21.5, 1.15, pz, 0.5, 2.3, 0.5, rust);      // supports (walk-under stays clear)
+  for (const px of [11.5, 18])
+    k.box(px, 1.15, -2, 0.5, 2.3, 0.5, rust);
+
+  // ---- Oil Derrick (NW): raised platform with top/ground/under levels
+  for (const [lx, lz] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]])
+    k.box(17.5 + lx, 1.6, -17.5 + lz, 0.45, 3.2, 0.45, rust);
+  k.box(17.5, 3.2, -17.5, 5.4, 0.3, 5.4, DECK);
+  k.box(17.5, 3.65, -20.1, 5.4, 0.6, 0.15, rust);    // rail on the open faces
+  k.box(20.1, 3.65, -17.5, 0.15, 0.6, 5.4, rust);
+  k.box(16.8, 0.75, -16.8, 1.6, 1.5, 1.4, MACHINE);  // machinery underneath
+
+  // ---- Comms Station (NE, by the Front Gate): small corrugated shed
+  k.wall('z', 9.5, 13, 16.6, 2.5, 0.2, SHED);
+  k.wall('z', 9.5, 13, 13.6, 2.5, 0.2, SHED, [{ a: 10.5, b: 11.7, top: 2.1 }]);
+  k.wall('x', 13.6, 16.6, 9.5, 2.5, 0.2, SHED);
+  k.wall('x', 13.6, 16.6, 13, 2.5, 0.2, SHED);
+  k.box(15.1, 2.6, 11.25, 3.6, 0.25, 4.1, 0x5a4a3a);
+  k.box(15.1, 3.9, 12.4, 0.16, 2.4, 0.16, 0x8a8d90, { solid: false }); // antenna
+
+  // ---- Front Gate verticality: stacked boxes inside the NE corner
+  k.box(19.3, 0.75, 20.8, 1.5, 1.5, 1.5, 0x7a6a4a);
+  k.box(19.3, 1.9, 20.4, 1.3, 1.3, 1.3, 0x6e5e40);
+
+  // ---- Red Containers + fuel tank (east edge): transition lane between
+  // Front Gate and Fuel Depot; hosts the tower mid-platform route (#8c)
+  k.box(4, 1.3, 20.5, 6.5, 2.6, 2.5, 0x8a4a35);
+  k.box(-2.5, 1.3, 19, 2.5, 2.6, 6, 0x9a4a30);
+  const tank = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 5, 14), k.mat(0x8a8a45));
+  tank.rotation.z = Math.PI / 2;
+  tank.position.set(1, 1.4, 23);
+  tank.castShadow = true; tank.receiveShadow = true;
+  scene.add(tank);
+  k.blocker(1, 1.4, 23, 5, 2.8, 2.8);
+
+  // ---- Fuel Depot (SE): vertical tanks + barrier clutter
+  for (const [tx, tz] of [[-18, 19.5], [-15.5, 16.5]]) {
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 3.4, 14), k.mat(0x7a7a48));
+    t.position.set(tx, 1.7, tz);
+    t.castShadow = true; t.receiveShadow = true;
+    scene.add(t);
+    k.blocker(tx, 1.7, tz, 3.4, 3.4, 3.4);
+  }
+  k.box(-20.5, 0.65, 14.5, 2.8, 1.3, 0.9, 0x8a8478);
+
+  // ---- south barricade CQB pocket (between Fuel Depot and Maintenance):
+  // the tall scrap barricade is what kills the sightlines through here
+  k.box(-19.5, 1.1, 9.5, 3.4, 2.2, 0.9, 0x6a5a45);
+  k.box(-21, 0.55, 6, 0.9, 1.1, 3.4, SANDBAG);
+  k.box(-22.5, 0.55, 11.5, 0.9, 1.1, 2.6, SANDBAG);
+  k.crate(-18, 7, 1.2);
+
+  // ---- Control Room (S-center): extremely small structure dividing
+  // Generators from Maintenance; the slide/pit into Maintenance is #8d
+  k.wall('z', -2.9, -0.1, -9.6, 2.3, 0.2, SHED, [{ a: -2.1, b: -0.9, top: 2.0 }]);
+  k.wall('z', -2.9, -0.1, -12.4, 2.3, 0.2, SHED);
+  k.wall('x', -12.4, -9.6, -2.9, 2.3, 0.2, SHED);
+  k.wall('x', -12.4, -9.6, -0.1, 2.3, 0.2, SHED);
+  k.box(-11, 2.4, -1.5, 3.2, 0.25, 3.2, 0x5a4a3a);
+
+  // ---- Maintenance (low ground, S-center-west): open space + scattered
+  // cover; the sunken basin is deferred to #8d ([verify] in the reference)
+  k.crate(-17, -3, 1.3, 0x6e5e40); k.crate(-18.3, -3.6, 1.0, 0x7a6a4a);
+  k.crate(-20, -7, 1.2);
+  k.barrel(-16, -6.5);
+
+  // ---- Generators: machinery blocks west of the tower splitting the
+  // mid into north and south halves
+  k.box(0.5, 1.1, -7.5, 2.4, 2.2, 3.2, MACHINE);
+  k.box(-0.5, 0.95, -11, 2.0, 1.9, 2.6, MACHINE);
+  k.box(1.5, 1.0, -14, 1.8, 2.0, 2.2, MACHINE);
+
+  // ---- tri-level scaffold, SE face of the tower complex ([verify]
+  // placement per the reference — recorded as approximate)
+  for (const [lx, lz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]])
+    k.box(-6 + lx, 1.9, 5.5 + lz, 0.35, 3.8, 0.35, 0x7a6248);
+  k.box(-6, 1.7, 5.5, 3.6, 0.2, 3.6, 0x9a7a55);
+  k.box(-6, 3.5, 5.5, 3.6, 0.2, 3.6, 0x9a7a55);
+
+  // ---- Loading Dock (tf spawn, SW): container stack + barriers shield
+  // the spawn pocket from the map without walling in the spawn points
+  k.box(-15.5, 1.3, -16, 2.5, 2.6, 6, 0x4a6a8a);
+  k.box(-15.5, 3.9, -15.2, 2.5, 2.6, 6, 0x5a7a4a);    // stacked second container
+  k.box(-13.5, 1.3, -21.5, 6, 2.6, 2.5, 0x8a8a45);
+  k.box(-12.5, 0.55, -16.5, 0.9, 1.1, 3.2, SANDBAG);
+  k.box(-15, 0.55, -11.5, 3.2, 1.1, 0.9, SANDBAG);
+
+  // ---- Blue Containers (mid-west edge): staggered pair forming the
+  // short covered dogleg between Oil Derrick and Loading Dock
+  k.box(3, 1.3, -18.5, 6, 2.6, 2.5, 0x4a6a8a);
+  k.box(-3, 1.3, -22.3, 6, 2.6, 2.5, 0x3a5a7a);
+
+  // scattered cover (light garnish; the real prop pass is #8d)
+  k.barrel(6, 8); k.barrel(6.8, 8.8);
+  k.crate(9, -7, 1.3, 0x6e5e40);
+  k.crate(-7, 12, 1.2);
+  k.barrel(-9, -12, 0x5a6a45);
+  k.crate(12, 3, 1.1, 0x7a5a3a);
+
+  // ---- waypoints: ground grid for the new footprint + lane/door seeds;
+  // y-aware tower/derrick/pipeline seeds are #8e
   const grid = [];
-  for (const x of [-13, -8, -4, 0, 4, 8, 13])
-    for (const z of [-13, -8, -4, 0, 4, 8, 13])
+  for (const x of [-23, -17.5, -11.5, -5.5, 0, 5.5, 11.5, 17.5, 23])
+    for (const z of [-23, -17.5, -11.5, -5.5, 0, 5.5, 11.5, 17.5, 23])
       grid.push([x, z]);
-  const extra = [[11, 1.5], [11, -1.5], [-6, 6], [6, -3], [-3, 3]];
+  const extra = [
+    [20, 15.5], [22, 20],           // Front Gate pocket
+    [12.8, 11.1], [15.1, 11.2],     // Comms Station door in/out
+    [1, 17], [-2.5, 15],            // Red Containers lane
+    [14, -5], [14, 1],              // under the pipeline spur
+    [-8.3, -1.5], [-11, -1.5],      // Control Room door in/out
+    [-18, -4.8],                    // Maintenance
+    [-20, 8], [-17, 11],            // south CQB pocket
+    [-21.5, -15],                   // Loading Dock west lane
+    [0, -20.6],                     // Blue Containers dogleg
+    [4.5, -3.5], [-4.5, 3.5],       // tower corners
+  ];
 
   return {
     name: 'RUST',
@@ -628,8 +763,8 @@ function buildRust(scene, colliders) {
     sun: { color: 0xffd9a8, intensity: 1.1, pos: [-25, 38, 15] },
     hemi: { sky: 0xe8c8a0, ground: 0x8a6a45, intensity: 0.7 },
     spawns: {
-      tf: [[-14, -14], [-10, -15], [-15, -10], [-14, -5], [-5, -14.5], [-12, -12]],
-      sp: [[14, 14], [10, 15], [15, 10], [14, 5], [5, 14.5], [12, 12]],
+      tf: [[-21.5, -20.5], [-23, -17], [-17.5, -24], [-20, -13], [-13.5, -19], [-23, -23]],
+      sp: [[21.5, 20.5], [23, 17], [17.5, 22.5], [19, 13], [13.5, 19], [23, 23]],
     },
     waypointSeeds: grid.concat(extra),
     windows: k.windows,
