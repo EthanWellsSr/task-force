@@ -265,6 +265,7 @@ class Bot {
       if (d > 4 && diff > 1.05 && !isKnown) continue;
       chest.set(e.pos.x, e.pos.y + 1.2, e.pos.z);
       if (!losClear(eye, chest, this.world.colliders)) continue;
+      if (this.world.api.smokeBlocked(eye, chest)) continue; // smoke is opaque
       if (d < bestD) { bestD = d; best = e; }
     }
     this.canSee = !!best;
@@ -290,9 +291,11 @@ class Bot {
     const dist = this.pos.distanceTo(t.pos);
     const muzzle = new THREE.Vector3(this.pos.x, this.pos.y + 1.45, this.pos.z);
 
-    // hard wall check per shot — a blocked line of fire can never damage
+    // hard wall check per shot — a blocked line of fire can never damage;
+    // smoke counts (a target lost in smoke gets sprayed at, never hit)
     const chestCheck = new THREE.Vector3(t.pos.x, t.pos.y + 1.2, t.pos.z);
-    const blocked = !losClear(muzzle, chestCheck, this.world.colliders);
+    const blocked = !losClear(muzzle, chestCheck, this.world.colliders) ||
+      this.world.api.smokeBlocked(muzzle, chestCheck);
 
     // skill roll
     let chance = this.skill.acc * THREE.MathUtils.clamp(1.55 - dist / 45, 0.25, 1.2);

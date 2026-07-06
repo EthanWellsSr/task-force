@@ -95,6 +95,7 @@ const player = {
   _stepT: 0, _killStreakCount: 0, _lastKillTime: -99, _streakKills: 0,
   _bankedStreaks: [], _streakSel: 0,
   equip: 'frag', equipLeft: 0, equipTac: 'stun', equipTacLeft: 0,
+  equipSmoke: 'smoke', equipSmokeLeft: 0,
   throwT: 0, cooking: null, cookKind: null, cookSlot: null,
   stunT: 0, stunMax: 1,
 };
@@ -214,10 +215,10 @@ function buildViewModel(w) {
 // ============================================================
 // Effects — pooled tracers & impact sparks
 // ============================================================
-const FX = { tracers: [], sparks: [], fires: [] };
+const FX = { tracers: [], sparks: [], fires: [], smokes: [] };
 
 function initFxPools(scene) {
-  FX.tracers = []; FX.sparks = []; FX.fires = [];
+  FX.tracers = []; FX.sparks = []; FX.fires = []; FX.smokes = [];
   for (let i = 0; i < 30; i++) {
     const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
     const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffdf9a, transparent: true, opacity: 0.85 }));
@@ -262,6 +263,24 @@ function initFxPools(scene) {
     scene.add(sp);
     FX.fires.push({ sp, ttl: 0, max: 1, size: 1, seed: 0 });
   }
+  // smoke puffs: soft gray billboards, normal blending so they read opaque
+  const scv = document.createElement('canvas');
+  scv.width = scv.height = 64;
+  const scx = scv.getContext('2d');
+  const sgrad = scx.createRadialGradient(32, 32, 4, 32, 32, 32);
+  sgrad.addColorStop(0, 'rgba(206,209,205,0.95)');
+  sgrad.addColorStop(0.55, 'rgba(186,191,187,0.6)');
+  sgrad.addColorStop(1, 'rgba(170,176,171,0)');
+  scx.fillStyle = sgrad;
+  scx.fillRect(0, 0, 64, 64);
+  const smokeTex = new THREE.CanvasTexture(scv);
+  for (let i = 0; i < 36; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: smokeTex, transparent: true, depthWrite: false }));
+    sp.visible = false;
+    scene.add(sp);
+    FX.smokes.push({ sp, ttl: 0, max: 1, size: 1, seed: 0 });
+  }
 }
 function fxTracer(from, to) {
   const t = FX.tracers.find(t => t.ttl <= 0) || FX.tracers[0];
@@ -288,6 +307,15 @@ function fxFire(at, ttl, size) {
   f.seed = Math.random() * 10;
   f.sp.visible = true;
 }
+function fxSmoke(at, ttl, size) {
+  const s = FX.smokes.find(s => s.ttl <= 0) || FX.smokes[0];
+  s.sp.position.copy(at);
+  s.ttl = s.max = ttl;
+  s.size = size;
+  s.seed = Math.random() * 10;
+  s.sp.material.rotation = Math.random() * Math.PI * 2;
+  s.sp.visible = true;
+}
 function fxUpdate(dt) {
   for (const t of FX.tracers) if (t.ttl > 0) { t.ttl -= dt; if (t.ttl <= 0) t.line.visible = false; }
   for (const s of FX.sparks) if (s.ttl > 0) {
@@ -303,6 +331,17 @@ function fxUpdate(dt) {
     const s = f.size * (0.55 + life * 0.45) * flick;
     f.sp.scale.set(s, s * 1.25, 1);
     f.sp.material.opacity = Math.min(1, life * 2.5);
+  }
+  for (const s of FX.smokes) if (s.ttl > 0) {
+    s.ttl -= dt;
+    if (s.ttl <= 0) { s.sp.visible = false; continue; }
+    const age = s.max - s.ttl;
+    // billow up fast, hang, then thin out over the last couple of seconds
+    const sc = s.size * (0.35 + 0.65 * Math.min(1, age / 0.9) + age * 0.02);
+    s.sp.scale.set(sc, sc, 1);
+    s.sp.material.opacity = 0.88 * Math.min(1, age / 0.45) * Math.min(1, s.ttl / 2);
+    s.sp.material.rotation += dt * 0.1 * (s.seed > 5 ? 1 : -1);
+    s.sp.position.y += dt * 0.05; // lazy drift upward
   }
 }
 
@@ -778,6 +817,15 @@ const THROWABLES = {
     color: 0x5a6a72, throwSpeed: 17, throwUp: 3.0,
     detonate: stunDetonate,
   },
+  // smoke: no damage — the pop spawns a lingering cloud (radius here is
+  // the cloud's, not a blast's) that blocks sight lines both ways via
+  // smokeBlocked. Own slot on [E]; one per life, it's strong cover.
+  smoke: {
+    name: 'SMOKE', count: 1, fuse: 1.5, radius: 4.5, dmg: 0, minDmg: 0,
+    smokeDur: 8,
+    color: 0x4a5346, throwSpeed: 15, throwUp: 3.2,
+    detonate: smokeDetonate,
+  },
 };
 const GREN_R = 0.08, GREN_H = 0.16, GREN_BOUNCE = 0.42;
 const _throwables = [];
@@ -814,16 +862,21 @@ function spawnThrowable(def, fuse, speed, up) {
 // COD-style cooking: key down pulls the pin (committed — the grenade is
 // spent and its fuse burns in hand), key up throws with the remaining
 // fuse. Cook too long and it detonates in hand; dying mid-cook drops it.
-// Two slots share one pair of hands: 'lethal' ([F], player.equip) and
-// 'tactical' ([T], player.equipTac) — only one grenade cooks at a time.
+// The slots share one pair of hands — 'lethal' ([F]), 'tactical' ([T]),
+// 'smoke' ([E]) — so only one grenade cooks at a time.
+const EQUIP_SLOTS = {
+  lethal:   { kind: 'equip',      left: 'equipLeft' },
+  tactical: { kind: 'equipTac',   left: 'equipTacLeft' },
+  smoke:    { kind: 'equipSmoke', left: 'equipSmokeLeft' },
+};
 function startCooking(slot = 'lethal') {
   if (G.state !== 'playing' || !player.alive) return;
-  const tac = slot === 'tactical';
-  const kind = tac ? player.equipTac : player.equip;
+  const fields = EQUIP_SLOTS[slot];
+  const kind = player[fields.kind];
   const def = THROWABLES[kind];
-  if (!def || (tac ? player.equipTacLeft : player.equipLeft) <= 0 || player.cooking !== null) return;
+  if (!def || player[fields.left] <= 0 || player.cooking !== null) return;
   if (player.throwT > 0 || player.switchT > 0 || player.meleeT > 0.5) return;
-  if (tac) player.equipTacLeft--; else player.equipLeft--;
+  player[fields.left]--;
   player.cooking = def.fuse;
   player.cookKind = kind;
   player.cookSlot = slot;
@@ -983,6 +1036,72 @@ function stunPlayer(dur) {
   player.stunMax = dur;
 }
 
+// smoke (#6): detonation spawns a lingering cloud that blocks sight lines
+// both ways. Blocking is a segment-vs-sphere test (smokeBlocked) run by
+// the vision checks — bot target acquisition, bot line of fire, and the
+// player's crosshair name — NOT by blast damage or bot hearing: sound
+// carries through smoke, and only solid cover protects from a frag.
+const _smokeClouds = [];
+const SMOKE_SEE_THROUGH = 2.0; // metres of smoke a sight line tolerates —
+                               // point-blank inside the cloud you still see shapes
+
+// the blocking sphere swells to full size, holds, then thins out with the
+// visuals over the cloud's last moments
+function smokeRadius(c) {
+  const age = c.max - c.ttl;
+  return c.r * Math.min(1, age / 0.7) * Math.min(1, c.ttl / 1.5);
+}
+
+// true when the a→b segment passes through more than SMOKE_SEE_THROUGH
+// metres of any active cloud (chord length inside the sphere)
+function smokeBlocked(a, b) {
+  if (!_smokeClouds.length) return false;
+  const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+  const len = Math.hypot(dx, dy, dz);
+  if (len < 0.001) return false;
+  for (const c of _smokeClouds) {
+    const r = smokeRadius(c);
+    if (r <= 0.5) continue; // still blooming / nearly gone
+    const cx = c.pos.x - a.x, cy = c.pos.y - a.y, cz = c.pos.z - a.z;
+    const t0 = (cx * dx + cy * dy + cz * dz) / len;
+    const d2 = cx * cx + cy * cy + cz * cz - t0 * t0;
+    if (d2 >= r * r) continue;
+    const h = Math.sqrt(r * r - d2);
+    if (Math.min(t0 + h, len) - Math.max(t0 - h, 0) > SMOKE_SEE_THROUGH) return true;
+  }
+  return false;
+}
+
+function updateSmokeClouds(dt) {
+  for (let i = _smokeClouds.length - 1; i >= 0; i--) {
+    const c = _smokeClouds[i];
+    c.ttl -= dt;
+    if (c.ttl <= 0) _smokeClouds.splice(i, 1);
+  }
+}
+
+function smokeDetonate(t) {
+  const def = t.def, p = t.pos;
+  // blocking sphere centered at chest height so it covers standing sight lines
+  _smokeClouds.push({ pos: new THREE.Vector3(p.x, p.y + 1.1, p.z),
+    r: def.radius, ttl: def.smokeDur, max: def.smokeDur });
+  // layered puffs: a dense core plus a low ring around it
+  _blastAt.set(p.x, p.y + 1.0, p.z);
+  fxSmoke(_blastAt, def.smokeDur, def.radius * 1.5);
+  for (let i = 0; i < 11; i++) {
+    const a = (i / 11) * Math.PI * 2;
+    const rr = def.radius * (0.35 + Math.random() * 0.45);
+    _victimAt.set(p.x + Math.sin(a) * rr, p.y + 0.4 + Math.random() * 1.6,
+      p.z + Math.cos(a) * rr);
+    fxSmoke(_victimAt, def.smokeDur * (0.8 + Math.random() * 0.25),
+      def.radius * (0.8 + Math.random() * 0.5));
+  }
+  AudioSys.smokePop(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(p));
+  // the pop is audible — nearby enemies come look (quieter than a frag)
+  _blastAt.set(p.x, p.y + 0.4, p.z);
+  for (const b of G.bots) b.hearShot({ pos: _blastAt, team: player.team }, 20);
+}
+
 // selector under the minimap: what's banked, what's selected, how to deploy
 function refreshStreakTag() {
   const b = player._bankedStreaks;
@@ -1085,6 +1204,7 @@ function startMatch(mapId) {
   G.uavUntil = 0; // G.time restarts at 0, so a stale value would be a free UAV
   _napalmDrops.length = 0; // no strikes carry across a rematch
   _throwables.length = 0;  // in-flight grenades die with the old scene
+  _smokeClouds.length = 0; // active smoke too (sprites rebuild with the pools)
   player.stunT = 0;        // a rematch shakes the stars off
   UI.stunOverlay(0);
   _nukeT = -1;             // nor an in-flight nuke countdown
@@ -1098,7 +1218,7 @@ function startMatch(mapId) {
     scene: G.scene, colliders: G.colliders, graph: G.graph,
     api: {
       difficulty: UI.settings.difficulty,
-      pickSpawn, getEnemies, registerKill, noteShot, audioPan,
+      pickSpawn, getEnemies, registerKill, noteShot, audioPan, smokeBlocked,
       tracer: fxTracer,
       playerPos: () => player.pos,
       playerTeam: player.team,
@@ -1137,6 +1257,7 @@ function deploy() {
   player.reloadT = 0; player.switchT = 0; player.burstQueue = 0;
   player.equipLeft = THROWABLES[player.equip].count;
   player.equipTacLeft = THROWABLES[player.equipTac].count;
+  player.equipSmokeLeft = THROWABLES[player.equipSmoke].count;
   player.throwT = 0; player.cooking = null; player.cookKind = null; player.cookSlot = null;
   player.stunT = 0;
   player.adsAmt = 0; player.adsToggle = false; player.bloom = 0;
@@ -1287,6 +1408,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'KeyV') tryMelee();
   if (e.code === 'KeyF') startCooking('lethal');   // pin out; leaves on release
   if (e.code === 'KeyT') startCooking('tactical'); // stun, same cook mechanics
+  if (e.code === 'KeyE') startCooking('smoke');    // smoke, same cook mechanics
   if (e.code === 'KeyX') player.adsToggle = !player.adsToggle;
   if (e.code === 'KeyG') deployKillstreak();
   if (e.code === 'Digit3') cycleKillstreak();
@@ -1296,6 +1418,7 @@ document.addEventListener('keyup', e => {
   if (e.code === 'Tab') UI.$('scoreboard').classList.add('hidden');
   if (e.code === 'KeyF') releaseThrow('lethal');
   if (e.code === 'KeyT') releaseThrow('tactical');
+  if (e.code === 'KeyE') releaseThrow('smoke');
 });
 // Losing window focus never fires keyup/mouseup, so held inputs would stick
 // (e.g. alt-tab while holding W = infinite auto-run). Clear everything on blur.
@@ -1752,7 +1875,11 @@ function updateTargetName(dt) {
     _bodyBox.max.set(b.pos.x + 0.45, b.pos.y + 1.85, b.pos.z + 0.45);
     _ray.origin.copy(origin); _ray.direction.copy(dir);
     const h = _ray.intersectBox(_bodyBox, _hitVec);
-    if (h && h.distanceTo(origin) < maxT) { found = b; break; }
+    if (h && h.distanceTo(origin) < maxT) {
+      _victimAt.set(b.pos.x, b.pos.y + 1.2, b.pos.z);
+      if (smokeBlocked(origin, _victimAt)) continue; // can't ID through smoke
+      found = b; break;
+    }
   }
   if (found) {
     el.textContent = found.name;
@@ -1789,6 +1916,7 @@ function loop() {
 
     fxUpdate(dt);
     updateThrowables(dt);
+    updateSmokeClouds(dt);
     updateNapalm(dt);
     updateNuke(dt);
 
@@ -1841,7 +1969,8 @@ window.MAIN = {
 
 window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
   nukeT: v => v === undefined ? _nukeT : (_nukeT = v),
-  throwables: () => _throwables, throwEquipment, startCooking, releaseThrow };
+  throwables: () => _throwables, throwEquipment, startCooking, releaseThrow,
+  smokeClouds: () => _smokeClouds, smokeBlocked };
 
 UI.init();
 UI.show('menu');

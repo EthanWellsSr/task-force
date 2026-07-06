@@ -234,9 +234,9 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
 .ammo-div { color:#6a7060; margin:0 4px; font-size:22px; }
 #ammoReserve { font-size:20px; color:#9aa08a; }
 #fireMode { font-size:9px; letter-spacing:2px; color:#6a7060; }
-#grenadeCount, #tacCount { font-size:10px; letter-spacing:2px; color:#9aa08a; margin-top:4px; }
-#tacCount { margin-top:2px; }
-#grenadeCount.none, #tacCount.none { color:#50564a; }
+#grenadeCount, #tacCount, #smokeCount { font-size:10px; letter-spacing:2px; color:#9aa08a; margin-top:4px; }
+#tacCount, #smokeCount { margin-top:2px; }
+#grenadeCount.none, #tacCount.none, #smokeCount.none { color:#50564a; }
 #stunFlash {
   position:absolute; inset:0; background:#fff; opacity:0;
   pointer-events:none; z-index:40;

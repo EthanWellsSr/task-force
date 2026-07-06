@@ -253,6 +253,12 @@ const UI = {
       el.textContent = THROWABLES[p.equipTac].name + ' ×' + p.equipTacLeft + '  [T]';
       el.classList.toggle('none', p.equipTacLeft <= 0);
     }
+    if (c.smokeLeft !== p.equipSmokeLeft) {
+      c.smokeLeft = p.equipSmokeLeft;
+      const el = this.$('smokeCount');
+      el.textContent = THROWABLES[p.equipSmoke].name + ' ×' + p.equipSmokeLeft + '  [E]';
+      el.classList.toggle('none', p.equipSmokeLeft <= 0);
+    }
     if (c.hp !== p.hp) {
       c.hp = p.hp;
       const hb = this.$('healthBar');

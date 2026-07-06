@@ -264,6 +264,37 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 1.4);
   },
 
+  // smoke grenade pop: soft thump + a hiss tail while the canister spews
+  smokePop(dist = 0, pan = 0) {
+    if (!this.ensure()) return;
+    const atten = dist <= 0 ? 1 : Math.max(0.04, 1 - dist / 45);
+    const t = this.ctx.currentTime;
+    const out = this._dest(pan);
+    // thump
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.exponentialRampToValueAtTime(55, t + 0.12);
+    const g = this.ctx.createGain();
+    this._env(g, 0.5 * atten, 0.14);
+    osc.connect(g); g.connect(out);
+    osc.start(t); osc.stop(t + 0.16);
+    // hiss sighing off as the cloud fills in
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.loop = true; // the buffer is 1 s, the hiss runs ~2.5
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 0.7;
+    bp.frequency.setValueAtTime(3200, t);
+    bp.frequency.exponentialRampToValueAtTime(1400, t + 2.2);
+    const g2 = this.ctx.createGain();
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.exponentialRampToValueAtTime(0.14 * atten, t + 0.08);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 2.4);
+    src.connect(bp); bp.connect(g2); g2.connect(out);
+    src.start(t); src.stop(t + 2.5);
+  },
+
   // incoming napalm canister: short descending whistle
   incoming(dist = 0, pan = 0) {
     if (!this.ensure()) return;
