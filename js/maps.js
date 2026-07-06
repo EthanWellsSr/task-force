@@ -560,8 +560,10 @@ function buildNuketown(scene, colliders) {
 // Fuel Depot SE with the south barricade CQB pocket, Control Room
 // and Maintenance south-center, Generators splitting mid west of
 // the tower, Loading Dock SW (tf spawn), Blue Containers mid-west.
-// #8b blockout: proportions + masses; tower climb routes are #8c,
-// detail/cover/pit are #8d, y-aware nav is #8e.
+// #8b blockout: proportions + masses; #8c tower climb routes; #8d
+// detail/cover pass (raised Control Room + slide into the faked-low
+// Maintenance basin, generator pipes, dune pipe spur, zone garnish);
+// y-aware nav for the tower/derrick/pipeline is #8e.
 // ============================================================
 function buildRust(scene, colliders) {
   const k = new MapKit(scene, colliders);
@@ -666,10 +668,12 @@ function buildRust(scene, colliders) {
   }
   pipeRun(21.5, 0, 48, true);                        // main run along the north edge
   pipeRun(14.5, -2, 14, false);                      // spur toward the tower
+  pipeRun(24, 8, 5.5, false);                        // spur into the north dune
   for (const pz of [-22, -14, -6, 2, 10, 18])
     k.box(21.5, 1.15, pz, 0.5, 2.3, 0.5, rust);      // supports (walk-under stays clear)
   for (const px of [11.5, 18])
     k.box(px, 1.15, -2, 0.5, 2.3, 0.5, rust);
+  k.box(24.2, 1.15, 8, 0.5, 2.3, 0.5, rust);         // dune-spur support
 
   // ---- Oil Derrick (NW): raised platform with top/ground/under levels
   for (const [lx, lz] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]])
@@ -686,6 +690,7 @@ function buildRust(scene, colliders) {
   k.wall('x', 13.6, 16.6, 13, 2.5, 0.2, SHED);
   k.box(15.1, 2.6, 11.25, 3.6, 0.25, 4.1, 0x5a4a3a);
   k.box(15.1, 3.9, 12.4, 0.16, 2.4, 0.16, 0x8a8d90, { solid: false }); // antenna
+  k.box(15.8, 0.4, 12.2, 1.4, 0.8, 0.8, 0x6a5a45);   // radio desk inside
 
   // ---- Front Gate verticality: stacked boxes inside the NE corner
   k.box(19.3, 0.75, 20.8, 1.5, 1.5, 1.5, 0x7a6a4a);
@@ -720,24 +725,59 @@ function buildRust(scene, colliders) {
   k.crate(-18, 7, 1.2);
 
   // ---- Control Room (S-center): extremely small structure dividing
-  // Generators from Maintenance; the slide/pit into Maintenance is #8d
-  k.wall('z', -2.9, -0.1, -9.6, 2.3, 0.2, SHED, [{ a: -2.1, b: -0.9, top: 2.0 }]);
-  k.wall('z', -2.9, -0.1, -12.4, 2.3, 0.2, SHED);
-  k.wall('x', -12.4, -9.6, -2.9, 2.3, 0.2, SHED);
-  k.wall('x', -12.4, -9.6, -0.1, 2.3, 0.2, SHED);
-  k.box(-11, 2.4, -1.5, 3.2, 0.25, 3.2, 0x5a4a3a);
+  // Generators from Maintenance, raised on a 1.06 m plinth — the engine
+  // floor is clamped at y = 0 (moveEntity), so "Maintenance is low
+  // ground" is faked by raising this side of it. Stepped entry from the
+  // Generators (north) side, slide chute down the west face into the
+  // Maintenance basin; every riser 0.53 (player and bot step-up ≤ 0.55)
+  k.box(-11, 0.53, -1.5, 3.2, 1.06, 3.2, 0x6a5a48);            // plinth
+  k.wall('z', -2.9, -0.1, -9.6, 2.3, 0.2, SHED, [{ a: -2.1, b: -0.9, top: 2.0 }], 1.06);
+  k.wall('z', -2.9, -0.1, -12.4, 2.3, 0.2, SHED, [], 1.06);
+  k.wall('x', -12.4, -9.6, -2.9, 2.3, 0.2, SHED, [{ a: -11.8, b: -10.6, top: 1.9 }], 1.06);
+  k.wall('x', -12.4, -9.6, -0.1, 2.3, 0.2, SHED, [], 1.06);
+  k.box(-11, 3.46, -1.5, 3.2, 0.25, 3.2, 0x5a4a3a);            // roof
+  k.box(-12.0, 1.41, -0.7, 0.8, 0.7, 1.0, MACHINE);            // console
+  k.box(-9.0, 0.265, -1.5, 0.7, 0.53, 1.2, 0x6a5a48);          // door entry step
+  k.box(-11.2, 0.265, -3.6, 1.3, 0.53, 1.1, 0x6a5a48);         // slide tread
 
-  // ---- Maintenance (low ground, S-center-west): open space + scattered
-  // cover; the sunken basin is deferred to #8d ([verify] in the reference)
+  // ---- Maintenance (S-center-west): the reference's low ground. A real
+  // below-grade pit is impossible (world floor clamps at y = 0), so the
+  // basin is faked: stained slab, steppable 0.45 m concrete lips (below
+  // the 0.65 m nav knee ray, so no graph edges are cut) with open entries
+  // toward the slide apron (N), the Loading Dock (W) and the CQB lane (E)
+  k.box(-17, 0.015, -5.25, 8.0, 0.03, 6.5, 0x9c8455, { solid: false, shadow: false });
+  const LIP = 0x8f8878;
+  k.wall('z', -8.5, -6.2, -13, 0.45, 0.5, LIP);      // north edge (slide-apron gap)
+  k.wall('z', -4.2, -2.0, -13, 0.45, 0.5, LIP);
+  k.wall('x', -21, -18.6, -2.0, 0.45, 0.5, LIP);     // east edge (CQB-lane gap)
+  k.wall('x', -16.2, -13, -2.0, 0.45, 0.5, LIP);
+  k.wall('z', -8.5, -2.0, -21, 0.45, 0.5, LIP);      // south edge
+  k.wall('x', -21, -18.8, -8.5, 0.45, 0.5, LIP);     // west edge (dock gap)
+  k.wall('x', -16.4, -13, -8.5, 0.45, 0.5, LIP);
   k.crate(-17, -3, 1.3, 0x6e5e40); k.crate(-18.3, -3.6, 1.0, 0x7a6a4a);
   k.crate(-20, -7, 1.2);
-  k.barrel(-16, -6.5);
+  k.barrel(-16, -6.5); k.barrel(-19.8, -3.2, 0x5a6a45);
+  // junked pipe on the basin floor (top 0.52: steppable, under the knee ray)
+  const jp = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 2.6, 10), k.mat(PIPE));
+  jp.rotation.x = Math.PI / 2; jp.position.set(-20.2, 0.26, -5.5);
+  jp.castShadow = true; jp.receiveShadow = true;
+  scene.add(jp);
+  k.blocker(-20.2, 0.26, -5.5, 0.52, 0.52, 2.6);
 
   // ---- Generators: machinery blocks west of the tower splitting the
-  // mid into north and south halves
+  // mid into north and south halves; pipes bridge the 0.6 m slots between
+  // blocks (already too narrow to walk) so the split reads as one plant
   k.box(0.5, 1.1, -7.5, 2.4, 2.2, 3.2, MACHINE);
   k.box(-0.5, 0.95, -11, 2.0, 1.9, 2.6, MACHINE);
   k.box(1.5, 1.0, -14, 1.8, 2.0, 2.2, MACHINE);
+  for (const [gx, gz, gy] of [[0, -9.4, 0.55], [0, -9.4, 1.15], [0.55, -12.6, 0.55], [0.55, -12.6, 1.15]]) {
+    const gp = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 2.2, 10), k.mat(PIPE));
+    gp.rotation.x = Math.PI / 2; gp.position.set(gx, gy, gz);
+    gp.castShadow = true; gp.receiveShadow = true;
+    scene.add(gp);
+  }
+  k.blocker(0, 0.85, -9.4, 0.7, 1.5, 2.2);
+  k.blocker(0.55, 0.85, -12.6, 0.7, 1.5, 2.2);
 
   // ---- tri-level scaffold, SE face of the tower complex ([verify]
   // placement per the reference — recorded as approximate)
@@ -759,12 +799,33 @@ function buildRust(scene, colliders) {
   k.box(3, 1.3, -18.5, 6, 2.6, 2.5, 0x4a6a8a);
   k.box(-3, 1.3, -22.3, 6, 2.6, 2.5, 0x3a5a7a);
 
-  // scattered cover (light garnish; the real prop pass is #8d)
-  k.barrel(6, 8); k.barrel(6.8, 8.8);
+  // ---- prop garnish (#8d): drums / pallets / tires per zone, placed
+  // clear of waypoint seeds, spawn points, and the north under-pipe lane
+  function pallet(cx, cz) { k.box(cx, 0.07, cz, 1.2, 0.14, 1.2, 0x8a6f45); }
+  function tires(cx, cz) {
+    for (let i = 0; i < 3; i++) {
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.3, 12), k.mat(0x2e2e2c));
+      t.position.set(cx + (i % 2 ? 0.05 : -0.04), 0.15 + 0.3 * i, cz + (i % 2 ? -0.05 : 0.04));
+      t.castShadow = true; t.receiveShadow = true;
+      scene.add(t);
+    }
+    k.blocker(cx, 0.45, cz, 1.04, 0.9, 1.04);
+  }
+  k.barrel(6, 8); k.barrel(6.8, 8.8);                // mid / tower surrounds
   k.crate(9, -7, 1.3, 0x6e5e40);
   k.crate(-7, 12, 1.2);
   k.barrel(-9, -12, 0x5a6a45);
   k.crate(12, 3, 1.1, 0x7a5a3a);
+  tires(19.3, 18.9);                                 // Front Gate crate-stack clutter
+  k.barrel(6.5, 18.6); pallet(7.7, 17.3);            // Red Containers lane
+  k.barrel(-14.6, 19.4); k.barrel(-13.8, 18.8);      // Fuel Depot drums
+  k.barrel(-15.2, 18.6, 0x5a6a45); pallet(-19.6, 13.2);
+  tires(-21.5, 8.2);                                 // south CQB pocket
+  pallet(15.0, -14.2); k.barrel(19.2, -15.0);        // Oil Derrick
+  pallet(-11.8, -19.0); k.barrel(-10.5, -20.2);      // Loading Dock
+  k.barrel(0.2, -17.0, 0x5a6a45);                    // Blue Containers dogleg
+  pallet(-15, -7.5);                                 // basin pallet stack
+  k.box(-15, 0.59, -7.3, 0.9, 0.9, 0.9, 0x7a6a4a);   // crate on the pallet
 
   // ---- waypoints: ground grid for the new footprint + lane/door seeds;
   // y-aware tower/derrick/pipeline seeds are #8e
@@ -777,8 +838,9 @@ function buildRust(scene, colliders) {
     [12.8, 11.1], [15.1, 11.2],     // Comms Station door in/out
     [1, 17], [-2.5, 15],            // Red Containers lane
     [14, -5], [14, 1],              // under the pipeline spur
-    [-8.3, -1.5], [-11, -1.5],      // Control Room door in/out
-    [-18, -4.8],                    // Maintenance
+    [-8.3, -1.5], [-11, -1.5, 1.06], // Control Room door out/in (raised floor)
+    [-11.2, -5],                    // slide bottom (Control Room -> basin)
+    [-18, -4.8],                    // Maintenance basin
     [-20, 8], [-17, 11],            // south CQB pocket
     [-21.5, -15],                   // Loading Dock west lane
     [0, -20.6],                     // Blue Containers dogleg
