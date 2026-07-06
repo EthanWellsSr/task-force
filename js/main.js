@@ -94,7 +94,7 @@ const player = {
   lastShotTime: -99,
   _stepT: 0, _killStreakCount: 0, _lastKillTime: -99, _streakKills: 0,
   _bankedStreaks: [], _streakSel: 0,
-  equip: 'frag', equipLeft: 0, throwT: 0,
+  equip: 'frag', equipLeft: 0, throwT: 0, cooking: null,
 };
 
 const keys = {};
@@ -786,25 +786,44 @@ function buildGrenadeMesh(color) {
   return g;
 }
 
-function throwEquipment() {
-  if (G.state !== 'playing' || !player.alive) return;
-  const def = THROWABLES[player.equip];
-  if (!def || player.equipLeft <= 0) return;
-  if (player.throwT > 0 || player.switchT > 0 || player.meleeT > 0.5) return;
-  player.equipLeft--;
-  player.throwT = 0.55; // re-throw cooldown; also drives the viewmodel animation
+function spawnThrowable(def, fuse, speed, up) {
   const dir = G.camera.getWorldDirection(_shotDir);
   const pos = new THREE.Vector3(player.pos.x, player.pos.y + eyeHeight() - 0.1, player.pos.z)
     .addScaledVector(dir, 0.35);
-  const vel = new THREE.Vector3().copy(dir).multiplyScalar(def.throwSpeed);
-  vel.y += def.throwUp; // lob arc
+  const vel = new THREE.Vector3().copy(dir).multiplyScalar(speed);
+  vel.y += up; // lob arc
   const mesh = buildGrenadeMesh(def.color);
   mesh.position.copy(pos);
   G.scene.add(mesh);
-  _throwables.push({ def, mesh, pos, vel, fuse: def.fuse,
+  _throwables.push({ def, mesh, pos, vel, fuse,
     spin: 5 + Math.random() * 3, sinceBounce: 0 });
+}
+
+// COD-style cooking: [F] down pulls the pin (committed — the grenade is
+// spent and its fuse burns in hand), [F] up throws with the remaining
+// fuse. Cook too long and it detonates in hand; dying mid-cook drops it.
+function startCooking() {
+  if (G.state !== 'playing' || !player.alive) return;
+  const def = THROWABLES[player.equip];
+  if (!def || player.equipLeft <= 0 || player.cooking !== null) return;
+  if (player.throwT > 0 || player.switchT > 0 || player.meleeT > 0.5) return;
+  player.equipLeft--;
+  player.cooking = def.fuse;
+  AudioSys.pinPull();
+}
+
+function releaseThrow() {
+  if (player.cooking === null) return;
+  const def = THROWABLES[player.equip];
+  const fuse = player.cooking;
+  player.cooking = null;
+  player.throwT = 0.55; // re-throw cooldown; also drives the viewmodel animation
+  spawnThrowable(def, fuse, def.throwSpeed, def.throwUp);
   AudioSys.throwWhoosh();
 }
+
+// instant pin-pull + lob in one call (DEBUG / tests)
+function throwEquipment() { startCooking(); releaseThrow(); }
 
 function updateThrowables(dt) {
   for (let i = _throwables.length - 1; i >= 0; i--) {
@@ -1055,7 +1074,8 @@ function deploy() {
   player.weapons = [mkState(cls.primary), mkState(cls.secondary)];
   player.cur = 0;
   player.reloadT = 0; player.switchT = 0; player.burstQueue = 0;
-  player.equipLeft = THROWABLES[player.equip].count; player.throwT = 0;
+  player.equipLeft = THROWABLES[player.equip].count;
+  player.throwT = 0; player.cooking = null;
   player.adsAmt = 0; player.adsToggle = false; player.bloom = 0;
   player.hp = 100;
   player.stamina = 1;
@@ -1089,6 +1109,12 @@ function damagePlayer(dmg, attacker, weaponName, headshot) {
     player.hp = 0;
     player.alive = false;
     player.deaths++;
+    if (player.cooking !== null) { // dying mid-cook drops the live grenade
+      const cdef = THROWABLES[player.equip];
+      const fuse = player.cooking;
+      player.cooking = null;
+      spawnThrowable(cdef, fuse, 1.2, 1.2);
+    }
     player._killStreakCount = 0; // reset streak on death
     player._streakKills = 0;     // streak progress resets; banked rewards survive death
     if (attacker) attacker.kills++;
@@ -1192,7 +1218,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Digit1') switchWeapon(0);
   if (e.code === 'Digit2') switchWeapon(1);
   if (e.code === 'KeyV') tryMelee();
-  if (e.code === 'KeyF') throwEquipment();
+  if (e.code === 'KeyF') startCooking(); // pin out; the grenade leaves on release
   if (e.code === 'KeyX') player.adsToggle = !player.adsToggle;
   if (e.code === 'KeyG') deployKillstreak();
   if (e.code === 'Digit3') cycleKillstreak();
@@ -1200,12 +1226,14 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => {
   keys[e.code] = false;
   if (e.code === 'Tab') UI.$('scoreboard').classList.add('hidden');
+  if (e.code === 'KeyF') releaseThrow();
 });
 // Losing window focus never fires keyup/mouseup, so held inputs would stick
 // (e.g. alt-tab while holding W = infinite auto-run). Clear everything on blur.
 window.addEventListener('blur', () => {
   for (const k in keys) keys[k] = false;
   firing = false;
+  releaseThrow(); // focus loss eats the keyup — a cooking grenade leaves now
   player.adsHeld = false;
   UI.$('scoreboard').classList.add('hidden');
 });
@@ -1412,6 +1440,14 @@ function updatePlayer(dt) {
   if (player.switchT > 0) player.switchT -= dt;
   if (player.meleeT > 0) player.meleeT -= dt;
   if (player.throwT > 0) player.throwT -= dt;
+  if (player.cooking !== null) {
+    player.cooking -= dt;
+    if (player.cooking <= 0) { // cooked too long: it goes off in hand
+      const cdef = THROWABLES[player.equip];
+      player.cooking = null;
+      cdef.detonate({ def: cdef, pos: player.pos.clone() });
+    }
+  }
   if (player.fireCooldown > 0) player.fireCooldown -= dt;
   player.bloom = Math.max(0, player.bloom - dt * 0.09);
   if (player.reloadT > 0) {
@@ -1426,7 +1462,8 @@ function updatePlayer(dt) {
 
   // ---- firing
   if (firing && player.sprinting) player.sprinting = false;
-  const canFire = player.reloadT <= 0 && player.switchT <= 0 && player.meleeT <= 0.5;
+  const canFire = player.reloadT <= 0 && player.switchT <= 0 && player.meleeT <= 0.5 &&
+    player.cooking === null; // the trigger hand is holding a live grenade
   if (canFire && player.fireCooldown <= 0) {
     let wants = false;
     if (def.mode === 'auto') wants = firing;
@@ -1572,7 +1609,7 @@ function firePlayerShot(w) {
 // ============================================================
 // Camera & viewmodel per-frame
 // ============================================================
-let swayT = 0;
+let swayT = 0, cookDip = 0;
 function updateCameraAndViewmodel(dt) {
   const def = curW().def;
   swayT += dt;
@@ -1597,11 +1634,15 @@ function updateCameraAndViewmodel(dt) {
     }
     vmKick = Math.max(0, vmKick - dt * 7);
     target.z += vmKick * 0.05;
-    // grenade throw: the gun dips down-right while the off hand lobs
-    let dip = 0;
+    // grenade: the gun holds dipped down-right while cooking, and the
+    // release plays the same dip as a quick lob swing
+    cookDip += ((player.cooking !== null ? 1 : 0) - cookDip) * Math.min(1, dt * 10);
+    let dip = cookDip;
     if (player.throwT > 0) {
       const u = 1 - player.throwT / 0.55;
-      dip = Math.sin(Math.min(1, u * 1.15) * Math.PI);
+      dip = Math.max(dip, Math.sin(Math.min(1, u * 1.15) * Math.PI));
+    }
+    if (dip > 0.001) {
       target.x += dip * 0.16;
       target.y -= dip * 0.2;
     }
@@ -1720,7 +1761,7 @@ window.MAIN = {
 
 window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
   nukeT: v => v === undefined ? _nukeT : (_nukeT = v),
-  throwables: () => _throwables, throwEquipment };
+  throwables: () => _throwables, throwEquipment, startCooking, releaseThrow };
 
 UI.init();
 UI.show('menu');

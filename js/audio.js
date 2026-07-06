@@ -191,6 +191,18 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 0.08);
   },
 
+  // grenade pin pull: tiny bright metallic click
+  pinPull() {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'square'; osc.frequency.value = 2200;
+    const g = this.ctx.createGain();
+    this._env(g, 0.07, 0.03);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + 0.05);
+  },
+
   // grenade toss: short rising noise whoosh
   throwWhoosh() {
     if (!this.ensure()) return;
