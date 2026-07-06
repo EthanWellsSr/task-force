@@ -214,6 +214,19 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
   font-size:17px; font-weight:800; letter-spacing:4px; color:#e8a33d;
   text-shadow:0 0 14px rgba(232,163,61,.55), 0 1px 3px #000;
 }
+#nukeCountdown {
+  position:absolute; top:118px; left:50%; transform:translateX(-50%);
+  font-size:22px; font-weight:800; letter-spacing:5px; color:#ff4a3a;
+  text-shadow:0 0 18px rgba(255,74,58,.6), 0 1px 3px #000;
+  animation:nukePulse 1s infinite;
+}
+@keyframes nukePulse { 50% { opacity:.55; } }
+#nukeFlash {
+  position:absolute; inset:0; background:#fff; opacity:0;
+  pointer-events:none; z-index:60;
+}
+#nukeFlash.flash { opacity:1; }
+#nukeFlash.fade { opacity:0; transition:opacity 2.2s ease-in; }
 #ammoBox { position:absolute; right:24px; bottom:22px; text-align:right; text-shadow:0 1px 3px #000; }
 #weaponName { font-size:13px; letter-spacing:2px; color:#c8c5b8; font-weight:700; }
 #ammoCount { font-size:34px; font-weight:800; }

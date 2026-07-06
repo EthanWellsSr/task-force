@@ -282,6 +282,31 @@ const UI = {
     this._sbT = setTimeout(() => el.classList.add('hidden'), 2500);
   },
 
+  // tactical nuke countdown, big and red under the scorebar (null hides it);
+  // called every frame while a nuke is inbound, so gate the DOM write
+  _nukeSec: null,
+  setNukeCountdown(sec) {
+    if (sec === this._nukeSec) return;
+    this._nukeSec = sec;
+    const el = this.$('nukeCountdown');
+    if (sec === null) { el.classList.add('hidden'); return; }
+    el.textContent = '☢ TACTICAL NUKE INBOUND — ' + sec + ' ☢';
+    el.classList.remove('hidden');
+  },
+
+  // detonation whiteout: snap to full white, then fade to reveal the end screen
+  nukeFlash() {
+    const el = this.$('nukeFlash');
+    el.classList.remove('fade');
+    el.classList.add('flash');
+    void el.offsetWidth; // commit the full-white frame so the fade transitions from it
+    el.classList.remove('flash');
+    el.classList.add('fade');
+  },
+  clearNukeFlash() {
+    this.$('nukeFlash').classList.remove('flash', 'fade');
+  },
+
   // banked-killstreak selector under the minimap (null hides it)
   setStreakTag(text) {
     const el = this.$('streakTag');

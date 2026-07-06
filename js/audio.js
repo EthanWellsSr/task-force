@@ -236,6 +236,81 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 0.45);
   },
 
+  // tactical nuke deployed: wailing air-raid siren, three slow sweeps
+  nukeSiren() {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(520, t);
+    for (let i = 0; i < 3; i++) {
+      osc.frequency.linearRampToValueAtTime(760, t + i * 0.9 + 0.45);
+      osc.frequency.linearRampToValueAtTime(520, t + i * 0.9 + 0.9);
+    }
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.08, t);
+    g.gain.setValueAtTime(0.08, t + 2.4);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 2.7);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + 2.8);
+  },
+
+  // nuke countdown: one sharp tick per second
+  nukeTick() {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'square'; osc.frequency.value = 1050;
+    const g = this.ctx.createGain();
+    this._env(g, 0.12, 0.07);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + 0.09);
+  },
+
+  // nuke cinematic: heavy bomber drone — two detuned saws swelling in,
+  // holding through the run, fading as the plane leaves
+  nukePlane() {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    for (const f of [55, 57.5]) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sawtooth'; osc.frequency.value = f;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 320;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.055, t + 2.2);
+      g.gain.setValueAtTime(0.055, t + 5.5);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 9);
+      osc.connect(lp); lp.connect(g); g.connect(this.master);
+      osc.start(t); osc.stop(t + 9.2);
+    }
+  },
+
+  // nuke detonation: long low rumble + deep sub boom (the whiteout sound)
+  nukeBlast() {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf; src.loop = true; // buffer is 1 s, rumble is longer
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(1400, t);
+    lp.frequency.exponentialRampToValueAtTime(60, t + 2.2);
+    const g = this.ctx.createGain();
+    this._env(g, 1.0, 2.4);
+    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + 2.6);
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(90, t);
+    osc.frequency.exponentialRampToValueAtTime(28, t + 1.2);
+    const g2 = this.ctx.createGain();
+    this._env(g2, 0.9, 1.6);
+    osc.connect(g2); g2.connect(this.master);
+    osc.start(t); osc.stop(t + 1.8);
+  },
+
   // killstreak reward earned (banked, not yet deployed): two bright notes
   streakReady() {
     if (!this.ensure()) return;

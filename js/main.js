@@ -426,6 +426,10 @@ const KILLSTREAKS = [
     id: 'napalm', name: 'NAPALM STRIKE', kills: 10,
     deploy() { deployNapalm(); },
   },
+  {
+    id: 'nuke', name: 'TACTICAL NUKE', kills: 25,
+    deploy() { deployNuke(); },
+  },
 ];
 
 // ---- napalm strike (#7b): random bombardment across the map ----
@@ -505,6 +509,248 @@ function updateNapalm(dt) {
   }
 }
 
+// ---- tactical nuke (#7c): dramatic countdown, then a cinematic — the
+// camera pulls out over the map, a bomber crosses the sky and drops the
+// bomb, the whiteout fades into a growing mushroom cloud, everyone dies,
+// and the match ends as a win for the owner's team, MW2-style.
+// Like the other streaks the countdown keeps running through the owner's
+// death (updateNuke runs while the match is live) and dies at match end.
+const NUKE_COUNTDOWN = 10;
+let _nukeT = -1;   // seconds until the cinematic; <0 = none in the air
+let _cine = null;  // nuke cinematic state (G.state === 'nukecine')
+const _cineCamPos = new THREE.Vector3();
+const _cineLook = new THREE.Vector3();
+
+function deployNuke() {
+  _nukeT = NUKE_COUNTDOWN;
+  AudioSys.nukeSiren();
+}
+
+function updateNuke(dt) {
+  if (_nukeT < 0) return;
+  const prevSec = Math.ceil(_nukeT);
+  _nukeT -= dt;
+  if (_nukeT <= 0) {
+    _nukeT = -1;
+    startNukeCinematic();
+    return;
+  }
+  const sec = Math.ceil(_nukeT);
+  if (sec !== prevSec) AudioSys.nukeTick();
+  UI.setNukeCountdown(sec);
+}
+
+// box-built strategic bomber, nose facing +x
+function buildNukePlane() {
+  const g = new THREE.Group();
+  const mat = c => new THREE.MeshLambertMaterial({ color: c });
+  const part = (w, h, d, c, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c));
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  };
+  const body = 0x4a4f45, wing = 0x3e423a, dark = 0x2e3230;
+  part(9, 1.1, 1.1, body, 0, 0, 0);          // fuselage
+  part(1.6, 0.85, 0.85, dark, 5.2, 0, 0);    // nose
+  part(3.4, 0.18, 12, wing, 0.4, 0.2, 0);    // main wing
+  part(1.5, 0.14, 4.2, wing, -4.1, 0.35, 0); // tailplane
+  part(1.6, 2.1, 0.16, wing, -4.2, 1.1, 0);  // fin
+  for (const z of [-4.4, -2.4, 2.4, 4.4])    // engine pods under the wing
+    part(1.4, 0.5, 0.5, dark, 1.3, -0.35, z);
+  g.scale.set(1.6, 1.6, 1.6);
+  return g;
+}
+
+// the bomb itself: fat cylinder-ish body + tail fins, nose facing +x
+function buildNukeBomb() {
+  const g = new THREE.Group();
+  const mat = c => new THREE.MeshLambertMaterial({ color: c });
+  const part = (w, h, d, c, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c));
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  };
+  part(1.8, 0.55, 0.55, 0x33362f, 0, 0, 0);
+  part(0.5, 0.4, 0.4, 0x272a24, 1.1, 0, 0);
+  part(0.5, 0.14, 1.1, 0x272a24, -0.85, 0, 0); // tail fins
+  part(0.5, 1.1, 0.14, 0x272a24, -0.85, 0, 0);
+  return g;
+}
+
+// low-poly mushroom cloud sized to the map (unit height ~1.3×B), grown
+// from ~0 by the cinematic; returns the group + the glow light inside it
+function buildMushroomCloud(B) {
+  const g = new THREE.Group();
+  const puff = (r, x, y, z, c) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8),
+      new THREE.MeshLambertMaterial({ color: c }));
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  };
+  const gray = 0x9a9284, dust = 0x8a8072;
+  // stem
+  puff(B * 0.14, 0, B * 0.12, 0, dust);
+  puff(B * 0.17, 0, B * 0.38, 0, dust);
+  puff(B * 0.20, 0, B * 0.66, 0, gray);
+  // cap: center dome + a ring of puffs curling under it
+  puff(B * 0.36, 0, B * 1.02, 0, gray);
+  for (let i = 0; i < 7; i++) {
+    const a = i / 7 * Math.PI * 2;
+    puff(B * 0.19, Math.sin(a) * B * 0.33, B * 0.88, Math.cos(a) * B * 0.33, dust);
+  }
+  // fireball glow at the base
+  puff(B * 0.16, 0, B * 0.10, 0, 0xffa040).material =
+    new THREE.MeshBasicMaterial({ color: 0xff9030 });
+  const light = new THREE.PointLight(0xff8030, 6, B * 3);
+  light.position.y = B * 0.25;
+  g.add(light);
+  return { group: g, light };
+}
+
+// endWin (optional): when set (true/false/null), this is the end-of-match
+// Nuketown nuke — cosmetic, and the held result is shown afterwards.
+// When omitted it's the killstreak nuke: everyone dies, owner's team wins.
+function startNukeCinematic(endWin) {
+  G.state = 'nukecine';
+  UI.setNukeCountdown(null);
+  UI.show(null); // no HUD, no menus — the world is the whole screen
+  document.exitPointerLock && document.exitPointerLock();
+  if (vmGun) vmGun.visible = false;
+  document.getElementById('scopeOverlay').classList.add('hidden');
+  G.camera.fov = UI.settings.fov; // undo any ADS zoom
+  G.camera.updateProjectionMatrix();
+  const B = Math.max(G.map.bounds.x, G.map.bounds.z);
+  const span = B * 2.6;
+  const plane = buildNukePlane();
+  plane.position.set(-span, B * 1.5, -B * 0.4);
+  G.scene.add(plane);
+  _cine = {
+    t: 0, B,
+    // camera glides from the player's eyes to a vantage over the map
+    camFrom: G.camera.position.clone(),
+    lookFrom: G.camera.position.clone()
+      .add(G.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(12)),
+    camTo: new THREE.Vector3(0, B * 1.15, B * 2.3),
+    lookTo: new THREE.Vector3(0, 4, 0),
+    plane, planeSpeed: span / 3.2, dropped: false,
+    bomb: null, bombT: 0, dropY: 0,
+    cloud: null, impactT: -1, shake: 0,
+    endWin,
+  };
+  AudioSys.nukePlane();
+}
+
+function nukeImpact(x, z) {
+  const c = _cine;
+  c.impactT = 0;
+  c.shake = 1;
+  UI.nukeFlash();
+  AudioSys.nukeBlast();
+  const cloud = buildMushroomCloud(c.B);
+  cloud.group.position.set(x, 0, z);
+  cloud.group.scale.set(0.05, 0.05, 0.05);
+  G.scene.add(cloud.group);
+  c.cloud = cloud;
+  for (let i = 0; i < 12; i++) { // burning ground around the zero point
+    const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * c.B * 0.45;
+    _burnAt.set(x + Math.sin(a) * r, 0.6, z + Math.cos(a) * r);
+    fxFire(_burnAt, 3 + Math.random() * 2, 2 + Math.random() * 2);
+  }
+  if (c.endWin !== undefined) {
+    // end-of-match nuke: purely cosmetic — bots flop for the camera, but
+    // the scoreboard is already decided and must not change
+    for (const b of G.bots) {
+      if (!b.alive) continue;
+      b.alive = false;
+      b.deathAnimT = 2.2;
+    }
+    return;
+  }
+  // killstreak nuke — everyone dies for real: enemies credit the owner
+  // (score + killfeed), teammates die uncredited — no friendly kills
+  for (const b of G.bots) {
+    if (!b.alive) continue;
+    b.hurt(9999, b.team !== player.team ? player : null, 'TACTICAL NUKE', false);
+  }
+  // the owner dies too (damagePlayer would show the respawn screen
+  // mid-cinematic, so just record the death directly)
+  if (player.alive) {
+    player.alive = false;
+    player.hp = 0;
+    player.deaths++;
+    player._killStreakCount = 0;
+    player._streakKills = 0;
+  }
+}
+
+function updateNukeCine(dt) {
+  const c = _cine;
+  if (!c) return;
+  c.t += dt;
+
+  // camera: smoothstep glide out, then hold (plus impact shake)
+  const u = Math.min(1, c.t / 2.2), e = u * u * (3 - 2 * u);
+  _cineCamPos.lerpVectors(c.camFrom, c.camTo, e);
+  _cineLook.lerpVectors(c.lookFrom, c.lookTo, e);
+  if (c.shake > 0) {
+    c.shake -= dt * 0.8;
+    const s = Math.max(0, c.shake) * 0.5;
+    _cineCamPos.x += (Math.random() - 0.5) * s;
+    _cineCamPos.y += (Math.random() - 0.5) * s;
+    _cineCamPos.z += (Math.random() - 0.5) * s;
+  }
+  G.camera.position.copy(_cineCamPos);
+  G.camera.lookAt(_cineLook);
+
+  // bomber: straight run, releases over the middle, climbs away after
+  c.plane.position.x += c.planeSpeed * dt;
+  if (c.dropped) c.plane.position.y += dt * 2.5;
+  if (!c.dropped && c.plane.position.x >= -c.B * 0.25) {
+    c.dropped = true;
+    c.bomb = buildNukeBomb();
+    c.bomb.position.copy(c.plane.position);
+    c.bomb.position.y -= 1.4;
+    c.dropY = c.bomb.position.y;
+    G.scene.add(c.bomb);
+    c.bombT = 0;
+    AudioSys.incoming(0, 0);
+  }
+  if (c.bomb) {
+    c.bombT += dt;
+    const f = Math.min(1, c.bombT / 1.7);
+    c.bomb.position.y = c.dropY * (1 - f * f); // accelerating fall
+    c.bomb.position.x += c.planeSpeed * 0.35 * (1 - f) * dt; // carried speed bleeds off
+    c.bomb.rotation.z = -f * 1.2; // noses over as it falls
+    if (f >= 1) {
+      const bx = c.bomb.position.x, bz = c.bomb.position.z;
+      G.scene.remove(c.bomb);
+      c.bomb = null;
+      nukeImpact(bx, bz);
+    }
+  }
+
+  // after impact: the cloud swells while the flash fades, then match end
+  if (c.impactT >= 0) {
+    c.impactT += dt;
+    const g = Math.min(1, c.impactT / 4);
+    const s = 0.05 + 0.95 * (1 - Math.pow(1 - g, 3)); // fast rise, slow finish
+    c.cloud.group.scale.set(s, s, s);
+    c.cloud.group.rotation.y += dt * 0.12;
+    c.cloud.light.intensity = Math.max(0, 6 * (1 - c.impactT / 3));
+    for (const b of G.bots) if (!b.alive) b.update(dt); // death anims play out
+    if (c.impactT >= 4.5) {
+      // end-of-match nuke shows the held result; the killstreak nuke
+      // wins for the owner's team no matter the score
+      const win = c.endWin !== undefined ? c.endWin : true;
+      _cine = null;
+      finishMatch(win);
+    }
+  }
+}
+
 // selector under the minimap: what's banked, what's selected, how to deploy
 function refreshStreakTag() {
   const b = player._bankedStreaks;
@@ -569,6 +815,8 @@ function registerKill(killer, victim, weaponName, headshot) {
     }
   }
   UI.updateScores(G.scores.tf, G.scores.sp, G.timeLeft);
+  // (endMatch is a no-op during the nuke cinematic, so the killstreak
+  // nuke's mass kill can't trip the score limit mid-scene)
   if (G.scores.tf >= UI.settings.scoreLimit || G.scores.sp >= UI.settings.scoreLimit) endMatch();
 }
 
@@ -604,6 +852,10 @@ function startMatch(mapId) {
   refreshStreakTag();
   G.uavUntil = 0; // G.time restarts at 0, so a stale value would be a free UAV
   _napalmDrops.length = 0; // no strikes carry across a rematch
+  _nukeT = -1;             // nor an in-flight nuke countdown
+  _cine = null;            // cinematic props die with the old scene
+  UI.setNukeCountdown(null);
+  UI.clearNukeFlash();
   player.alive = false;
   G.bots = [];
 
@@ -685,7 +937,9 @@ function damagePlayer(dmg, attacker, weaponName, headshot) {
     player._streakKills = 0;     // streak progress resets; banked rewards survive death
     if (attacker) attacker.kills++;
     registerKill(attacker, player, weaponName, headshot);
-    if (G.state === 'end') return;
+    // that kill may have ended the match (or started the Nuketown
+    // end-of-match nuke) — don't clobber the state with 'dead'
+    if (G.state === 'end' || G.state === 'nukecine') return;
     G.state = 'dead';
     player.respawnT = 3.5;
     document.exitPointerLock && document.exitPointerLock();
@@ -694,11 +948,26 @@ function damagePlayer(dmg, attacker, weaponName, headshot) {
   }
 }
 
-function endMatch() {
+// forcedWin (optional): true/false forces the result regardless of score —
+// the tactical nuke ends the match as a win for its owner's team.
+// On Nuketown every match ends with the test-site nuke going off: the
+// result is computed here, then the cinematic plays (cosmetic — no stat
+// changes) and hands the held result to finishMatch. A no-op while the
+// cinematic is already running (the killstreak nuke's mass kill would
+// otherwise trip the score limit mid-scene).
+function endMatch(forcedWin) {
+  if (G.state === 'end' || G.state === 'nukecine') return;
+  const win = forcedWin !== undefined ? forcedWin
+    : G.scores.tf === G.scores.sp ? null : G.scores.tf > G.scores.sp;
+  if (G.mapId === 'nuketown') { startNukeCinematic(win); return; }
+  finishMatch(win);
+}
+
+// the actual match end: state flip + end screen (win: true/false/null)
+function finishMatch(win) {
   if (G.state === 'end') return;
   G.state = 'end';
   document.exitPointerLock && document.exitPointerLock();
-  const win = G.scores.tf === G.scores.sp ? null : G.scores.tf > G.scores.sp;
   AudioSys.matchEnd(win !== false);
   UI.showEnd(win, G.scores.tf, G.scores.sp, G.combatants);
 }
@@ -1236,6 +1505,7 @@ function loop() {
 
     fxUpdate(dt);
     updateNapalm(dt);
+    updateNuke(dt);
 
     // HUD
     if (player.alive) {
@@ -1249,10 +1519,15 @@ function loop() {
         (player.perks.has('marathon') ? 100 : player.stamina * 100) + '%';
     }
     drawMinimap();
+  } else if (G.state === 'nukecine') {
+    // nuke cinematic: the world freezes, the camera belongs to the show
+    fxUpdate(dt);
+    updateNukeCine(dt);
   }
 
   if (G.scene) {
-    if (player.alive || G.state === 'dead') updateCameraAndViewmodel(live ? dt : 0);
+    if ((player.alive || G.state === 'dead') && G.state !== 'nukecine')
+      updateCameraAndViewmodel(live ? dt : 0);
     G.renderer.render(G.scene, G.camera);
   }
 }
@@ -1275,7 +1550,8 @@ window.MAIN = {
   },
 };
 
-window.DEBUG = { G, player, startMatch, deploy };
+window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
+  nukeT: v => v === undefined ? _nukeT : (_nukeT = v) };
 
 UI.init();
 UI.show('menu');
