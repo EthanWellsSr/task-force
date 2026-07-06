@@ -129,6 +129,8 @@ class Bot {
     this.walkPhase = Math.random() * 10;
     this.flashT = 0;
     this._stepT = 0;
+    this.stunT = 0; // stun grenade: frozen while > 0
+    this.dazeT = 0; // ...and accuracy stays blown until this runs out
   }
 
   spawn() {
@@ -150,6 +152,7 @@ class Bot {
     this.mesh.position.copy(this.pos);
     this.lastPos.copy(this.pos);
     this.stuckT = 0;
+    this.stunT = 0; this.dazeT = 0; // death clears the stars
   }
 
   // A shot rang out: enemies within earshot learn the shooter's position
@@ -168,6 +171,15 @@ class Bot {
     const fresh = !this.lastKnown || this.lastKnown.distanceTo(shooter.pos) > 4;
     this.lastKnown = shooter.pos.clone();
     if (fresh && !this.target) this.path = null;
+  }
+
+  // A stun grenade got them: aim and movement freeze while stunT runs,
+  // and accuracy stays blown (dazeT, see _fireShot) for a beat after
+  // they can move again — recovering, not instantly back to laser aim.
+  stun(dur) {
+    if (!this.alive) return;
+    this.stunT = Math.max(this.stunT, dur);
+    this.dazeT = Math.max(this.dazeT, dur + 2);
   }
 
   hurt(dmg, attacker, weaponName, headshot) {
@@ -287,6 +299,7 @@ class Bot {
     if (t.speedNow > 4) chance *= 0.72;
     if (t.crouched) chance *= 0.85;
     if (w.model === 'sniper') chance *= 1.25;
+    if (this.dazeT > 0) chance *= 0.25; // stun aftermath: can barely aim
     const hit = !blocked && Math.random() < chance;
 
     // damage with falloff
@@ -340,6 +353,23 @@ class Bot {
       if (this.respawnT <= 0 && this.world.api.matchLive()) this.spawn();
       return;
     }
+
+    // ---- stunned: frozen in place — no turning, moving, perceiving or
+    // firing; gravity still applies so a stunned bot doesn't hover
+    if (this.stunT > 0) {
+      this.stunT -= dt;
+      this.velY -= 13 * dt;
+      this.onGround = moveEntity(this.pos, 0.38, 1.7, 0, this.velY * dt, 0,
+        this.world.colliders, 0);
+      if (this.onGround && this.velY < 0) this.velY = 0;
+      this.speedNow = 0;
+      if (this.flashT > 0) { this.flashT -= dt; ud.flash.visible = this.flashT > 0; }
+      this.mesh.position.copy(this.pos);
+      ud.legL.rotation.x *= 0.8;
+      ud.legR.rotation.x *= 0.8;
+      return;
+    }
+    if (this.dazeT > 0) this.dazeT -= dt;
 
     // ---- perception (staggered)
     this.scanT -= dt;

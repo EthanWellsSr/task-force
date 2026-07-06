@@ -247,6 +247,12 @@ const UI = {
       el.textContent = THROWABLES[p.equip].name + ' ×' + p.equipLeft + '  [F]';
       el.classList.toggle('none', p.equipLeft <= 0);
     }
+    if (c.tacLeft !== p.equipTacLeft) {
+      c.tacLeft = p.equipTacLeft;
+      const el = this.$('tacCount');
+      el.textContent = THROWABLES[p.equipTac].name + ' ×' + p.equipTacLeft + '  [T]';
+      el.classList.toggle('none', p.equipTacLeft <= 0);
+    }
     if (c.hp !== p.hp) {
       c.hp = p.hp;
       const hb = this.$('healthBar');
@@ -298,6 +304,15 @@ const UI = {
     if (sec === null) { el.classList.add('hidden'); return; }
     el.textContent = '☢ TACTICAL NUKE INBOUND — ' + sec + ' ☢';
     el.classList.remove('hidden');
+  },
+
+  // stun whiteout: opacity driven per frame while the player is stunned
+  // (main loop passes 0 when not — cache gates the DOM write)
+  _stunV: 0,
+  stunOverlay(v) {
+    if (v === this._stunV) return;
+    this._stunV = v;
+    this.$('stunFlash').style.opacity = v;
   },
 
   // detonation whiteout: snap to full white, then fade to reveal the end screen

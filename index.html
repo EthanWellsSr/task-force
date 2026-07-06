@@ -44,11 +44,14 @@
       <div id="ammoCount"><span id="ammoMag">30</span><span class="ammo-div">/</span><span id="ammoReserve">120</span></div>
       <div id="fireMode">AUTO</div>
       <div id="grenadeCount">FRAG &times;2  [F]</div>
+      <div id="tacCount">STUN &times;2  [T]</div>
     </div>
     <div id="healthWrap"><div id="healthBar"></div></div>
     <div id="sprintWrap"><div id="sprintBar"></div></div>
     <div id="reloadHint" class="hidden">RELOADING...</div>
     <div id="killMsg" class="hidden"></div>
+    <!-- stun grenade whiteout — above the HUD, hides with it -->
+    <div id="stunFlash"></div>
   </div>
 
   <!-- ============ MAIN MENU ============ -->
@@ -168,7 +171,7 @@
       <h2 id="spawnTitle">CHOOSE YOUR LOADOUT</h2>
       <div id="spawnClasses" class="spawn-classes"></div>
       <button id="btnDeploy" class="menu-btn deploy">DEPLOY</button>
-      <div class="menu-hint">WASD move &middot; X aim down sights &middot; SHIFT sprint &middot; SPACE jump &middot; C crouch &middot; R reload &middot; 1/2 or Q swap weapon &middot; V melee &middot; F frag grenade &middot; G deploy killstreak &middot; 3 cycle killstreaks &middot; TAB scoreboard &middot; ESC pause</div>
+      <div class="menu-hint">WASD move &middot; X aim down sights &middot; SHIFT sprint &middot; SPACE jump &middot; C crouch &middot; R reload &middot; 1/2 or Q swap weapon &middot; V melee &middot; F frag grenade &middot; T stun grenade &middot; G deploy killstreak &middot; 3 cycle killstreaks &middot; TAB scoreboard &middot; ESC pause</div>
     </div>
   </div>
 

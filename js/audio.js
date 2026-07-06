@@ -238,6 +238,32 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 0.08);
   },
 
+  // stun grenade pop: sharp high crack + a lingering ears-ringing tone
+  stunBang(dist = 0, pan = 0) {
+    if (!this.ensure()) return;
+    const atten = dist <= 0 ? 1 : Math.max(0.05, 1 - dist / 60);
+    const t = this.ctx.currentTime;
+    const out = this._dest(pan);
+    // crack
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 1400;
+    const g = this.ctx.createGain();
+    this._env(g, 0.75 * atten, 0.13);
+    src.connect(hp); hp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + 0.16);
+    // ring (only really audible close up — where you'd be stunned)
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine'; osc.frequency.value = 3400;
+    const g2 = this.ctx.createGain();
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.exponentialRampToValueAtTime(0.11 * atten * atten, t + 0.03);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
+    osc.connect(g2); g2.connect(out);
+    osc.start(t); osc.stop(t + 1.4);
+  },
+
   // incoming napalm canister: short descending whistle
   incoming(dist = 0, pan = 0) {
     if (!this.ensure()) return;

@@ -94,7 +94,9 @@ const player = {
   lastShotTime: -99,
   _stepT: 0, _killStreakCount: 0, _lastKillTime: -99, _streakKills: 0,
   _bankedStreaks: [], _streakSel: 0,
-  equip: 'frag', equipLeft: 0, throwT: 0, cooking: null,
+  equip: 'frag', equipLeft: 0, equipTac: 'stun', equipTacLeft: 0,
+  throwT: 0, cooking: null, cookKind: null, cookSlot: null,
+  stunT: 0, stunMax: 1,
 };
 
 const keys = {};
@@ -270,11 +272,11 @@ function fxTracer(from, to) {
   t.line.visible = true;
   t.ttl = 0.055;
 }
-function fxSpark(at, red) {
+function fxSpark(at, red, scale = 0.32) {
   const s = FX.sparks.find(s => s.ttl <= 0) || FX.sparks[0];
   s.sp.position.copy(at);
   s.sp.material.color.setHex(red ? 0xd03020 : 0xffffff);
-  s.sp.scale.set(0.32, 0.32, 1);
+  s.sp.scale.set(scale, scale, 1);
   s.sp.visible = true;
   s.ttl = 0.14;
 }
@@ -766,6 +768,16 @@ const THROWABLES = {
     color: 0x3d4a33, throwSpeed: 15, throwUp: 3.4,
     detonate: fragDetonate,
   },
+  // stun: zero damage — anyone caught in the radius with a clear line to
+  // the bang is stunned; duration scales with proximity (stunMax at
+  // ground zero, stunMin at the edge). Short fuse so it pops near where
+  // it lands. Tactical slot: thrown with [T], frags keep [F].
+  stun: {
+    name: 'STUN', count: 2, fuse: 1.8, radius: 8, dmg: 0, minDmg: 0,
+    stunMax: 4, stunMin: 1.2,
+    color: 0x5a6a72, throwSpeed: 17, throwUp: 3.0,
+    detonate: stunDetonate,
+  },
 };
 const GREN_R = 0.08, GREN_H = 0.16, GREN_BOUNCE = 0.42;
 const _throwables = [];
@@ -799,22 +811,31 @@ function spawnThrowable(def, fuse, speed, up) {
     spin: 5 + Math.random() * 3, sinceBounce: 0 });
 }
 
-// COD-style cooking: [F] down pulls the pin (committed — the grenade is
-// spent and its fuse burns in hand), [F] up throws with the remaining
+// COD-style cooking: key down pulls the pin (committed — the grenade is
+// spent and its fuse burns in hand), key up throws with the remaining
 // fuse. Cook too long and it detonates in hand; dying mid-cook drops it.
-function startCooking() {
+// Two slots share one pair of hands: 'lethal' ([F], player.equip) and
+// 'tactical' ([T], player.equipTac) — only one grenade cooks at a time.
+function startCooking(slot = 'lethal') {
   if (G.state !== 'playing' || !player.alive) return;
-  const def = THROWABLES[player.equip];
-  if (!def || player.equipLeft <= 0 || player.cooking !== null) return;
+  const tac = slot === 'tactical';
+  const kind = tac ? player.equipTac : player.equip;
+  const def = THROWABLES[kind];
+  if (!def || (tac ? player.equipTacLeft : player.equipLeft) <= 0 || player.cooking !== null) return;
   if (player.throwT > 0 || player.switchT > 0 || player.meleeT > 0.5) return;
-  player.equipLeft--;
+  if (tac) player.equipTacLeft--; else player.equipLeft--;
   player.cooking = def.fuse;
+  player.cookKind = kind;
+  player.cookSlot = slot;
   AudioSys.pinPull();
 }
 
-function releaseThrow() {
+// slot given: only the keyup matching the cooking slot throws (releasing
+// [T] must not lob a frag cooked on [F]); omitted (blur) throws whatever
+function releaseThrow(slot) {
   if (player.cooking === null) return;
-  const def = THROWABLES[player.equip];
+  if (slot && slot !== player.cookSlot) return;
+  const def = THROWABLES[player.cookKind];
   const fuse = player.cooking;
   player.cooking = null;
   player.throwT = 0.55; // re-throw cooldown; also drives the viewmodel animation
@@ -823,7 +844,7 @@ function releaseThrow() {
 }
 
 // instant pin-pull + lob in one call (DEBUG / tests)
-function throwEquipment() { startCooking(); releaseThrow(); }
+function throwEquipment(slot = 'lethal') { startCooking(slot); releaseThrow(slot); }
 
 function updateThrowables(dt) {
   for (let i = _throwables.length - 1; i >= 0; i--) {
@@ -890,14 +911,21 @@ function updateThrowables(dt) {
 }
 
 // blast center is knee height (+0.4) so table/crate tops don't shadow a
-// bot standing right next to them; victims checked at chest height
-function blastDamage(def, at, victimPos) {
+// bot standing right next to them; victims checked at chest height.
+// Returns dist/radius (0 = ground zero, 1 = edge), or -1 when out of
+// range, more than a floor apart, or behind cover.
+function blastFactor(def, at, victimPos) {
   const dist = Math.hypot(victimPos.x - at.x, victimPos.z - at.z);
-  if (dist > def.radius || Math.abs(victimPos.y - at.y) > 3.5) return 0;
+  if (dist > def.radius || Math.abs(victimPos.y - at.y) > 3.5) return -1;
   _blastAt.set(at.x, at.y + 0.4, at.z);
   _victimAt.set(victimPos.x, victimPos.y + 1.2, victimPos.z);
-  if (!losClear(_blastAt, _victimAt, G.colliders)) return 0; // cover protects
-  return Math.round(THREE.MathUtils.lerp(def.dmg, def.minDmg, dist / def.radius));
+  if (!losClear(_blastAt, _victimAt, G.colliders)) return -1; // cover protects
+  return dist / def.radius;
+}
+
+function blastDamage(def, at, victimPos) {
+  const f = blastFactor(def, at, victimPos);
+  return f < 0 ? 0 : Math.round(THREE.MathUtils.lerp(def.dmg, def.minDmg, f));
 }
 
 function fragDetonate(t) {
@@ -922,6 +950,37 @@ function fragDetonate(t) {
   // the blast is loud — enemies within earshot investigate the spot
   _blastAt.set(p.x, p.y + 0.4, p.z); // blastDamage reuses the scratch
   for (const b of G.bots) b.hearShot({ pos: _blastAt, team: player.team }, 30);
+}
+
+// stun (#6): no damage — anyone caught in the radius with a clear line
+// to the bang is stunned. COD-style that includes teammates AND the
+// thrower (only the player throws grenades, so a stunned teammate is
+// always your own fault). Duration scales with proximity.
+function stunDetonate(t) {
+  const def = t.def, p = t.pos;
+  _blastAt.set(p.x, p.y + 0.4, p.z);
+  fxSpark(_blastAt, false, 4.5); // white pop, not fire
+  AudioSys.stunBang(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(_blastAt));
+  for (const b of G.bots) {
+    if (!b.alive) continue; // teammates get stunned too
+    const f = blastFactor(def, p, b.pos);
+    if (f >= 0) b.stun(THREE.MathUtils.lerp(def.stunMax, def.stunMin, f));
+  }
+  if (player.alive) {
+    const f = blastFactor(def, p, player.pos);
+    if (f >= 0) stunPlayer(THREE.MathUtils.lerp(def.stunMax, def.stunMin, f));
+  }
+  // the bang is loud — enemies within earshot investigate the spot
+  _blastAt.set(p.x, p.y + 0.4, p.z); // blastFactor reuses the scratch
+  for (const b of G.bots) b.hearShot({ pos: _blastAt, team: player.team }, 30);
+}
+
+// white flash + heavily slowed look/move; stunMax remembers the applied
+// duration so the overlay can fade as a fraction of it
+function stunPlayer(dur) {
+  if (dur <= player.stunT) return;
+  player.stunT = dur;
+  player.stunMax = dur;
 }
 
 // selector under the minimap: what's banked, what's selected, how to deploy
@@ -1026,6 +1085,8 @@ function startMatch(mapId) {
   G.uavUntil = 0; // G.time restarts at 0, so a stale value would be a free UAV
   _napalmDrops.length = 0; // no strikes carry across a rematch
   _throwables.length = 0;  // in-flight grenades die with the old scene
+  player.stunT = 0;        // a rematch shakes the stars off
+  UI.stunOverlay(0);
   _nukeT = -1;             // nor an in-flight nuke countdown
   _cine = null;            // cinematic props die with the old scene
   UI.setNukeCountdown(null);
@@ -1075,7 +1136,9 @@ function deploy() {
   player.cur = 0;
   player.reloadT = 0; player.switchT = 0; player.burstQueue = 0;
   player.equipLeft = THROWABLES[player.equip].count;
-  player.throwT = 0; player.cooking = null;
+  player.equipTacLeft = THROWABLES[player.equipTac].count;
+  player.throwT = 0; player.cooking = null; player.cookKind = null; player.cookSlot = null;
+  player.stunT = 0;
   player.adsAmt = 0; player.adsToggle = false; player.bloom = 0;
   player.hp = 100;
   player.stamina = 1;
@@ -1110,7 +1173,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot) {
     player.alive = false;
     player.deaths++;
     if (player.cooking !== null) { // dying mid-cook drops the live grenade
-      const cdef = THROWABLES[player.equip];
+      const cdef = THROWABLES[player.cookKind];
       const fuse = player.cooking;
       player.cooking = null;
       spawnThrowable(cdef, fuse, 1.2, 1.2);
@@ -1184,7 +1247,8 @@ canvas.addEventListener('click', () => {
 document.addEventListener('mousemove', e => {
   if (!G.pointerLocked || (G.state !== 'playing')) return;
   const fovScale = G.camera.fov / UI.settings.fov;
-  const s = 0.0021 * UI.settings.sens * fovScale;
+  let s = 0.0021 * UI.settings.sens * fovScale;
+  if (player.stunT > 0) s *= 0.15; // stunned: look speed heavily slowed
   player.yaw -= e.movementX * s;
   player.pitch -= e.movementY * s;
   player.pitch = THREE.MathUtils.clamp(player.pitch, -1.53, 1.53);
@@ -1218,7 +1282,8 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Digit1') switchWeapon(0);
   if (e.code === 'Digit2') switchWeapon(1);
   if (e.code === 'KeyV') tryMelee();
-  if (e.code === 'KeyF') startCooking(); // pin out; the grenade leaves on release
+  if (e.code === 'KeyF') startCooking('lethal');   // pin out; leaves on release
+  if (e.code === 'KeyT') startCooking('tactical'); // stun, same cook mechanics
   if (e.code === 'KeyX') player.adsToggle = !player.adsToggle;
   if (e.code === 'KeyG') deployKillstreak();
   if (e.code === 'Digit3') cycleKillstreak();
@@ -1226,7 +1291,8 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => {
   keys[e.code] = false;
   if (e.code === 'Tab') UI.$('scoreboard').classList.add('hidden');
-  if (e.code === 'KeyF') releaseThrow();
+  if (e.code === 'KeyF') releaseThrow('lethal');
+  if (e.code === 'KeyT') releaseThrow('tactical');
 });
 // Losing window focus never fires keyup/mouseup, so held inputs would stick
 // (e.g. alt-tab while holding W = infinite auto-run). Clear everything on blur.
@@ -1386,6 +1452,7 @@ function updatePlayer(dt) {
   if (player.sprinting) speed *= 1.42;
   if (player.crouchAmt > 0.5) speed *= 0.55;
   else if (player.adsAmt > 0.5) speed *= 0.6;
+  if (player.stunT > 0) speed *= 0.4; // stunned: legs barely answer
 
   // rotate input (x = right, z = back) into world space:
   // forward = (-sin yaw, -cos yaw), right = (cos yaw, -sin yaw)
@@ -1440,10 +1507,11 @@ function updatePlayer(dt) {
   if (player.switchT > 0) player.switchT -= dt;
   if (player.meleeT > 0) player.meleeT -= dt;
   if (player.throwT > 0) player.throwT -= dt;
+  if (player.stunT > 0) player.stunT -= dt;
   if (player.cooking !== null) {
     player.cooking -= dt;
     if (player.cooking <= 0) { // cooked too long: it goes off in hand
-      const cdef = THROWABLES[player.equip];
+      const cdef = THROWABLES[player.cookKind];
       player.cooking = null;
       cdef.detonate({ def: cdef, pos: player.pos.clone() });
     }
@@ -1728,6 +1796,10 @@ function loop() {
         (player.perks.has('marathon') ? 100 : player.stamina * 100) + '%';
     }
     drawMinimap();
+    // stun whiteout: snaps to full, fades out over the stun's duration
+    // (UI gates the DOM write, so this only costs while stunned)
+    UI.stunOverlay(player.alive && player.stunT > 0
+      ? Math.min(1, 1.3 * player.stunT / player.stunMax) : 0);
   } else if (G.state === 'nukecine') {
     // nuke cinematic: the world freezes, the camera belongs to the show
     fxUpdate(dt);
