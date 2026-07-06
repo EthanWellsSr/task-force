@@ -94,6 +94,7 @@ const player = {
   lastShotTime: -99,
   _stepT: 0, _killStreakCount: 0, _lastKillTime: -99, _streakKills: 0,
   _bankedStreaks: [], _streakSel: 0,
+  equip: 'frag', equipLeft: 0, throwT: 0,
 };
 
 const keys = {};
@@ -751,6 +752,159 @@ function updateNukeCine(dt) {
   }
 }
 
+// ---------- throwables (#6): shared framework for frag/stun/smoke ----------
+// One equipment kind per life (player.equip), thrown with [F]. A thrown
+// grenade is a small AABB projectile: gravity + axis-separated sweeps
+// against the world colliders that reflect instead of stop (bounce), a
+// fuse, then the kind's detonate(). Frag is the first kind: radial damage
+// with distance falloff, blocked by walls (losClear), COD-style — hurts
+// enemies (credited to the thrower) and the thrower (uncredited, so no
+// friendly-kill score), never teammates.
+const THROWABLES = {
+  frag: {
+    name: 'FRAG', count: 2, fuse: 3.6, radius: 7, dmg: 125, minDmg: 25,
+    color: 0x3d4a33, throwSpeed: 15, throwUp: 3.4,
+    detonate: fragDetonate,
+  },
+};
+const GREN_R = 0.08, GREN_H = 0.16, GREN_BOUNCE = 0.42;
+const _throwables = [];
+const _blastAt = new THREE.Vector3();
+const _victimAt = new THREE.Vector3();
+
+function buildGrenadeMesh(color) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6),
+    new THREE.MeshLambertMaterial({ color }));
+  body.scale.y = 1.25;
+  body.position.y = 0.08;
+  g.add(body);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.045),
+    new THREE.MeshLambertMaterial({ color: 0x707668 }));
+  cap.position.y = 0.17;
+  g.add(cap);
+  return g;
+}
+
+function throwEquipment() {
+  if (G.state !== 'playing' || !player.alive) return;
+  const def = THROWABLES[player.equip];
+  if (!def || player.equipLeft <= 0) return;
+  if (player.throwT > 0 || player.switchT > 0 || player.meleeT > 0.5) return;
+  player.equipLeft--;
+  player.throwT = 0.55; // re-throw cooldown; also drives the viewmodel animation
+  const dir = G.camera.getWorldDirection(_shotDir);
+  const pos = new THREE.Vector3(player.pos.x, player.pos.y + eyeHeight() - 0.1, player.pos.z)
+    .addScaledVector(dir, 0.35);
+  const vel = new THREE.Vector3().copy(dir).multiplyScalar(def.throwSpeed);
+  vel.y += def.throwUp; // lob arc
+  const mesh = buildGrenadeMesh(def.color);
+  mesh.position.copy(pos);
+  G.scene.add(mesh);
+  _throwables.push({ def, mesh, pos, vel, fuse: def.fuse,
+    spin: 5 + Math.random() * 3, sinceBounce: 0 });
+  AudioSys.throwWhoosh();
+}
+
+function updateThrowables(dt) {
+  for (let i = _throwables.length - 1; i >= 0; i--) {
+    const t = _throwables[i];
+    t.fuse -= dt;
+    if (t.fuse <= 0) {
+      G.scene.remove(t.mesh);
+      _throwables.splice(i, 1);
+      t.def.detonate(t);
+      continue;
+    }
+    const p = t.pos, v = t.vel;
+    t.sinceBounce += dt;
+    v.y -= 13 * dt; // same gravity as the player
+    let bounced = false;
+    // axis-separated sweep like moveEntity, but reflecting instead of stopping
+    p.x += v.x * dt;
+    for (const c of G.colliders) {
+      if (c.max.y <= 0.02) continue;
+      if (_boxOverlap(c, p, GREN_R, GREN_H)) {
+        p.x = v.x > 0 ? c.min.x - GREN_R - 0.001 : c.max.x + GREN_R + 0.001;
+        v.x *= -GREN_BOUNCE;
+        bounced = true;
+      }
+    }
+    p.z += v.z * dt;
+    for (const c of G.colliders) {
+      if (c.max.y <= 0.02) continue;
+      if (_boxOverlap(c, p, GREN_R, GREN_H)) {
+        p.z = v.z > 0 ? c.min.z - GREN_R - 0.001 : c.max.z + GREN_R + 0.001;
+        v.z *= -GREN_BOUNCE;
+        bounced = true;
+      }
+    }
+    p.y += v.y * dt;
+    let rest = false;
+    const landed = () => { // downward hit: bounce, or settle when nearly spent
+      if (-v.y * GREN_BOUNCE < 1.0) { v.y = 0; rest = true; }
+      else { v.y *= -GREN_BOUNCE; bounced = true; }
+      v.x *= 0.75; v.z *= 0.75; // ground hits scrub lateral speed too
+    };
+    for (const c of G.colliders) {
+      if (c.max.y <= 0.02) continue;
+      if (_boxOverlap(c, p, GREN_R, GREN_H)) {
+        if (v.y < 0) { p.y = c.max.y + 0.001; landed(); }
+        else { p.y = c.min.y - GREN_H - 0.001; v.y *= -GREN_BOUNCE; bounced = true; }
+      }
+    }
+    if (p.y <= 0 && v.y <= 0) { p.y = 0; if (v.y < 0) landed(); else rest = true; }
+    if (rest) { // rolling friction
+      const f = Math.max(0, 1 - 4 * dt);
+      v.x *= f; v.z *= f;
+    }
+    if (bounced && t.sinceBounce > 0.12 && Math.hypot(v.x, v.y, v.z) > 1.2) {
+      t.sinceBounce = 0;
+      AudioSys.grenadeBounce(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(p));
+    }
+    t.mesh.position.copy(p);
+    if (!rest) {
+      t.mesh.rotation.x += t.spin * dt;
+      t.mesh.rotation.z += t.spin * 0.6 * dt;
+    }
+  }
+}
+
+// blast center is knee height (+0.4) so table/crate tops don't shadow a
+// bot standing right next to them; victims checked at chest height
+function blastDamage(def, at, victimPos) {
+  const dist = Math.hypot(victimPos.x - at.x, victimPos.z - at.z);
+  if (dist > def.radius || Math.abs(victimPos.y - at.y) > 3.5) return 0;
+  _blastAt.set(at.x, at.y + 0.4, at.z);
+  _victimAt.set(victimPos.x, victimPos.y + 1.2, victimPos.z);
+  if (!losClear(_blastAt, _victimAt, G.colliders)) return 0; // cover protects
+  return Math.round(THREE.MathUtils.lerp(def.dmg, def.minDmg, dist / def.radius));
+}
+
+function fragDetonate(t) {
+  const def = t.def, p = t.pos;
+  _blastAt.set(p.x, p.y + 0.4, p.z);
+  fxFire(_blastAt, 0.3, 4);
+  for (let i = 0; i < 4; i++) {
+    _victimAt.set(p.x + (Math.random() - 0.5) * 1.6, p.y + 0.3 + Math.random() * 0.8,
+      p.z + (Math.random() - 0.5) * 1.6);
+    fxFire(_victimAt, 0.3 + Math.random() * 0.3, 1.2 + Math.random());
+  }
+  AudioSys.explosion(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(_blastAt));
+  for (const b of G.bots) {
+    if (!b.alive || b.team === player.team) continue; // teammates are safe
+    const dmg = blastDamage(def, p, b.pos);
+    if (dmg > 0) b.hurt(dmg, player, def.name, false);
+  }
+  // the thrower's own grenade hurts them (null attacker: a self-kill
+  // credits no one, same rule as the nuke's owner death)
+  const selfDmg = blastDamage(def, p, player.pos);
+  if (selfDmg > 0) damagePlayer(selfDmg, null, def.name, false);
+  // the blast is loud — enemies within earshot investigate the spot
+  _blastAt.set(p.x, p.y + 0.4, p.z); // blastDamage reuses the scratch
+  for (const b of G.bots) b.hearShot({ pos: _blastAt, team: player.team }, 30);
+}
+
 // selector under the minimap: what's banked, what's selected, how to deploy
 function refreshStreakTag() {
   const b = player._bankedStreaks;
@@ -852,6 +1006,7 @@ function startMatch(mapId) {
   refreshStreakTag();
   G.uavUntil = 0; // G.time restarts at 0, so a stale value would be a free UAV
   _napalmDrops.length = 0; // no strikes carry across a rematch
+  _throwables.length = 0;  // in-flight grenades die with the old scene
   _nukeT = -1;             // nor an in-flight nuke countdown
   _cine = null;            // cinematic props die with the old scene
   UI.setNukeCountdown(null);
@@ -900,6 +1055,7 @@ function deploy() {
   player.weapons = [mkState(cls.primary), mkState(cls.secondary)];
   player.cur = 0;
   player.reloadT = 0; player.switchT = 0; player.burstQueue = 0;
+  player.equipLeft = THROWABLES[player.equip].count; player.throwT = 0;
   player.adsAmt = 0; player.adsToggle = false; player.bloom = 0;
   player.hp = 100;
   player.stamina = 1;
@@ -1036,6 +1192,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Digit1') switchWeapon(0);
   if (e.code === 'Digit2') switchWeapon(1);
   if (e.code === 'KeyV') tryMelee();
+  if (e.code === 'KeyF') throwEquipment();
   if (e.code === 'KeyX') player.adsToggle = !player.adsToggle;
   if (e.code === 'KeyG') deployKillstreak();
   if (e.code === 'Digit3') cycleKillstreak();
@@ -1254,6 +1411,7 @@ function updatePlayer(dt) {
   // ---- timers
   if (player.switchT > 0) player.switchT -= dt;
   if (player.meleeT > 0) player.meleeT -= dt;
+  if (player.throwT > 0) player.throwT -= dt;
   if (player.fireCooldown > 0) player.fireCooldown -= dt;
   player.bloom = Math.max(0, player.bloom - dt * 0.09);
   if (player.reloadT > 0) {
@@ -1439,9 +1597,18 @@ function updateCameraAndViewmodel(dt) {
     }
     vmKick = Math.max(0, vmKick - dt * 7);
     target.z += vmKick * 0.05;
+    // grenade throw: the gun dips down-right while the off hand lobs
+    let dip = 0;
+    if (player.throwT > 0) {
+      const u = 1 - player.throwT / 0.55;
+      dip = Math.sin(Math.min(1, u * 1.15) * Math.PI);
+      target.x += dip * 0.16;
+      target.y -= dip * 0.2;
+    }
     vmGun.position.lerp(target, Math.min(1, dt * 16));
-    vmGun.rotation.x = vmKick * 0.09 + (player.sprinting ? -0.5 : 0);
+    vmGun.rotation.x = vmKick * 0.09 + (player.sprinting ? -0.5 : 0) - dip * 0.25;
     vmGun.rotation.y = player.sprinting ? 0.4 : 0;
+    vmGun.rotation.z = dip * 0.5;
     // hide gun when fully scoped
     const scoped = player.adsAmt > 0.85 && def.zoom > 3;
     vmGun.visible = !scoped;
@@ -1504,6 +1671,7 @@ function loop() {
     }
 
     fxUpdate(dt);
+    updateThrowables(dt);
     updateNapalm(dt);
     updateNuke(dt);
 
@@ -1551,7 +1719,8 @@ window.MAIN = {
 };
 
 window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
-  nukeT: v => v === undefined ? _nukeT : (_nukeT = v) };
+  nukeT: v => v === undefined ? _nukeT : (_nukeT = v),
+  throwables: () => _throwables, throwEquipment };
 
 UI.init();
 UI.show('menu');

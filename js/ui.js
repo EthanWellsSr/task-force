@@ -241,6 +241,12 @@ const UI = {
     if (c.mode !== mode) { c.mode = mode; this.$('fireMode').textContent = mode; }
     const low = state.mag <= Math.max(3, weapon.mag * 0.2);
     if (c.low !== low) { c.low = low; this.$('ammoCount').classList.toggle('low', low); }
+    if (c.equipLeft !== p.equipLeft) {
+      c.equipLeft = p.equipLeft;
+      const el = this.$('grenadeCount');
+      el.textContent = THROWABLES[p.equip].name + ' ×' + p.equipLeft + '  [F]';
+      el.classList.toggle('none', p.equipLeft <= 0);
+    }
     if (c.hp !== p.hp) {
       c.hp = p.hp;
       const hb = this.$('healthBar');

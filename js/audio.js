@@ -191,6 +191,41 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 0.08);
   },
 
+  // grenade toss: short rising noise whoosh
+  throwWhoosh() {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(500, t);
+    bp.frequency.exponentialRampToValueAtTime(1600, t + 0.16);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09, t + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + 0.24);
+  },
+
+  // grenade bouncing off the world: dull metallic tick, inaudible far away
+  grenadeBounce(dist = 0, pan = 0) {
+    if (!this.ensure()) return;
+    const atten = dist <= 0 ? 1 : Math.max(0, 1 - dist / 30);
+    if (atten <= 0.03) return;
+    const t = this.ctx.currentTime;
+    const out = this._dest(pan);
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1900, t);
+    osc.frequency.exponentialRampToValueAtTime(700, t + 0.05);
+    const g = this.ctx.createGain();
+    this._env(g, 0.12 * atten, 0.06);
+    osc.connect(g); g.connect(out);
+    osc.start(t); osc.stop(t + 0.08);
+  },
+
   // incoming napalm canister: short descending whistle
   incoming(dist = 0, pan = 0) {
     if (!this.ensure()) return;
