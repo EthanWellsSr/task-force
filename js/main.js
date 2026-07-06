@@ -83,7 +83,7 @@ const player = {
   yaw: 0, pitch: 0,
   hp: 100, alive: false, kills: 0, deaths: 0,
   crouched: false, crouchAmt: 0,
-  stamina: 1, sprinting: false,
+  stamina: 1, sprinting: false, winded: false,
   perks: new Set(),
   weapons: [], cur: 0,
   reloadT: 0, switchT: 0, fireCooldown: 0, burstQueue: 0,
@@ -1142,9 +1142,12 @@ function deploy() {
   player.adsAmt = 0; player.adsToggle = false; player.bloom = 0;
   player.hp = 100;
   player.stamina = 1;
+  player.winded = false;
   player.sinceDamage = 99;
   player.vault = null;
   player.forceCrouch = false;
+  player.crouched = false;
+  player.crouchAmt = 0;
   player.pos.copy(pickSpawn(player.team));
   player.vel.set(0, 0, 0);
   player.yaw = player.team === 'tf' ? (G.mapId === 'rust' ? Math.PI * 1.25 : Math.PI) : 0;
@@ -1421,8 +1424,13 @@ function updatePlayer(dt) {
   player.crouchAmt += (lowWant - player.crouchAmt) * Math.min(1, dt * (player.vault ? 14 : 10));
 
   // ---- sprint & stamina (sprinting breaks an ADS toggle)
-  const wantSprint = keys['ShiftLeft'] && keys['KeyW'] && !player.adsHeld && !firing && !player.crouched;
-  if (wantSprint && (player.stamina > 0 || player.perks.has('marathon'))) {
+  // hysteresis: exhaustion locks sprint until stamina recovers past 0.25,
+  // otherwise the drain/regen pair re-arms the gate every frame and sprint
+  // flickers on/off forever at stamina 0
+  if (player.stamina <= 0) player.winded = true;
+  else if (player.stamina >= 0.25) player.winded = false;
+  const wantSprint = (keys['ShiftLeft'] || keys['ShiftRight']) && keys['KeyW'] && !player.adsHeld && !firing && !player.crouched;
+  if (wantSprint && (!player.winded || player.perks.has('marathon'))) {
     player.sprinting = true;
     player.adsToggle = false;
     if (!player.perks.has('marathon')) player.stamina = Math.max(0, player.stamina - dt / 4.5);
