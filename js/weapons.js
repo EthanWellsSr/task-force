@@ -58,14 +58,17 @@ const WEAPONS = {
     speed:.87, range:[32,64], model:'lmg' },
 
   // ---------- PRIMARY: SNIPERS ----------
+  // Sniper balance: body shots one-shot only up close (Intervention) or never
+  // (Barrett); headshots one-shot at any range. Falloff window sits in-map —
+  // maps top out ~50 m, so [60,100] would never engage.
   intervention: { slot:'primary', cat:'Sniper Rifle', name:'CHEYTAC M200',
-    dmg:100, minDmg:100, head:1.6, rpm:46, mag:5, reserve:25, reload:2.9, mode:'bolt',
+    dmg:100, minDmg:70, head:1.6, rpm:46, mag:5, reserve:25, reload:2.9, mode:'bolt',
     spreadHip:.11, spreadAds:.0006, recoil:.05, bloom:.002, zoom:6.0, adsTime:.36,
-    speed:.92, range:[60,100], model:'sniper' },
+    speed:.92, range:[25,50], model:'sniper' },
   barrett: { slot:'primary', cat:'Sniper Rifle', name:'BARRETT M82',
-    dmg:100, minDmg:100, head:1.8, rpm:190, mag:10, reserve:30, reload:3.3, mode:'semi',
+    dmg:70, minDmg:56, head:1.8, rpm:190, mag:10, reserve:30, reload:3.3, mode:'semi',
     spreadHip:.12, spreadAds:.0012, recoil:.042, bloom:.006, zoom:6.0, adsTime:.4,
-    speed:.9, range:[60,100], model:'sniper' },
+    speed:.9, range:[25,50], model:'sniper' },
 
   // ---------- SECONDARIES ----------
   usp: { slot:'secondary', cat:'Handgun', name:'HK USP45',
