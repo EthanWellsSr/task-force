@@ -144,6 +144,7 @@ class Bot {
     this._stepT = 0;
     this.stunT = 0; // stun grenade: frozen while > 0
     this.dazeT = 0; // ...and accuracy stays blown until this runs out
+    this.spawnProtectT = 0; // #18a: spawn invuln window, set on spawn()
   }
 
   spawn() {
@@ -166,6 +167,7 @@ class Bot {
     this.lastPos.copy(this.pos);
     this.stuckT = 0;
     this.stunT = 0; this.dazeT = 0; // death clears the stars
+    this.spawnProtectT = 3; // #18a: 3 s spawn invuln, cancelled by firing
   }
 
   // A shot rang out: enemies within earshot learn the shooter's position
@@ -195,8 +197,9 @@ class Bot {
     this.dazeT = Math.max(this.dazeT, dur + 2);
   }
 
-  hurt(dmg, attacker, weaponName, headshot) {
+  hurt(dmg, attacker, weaponName, headshot, bypassProtect) {
     if (!this.alive) return;
+    if (this.spawnProtectT > 0 && !bypassProtect) return; // #18a spawn invuln
     this.hp -= dmg;
     // getting shot reveals the attacker
     if (attacker && attacker.team !== this.team && attacker.alive) {
@@ -303,6 +306,7 @@ class Bot {
     const w = this.weapon;
     const t = this.target;
     if (!t || !t.alive) return;
+    this.spawnProtectT = 0; // #18a: firing ends this bot's spawn invuln
     const dist = this.pos.distanceTo(t.pos);
     const muzzle = new THREE.Vector3(this.pos.x, this.pos.y + 1.45, this.pos.z);
 
@@ -374,6 +378,10 @@ class Bot {
       if (this.respawnT <= 0 && this.world.api.matchLive()) this.spawn();
       return;
     }
+
+    // ---- spawn invulnerability (#18a): tick even while stunned so the
+    // window can't be extended by getting flashed right off the spawn
+    if (this.spawnProtectT > 0) this.spawnProtectT -= dt;
 
     // ---- stunned: frozen in place — no turning, moving, perceiving or
     // firing; gravity still applies so a stunned bot doesn't hover

@@ -88,7 +88,7 @@ const player = {
   weapons: [], cur: 0,
   reloadT: 0, switchT: 0, fireCooldown: 0, burstQueue: 0,
   adsHeld: false, adsToggle: false, adsAmt: 0, bloom: 0,
-  meleeT: 0, sinceDamage: 99, respawnT: 0,
+  meleeT: 0, sinceDamage: 99, respawnT: 0, spawnProtectT: 0,
   speedNow: 0, onGround: true,
   vault: null, forceCrouch: false,
   lastShotTime: -99,
@@ -1384,7 +1384,8 @@ function nukeImpact(x, z) {
   // (score + killfeed), teammates die uncredited — no friendly kills
   for (const b of G.bots) {
     if (!b.alive) continue;
-    b.hurt(9999, b.team !== player.team ? player : null, 'TACTICAL NUKE', false);
+    // nuke kills through spawn invuln by design (#18a) — bypassProtect = true
+    b.hurt(9999, b.team !== player.team ? player : null, 'TACTICAL NUKE', false, true);
   }
   // the owner dies too (damagePlayer would show the respawn screen
   // mid-cinematic, so just record the death directly)
@@ -1593,6 +1594,7 @@ function releaseThrow(slot) {
   const def = THROWABLES[player.cookKind];
   const fuse = player.cooking;
   player.cooking = null;
+  player.spawnProtectT = 0; // #18a: throwing ends spawn invuln immediately
   player.throwT = 0.55; // re-throw cooldown; also drives the viewmodel animation
   spawnThrowable(def, fuse, def.throwSpeed, def.throwUp);
   AudioSys.throwWhoosh();
@@ -1968,6 +1970,7 @@ function deploy() {
   player.stunT = 0;
   player.adsAmt = 0; player.adsToggle = false; player.bloom = 0;
   player.hp = 100;
+  player.spawnProtectT = 3; // #18a: 3 s of spawn invuln, cancelled by firing/throwing
   player.stamina = 1;
   player.winded = false;
   player.sinceDamage = 99;
@@ -1988,8 +1991,9 @@ function deploy() {
 
 function curW() { return player.weapons[player.cur]; }
 
-function damagePlayer(dmg, attacker, weaponName, headshot) {
+function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect) {
   if (!player.alive || G.state !== 'playing') return;
+  if (player.spawnProtectT > 0 && !bypassProtect) return; // #18a spawn invuln
   player.hp -= dmg;
   player.sinceDamage = 0;
   AudioSys.hurt();
@@ -2245,6 +2249,9 @@ function updatePlayer(dt) {
   const w = curW();
   const def = w.def;
 
+  // ---- spawn invulnerability (#18a): count down the 3 s window
+  if (player.spawnProtectT > 0) player.spawnProtectT -= dt;
+
   // ---- crouch smoothing (vaulting forces a low profile; after a vault
   // the player stays low until there is headroom to stand)
   if (player.forceCrouch && _fitsAt(player.pos, player.pos.y, 0.38, 1.75, G.colliders))
@@ -2426,6 +2433,7 @@ const _headBox = new THREE.Box3();
 
 function firePlayerShot(w) {
   const def = w.def;
+  player.spawnProtectT = 0; // #18a: firing ends spawn invuln immediately
   w.mag--;
   noteShot(player);
   AudioSys.shot(def.model, 0);
