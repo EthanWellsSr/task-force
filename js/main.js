@@ -131,6 +131,9 @@ window.addEventListener('resize', () => {
 const vmRoot = new THREE.Group();
 G.camera.add(vmRoot);
 let vmGun = null, vmMuzzle = new THREE.Vector3();
+const _laserOrigin = new THREE.Vector3(), _laserDir = new THREE.Vector3();
+const _laserPt = new THREE.Vector3(), _laserMid = new THREE.Vector3(), _laserSeg = new THREE.Vector3();
+const _laserUpY = new THREE.Vector3(0, 1, 0);
 let vmKick = 0, bobPhase = 0;
 const muzzleLight = new THREE.PointLight(0xffc070, 0, 9);
 muzzleLight.position.set(0.12, -0.12, -0.9);
@@ -651,6 +654,30 @@ function buildViewModel(w) {
     const shaft = part(0.032, 0.1, 0.04, black, 0, mnt.y - 0.062, mnt.z - 0.006);
     shaft.rotation.x = 0.12;                                             // slight forward rake
     part(0.036, 0.014, 0.044, black, 0, mnt.y - 0.115, mnt.z - 0.012);   // flared bottom cap
+  }
+  // laser (#19c): a small emitter box on the handguard rail plus a bright
+  // beam that raycasts to the first wall each frame (updateCameraAndViewmodel
+  // sets the length + dot). Mount derives off the foregrip's handguard point
+  // — right side of the rail, near barrel height — so no per-gun table.
+  if (w.attachments && w.attachments.includes('laser')) {
+    const lm = VM_GRIP[w.key] || VM_GRIP[type] || { y: -0.045, z: -0.35 };
+    const ex = 0.05, ey = lm.y + 0.052, ez = lm.z + 0.02;      // emitter local pos
+    part(0.028, 0.026, 0.055, black, ex, ey, ez);              // rail-mounted housing
+    const beamCol = w.laserColor || 0x30ff44;
+    const lens = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.014, 0.006),
+      new THREE.MeshBasicMaterial({ color: beamCol }));
+    lens.position.set(ex, ey, ez - 0.03);                      // glowing front lens
+    g.add(lens);
+    // beam: unit-length cylinder along its Y axis, positioned/oriented/scaled
+    // per frame to span emitter → crosshair dot; additive so it reads as light
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 1, 6),
+      new THREE.MeshBasicMaterial({ color: beamCol, transparent: true, opacity: 0.5,
+        blending: THREE.AdditiveBlending, depthWrite: false }));
+    g.add(beam);
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 8),
+      new THREE.MeshBasicMaterial({ color: beamCol, transparent: true, opacity: 0.9, depthWrite: false }));
+    g.add(dot);
+    g.userData.laser = { beam, dot, emit: new THREE.Vector3(ex, ey, ez - 0.03), maxLen: 60 };
   }
   // mag handle (#10b): tagged mag parts re-parent into one group so the
   // reload anim moves them as a unit — rest pose is the zero transform,
@@ -1884,7 +1911,8 @@ function deploy() {
     // resolved def (base + attachment mods) — every curW().def consumer
     // (fire path, startReload, HUD, viewmodel) reads modified stats from here
     const w = resolveWeaponDef(cls[slot], cls.attachments && cls.attachments[slot],
-      cls.attachments && cls.attachments[slot + 'DotColor']);
+      cls.attachments && cls.attachments[slot + 'DotColor'],
+      cls.attachments && cls.attachments[slot + 'LaserColor']);
     return { def: w, mag: w.mag, reserve: w.reserve * (player.perks.has('scavenger') ? 2 : 1) };
   };
   player.weapons = [mkState('primary'), mkState('secondary')];
@@ -2576,6 +2604,41 @@ function updateCameraAndViewmodel(dt) {
     // the camera instead of hiding behind the receiver; bolt work rolls
     // positive so the right-side handle comes up into view
     vmGun.rotation.z = dip * 0.5 - rTilt * 0.42 + bReach * 0.18;
+    // laser (#19c): each frame land the dot on the crosshair's world point
+    // and converge the beam onto it from the offset emitter. Hidden at ADS
+    // (COD-style) so it never clutters the sight, and while sprinting (the
+    // gun swings off-axis, so the beam would shoot off-screen); one ray/
+    // frame, pooled meshes, no allocations here.
+    const laser = vmGun.userData.laser;
+    if (laser) {
+      const show = player.adsAmt < 0.5 && !player.sprinting;
+      laser.beam.visible = laser.dot.visible = show;
+      if (show) {
+        vmGun.updateWorldMatrix(true, false);
+        // aim along the CROSSHAIR, not the barrel: same origin/direction the
+        // fire path uses (camera center, no spread), so the dot lands exactly
+        // on the reticle's world point. The beam then converges to that point
+        // from the offset emitter — like a real zeroed laser.
+        _laserOrigin.copy(G.camera.position);
+        G.camera.getWorldDirection(_laserDir);
+        const hit = rayWorld(_laserOrigin, _laserDir, laser.maxLen, G.colliders);
+        if (hit) _laserPt.copy(hit.point);
+        else _laserPt.copy(_laserOrigin).addScaledVector(_laserDir, laser.maxLen);
+        laser.dot.visible = !!hit; // no dot when the ray reaches open sky
+        // world hit point → gun-local (beam + dot are children of the gun),
+        // so the dot stays pinned to the crosshair even as the gun bobs/sways
+        vmGun.worldToLocal(_laserPt);
+        laser.dot.position.copy(_laserPt);
+        // beam spans emitter → dot: sit at the midpoint, length = separation,
+        // Y axis rotated to point from the emitter at the dot
+        _laserMid.addVectors(laser.emit, _laserPt).multiplyScalar(0.5);
+        laser.beam.position.copy(_laserMid);
+        _laserSeg.subVectors(_laserPt, laser.emit);
+        const len = _laserSeg.length();
+        laser.beam.scale.set(1, len, 1);
+        if (len > 1e-5) laser.beam.quaternion.setFromUnitVectors(_laserUpY, _laserSeg.divideScalar(len));
+      }
+    }
     // hide gun when fully scoped
     const scoped = player.adsAmt > 0.85 && def.zoom > 3;
     vmGun.visible = !scoped && !melee;

@@ -209,6 +209,27 @@ const UI = {
           }
           wrap.appendChild(row);
         }
+        // laser color chips (#19c): only while a laser is equipped, same
+        // mechanism as the reticle row
+        if (cat === 'laser' && picked.includes('laser')) {
+          const row = document.createElement('div');
+          row.className = 'reticle-row';
+          row.innerHTML = '<span class="reticle-label">LASER COLOR</span>';
+          const cur = c.attachments[slot + 'LaserColor'] || 'green';
+          for (const lc of LASER_COLORS) {
+            const chip = document.createElement('div');
+            chip.className = 'reticle-chip' + (lc.id === cur ? ' selected' : '');
+            chip.style.background = '#' + lc.hex.toString(16).padStart(6, '0');
+            chip.title = lc.name;
+            chip.onclick = () => {
+              AudioSys.uiClick();
+              c.attachments[slot + 'LaserColor'] = lc.id;
+              this.saveClasses(); this.renderClassEditor();
+            };
+            row.appendChild(chip);
+          }
+          wrap.appendChild(row);
+        }
       }
     };
     mkAttachList('primaryAttach', 'primary');

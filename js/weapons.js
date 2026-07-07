@@ -120,7 +120,7 @@ function fireModeLabel(w) {
 // mods = stat multipliers applied to the base def by resolveWeaponDef.
 // cats = weapon categories the attachment mounts on (null = all).
 // ============================================================
-const ATTACH_SLOTS = ['optic', 'underbarrel', 'camo'];
+const ATTACH_SLOTS = ['optic', 'underbarrel', 'laser', 'camo'];
 
 const ATTACHMENTS = {
   reddot: { id:'reddot', name:'RED DOT SIGHT', slot:'optic',
@@ -135,6 +135,12 @@ const ATTACHMENTS = {
   foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
     mods:{ recoil:.8, bloom:.8 } },
+  // Laser (#19c): its own slot (underbarrel is the foregrip's), trades
+  // concealment for a tighter hip cone. Beam drawn from the muzzle in
+  // buildViewModel; color is a per-class pick like the reticle color.
+  laser: { id:'laser', name:'LASER SIGHT', slot:'laser',
+    cats:['Assault Rifle','SMG','LMG','Shotgun'],
+    mods:{ spreadHip:.8 } },
   camoDesert:   { id:'camoDesert',   name:'DESERT CAMO',   slot:'camo', cats:null, mods:{} },
   camoWoodland: { id:'camoWoodland', name:'WOODLAND CAMO', slot:'camo', cats:null, mods:{} },
   camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:null, mods:{} },
@@ -162,8 +168,22 @@ function reticleHex(id) {
   return (rc || RETICLE_COLORS[0]).hex;
 }
 
+// Laser color presets (#19c) — green is the iconic one, so it leads and is
+// the migration default. Stored per class as attachments[slot+'LaserColor']
+// (mirrors the reticle-color field), resolved to a hex via
+// resolveWeaponDef.laserColor and applied to the beam + dot material.
+const LASER_COLORS = [
+  { id:'green', name:'GREEN', hex:0x30ff44 },
+  { id:'red',   name:'RED',   hex:0xff2626 },
+  { id:'blue',  name:'BLUE',  hex:0x3a86ff },
+];
+function laserHex(id) {
+  const lc = LASER_COLORS.find(lc => lc.id === id);
+  return (lc || LASER_COLORS[0]).hex;
+}
+
 // Short mod summary for the class editor rows ("ADS TIME -15% · ADS SPREAD -10%")
-const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', recoil:'RECOIL', bloom:'BLOOM' };
+const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', spreadHip:'HIP SPREAD', recoil:'RECOIL', bloom:'BLOOM' };
 function attachmentDesc(att) {
   const parts = [];
   for (const stat in att.mods) {
@@ -179,7 +199,7 @@ function attachmentDesc(att) {
 // apply modifiers ad hoc. Returns the base def itself when nothing valid
 // is attached; otherwise a copy carrying `attachments` (valid ids, for the
 // viewmodel to branch on) with mods multiplied in.
-function resolveWeaponDef(key, attIds, dotColor) {
+function resolveWeaponDef(key, attIds, dotColor, laserColor) {
   const base = WEAPONS[key];
   const ids = (attIds || []).filter(id => ATTACHMENTS[id] && attachmentAllowed(ATTACHMENTS[id], base));
   if (!ids.length) return base;
@@ -187,6 +207,7 @@ function resolveWeaponDef(key, attIds, dotColor) {
   def.range = base.range.slice();
   def.attachments = ids;
   def.reticleColor = reticleHex(dotColor); // buildViewModel tints the dot/holo reticle with this
+  def.laserColor = laserHex(laserColor);   // ...and the laser beam/dot with this
   for (const id of ids) {
     const mods = ATTACHMENTS[id].mods;
     for (const stat in mods) def[stat] *= mods[stat];
@@ -213,6 +234,9 @@ function normalizeClass(c) {
     // reticle color (#19b): pre-color saves (and junk values) default to red
     const ck = slot + 'DotColor';
     if (!RETICLE_COLORS.some(rc => rc.id === c.attachments[ck])) c.attachments[ck] = 'red';
+    // laser color (#19c): pre-laser saves (and junk values) default to green
+    const lk = slot + 'LaserColor';
+    if (!LASER_COLORS.some(lc => lc.id === c.attachments[lk])) c.attachments[lk] = 'green';
   }
   return c;
 }
