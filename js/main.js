@@ -165,11 +165,34 @@ const VM_OPTIC = {
   lmg: { y: 0.05, z: -0.15 }, shotgun: { y: 0.04, z: -0.12 },
 };
 
+// Foregrip mount points (#9d): y = handguard/body underside (grip top), z =
+// spot along the fore-end — per weapon because handguard depths/spans differ
+// (model-type keys cover the generic fallback bodies). Stats (recoil/bloom
+// ×.8) already flow through resolveWeaponDef; this table is visual only.
+const VM_GRIP = {
+  m4a1: { y: -0.039, z: -0.5 },
+  scar: { y: -0.045, z: -0.42 },
+  acr: { y: -0.043, z: -0.47 },
+  tar21: { y: -0.066, z: -0.5 },
+  famas: { y: -0.045, z: -0.36 },
+  fal: { y: -0.042, z: -0.46 },
+  mp5k: { y: -0.055, z: -0.23 },
+  ump45: { y: -0.045, z: -0.3 },
+  vector: { y: -0.088, z: -0.33 },
+  p90: { y: -0.07, z: -0.3 },
+  rpd: { y: -0.042, z: -0.47 },
+  spas12: { y: -0.054, z: -0.4 },
+  ar: { y: -0.042, z: -0.45 }, smg: { y: -0.045, z: -0.32 },
+  lmg: { y: -0.05, z: -0.5 }, shotgun: { y: -0.07, z: -0.42 },
+};
+
 // Per-weapon viewmodel recipes: each builds the real gun's silhouette from
 // part()/cyl() primitives and returns the muzzle distance (len). Sight line
 // stays at local y ~0.06 so the shared VM_POS.ads still centers the irons
 // (a mounted optic re-centers via userData.adsPos instead). Iron-sight
-// parts go through `s` (not `p`) so an optic can hide them.
+// parts go through `s` (not `p`) so an optic can hide them; a built-in
+// vertical foregrip goes through `u` so the foregrip attachment replaces
+// it instead of doubling up (only the MP5K has one).
 // Weapons without a recipe fall back to the generic per-class body below.
 const VM_RECIPES = {
   m4a1({ p, s, dark, mid, black }) {
@@ -243,11 +266,11 @@ const VM_RECIPES = {
     s(0.016, 0.032, 0.02, dark, 0, 0.055, -0.06);
     return 0.88;
   },
-  mp5k({ p, s, dark, mid }) {
+  mp5k({ p, s, u, dark, mid }) {
     p(0.05, 0.085, 0.3, dark, 0, 0, -0.13);          // stubby receiver
     p(0.026, 0.026, 0.07, mid, 0, 0.008, -0.3);      // snub barrel
     p(0.05, 0.07, 0.1, mid, 0, -0.02, -0.23);        // fat handguard
-    p(0.034, 0.095, 0.045, dark, 0, -0.1, -0.23);    // vertical foregrip
+    u(0.034, 0.095, 0.045, dark, 0, -0.1, -0.23);    // built-in vertical foregrip
     p(0.034, 0.1, 0.06, mid, 0, -0.09, -0.08);       // curved mag, upper...
     const m2 = p(0.032, 0.09, 0.055, mid, 0, -0.165, -0.095); // ...and curl
     m2.rotation.x = 0.35;
@@ -395,13 +418,15 @@ function buildViewModel(w) {
   };
   const irons = [];
   const sight = (...a) => { const m = part(...a); irons.push(m); return m; };
+  const builtinGrips = [];
+  const ugrip = (...a) => { const m = part(...a); builtinGrips.push(m); return m; };
   const dark = 0x26282c, mid = 0x3a3d42, wood = 0x6e5637, black = 0x1a1c1f;
   const type = w.model;
   const flashSize = VM_FLASH[type] || 0.12;
   let len = 0.62;
   const recipe = VM_RECIPES[w.key];
   if (recipe) {
-    len = recipe({ p: part, s: sight, cyl, dark, mid, wood, black });
+    len = recipe({ p: part, s: sight, u: ugrip, cyl, dark, mid, wood, black });
   } else if (type === 'ar') {
     part(0.055, 0.085, 0.62, dark, 0, 0, -0.31);
     part(0.03, 0.03, 0.3, mid, 0, 0.005, -0.68);         // barrel
@@ -460,6 +485,17 @@ function buildViewModel(w) {
     dot.position.set(0, dotY, mnt.z);
     g.add(dot);
     g.userData.adsPos.y = -dotY; // camera-space y=0 at full ADS → dot exactly on the aim point
+  }
+  // foregrip (#9d): vertical grip hung off the handguard underside — collar
+  // at the mount, raked shaft, bottom cap. A recipe's built-in grip (MP5K)
+  // hides so the mounted one replaces it.
+  if (w.attachments && w.attachments.includes('foregrip')) {
+    for (const m of builtinGrips) m.visible = false;
+    const mnt = VM_GRIP[w.key] || VM_GRIP[type] || { y: -0.045, z: -0.35 };
+    part(0.04, 0.014, 0.056, black, 0, mnt.y - 0.007, mnt.z);            // mount collar
+    const shaft = part(0.032, 0.1, 0.04, black, 0, mnt.y - 0.062, mnt.z - 0.006);
+    shaft.rotation.x = 0.12;                                             // slight forward rake
+    part(0.036, 0.014, 0.044, black, 0, mnt.y - 0.115, mnt.z - 0.012);   // flared bottom cap
   }
   // muzzle flash quad
   const flash = new THREE.Mesh(
