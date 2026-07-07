@@ -215,6 +215,15 @@ const VM_HANDS = {
   shotgun: { trig: [-0.085, -0.03] }, pistol: { trig: [-0.068, 0], sup: [-0.096, 0.012, 'grip'] },
 };
 
+// Mag pull (#10b): gun-local travel of the mag part + support hand when
+// the reload anim pulls it, with an rx tip so the mag rocks out instead
+// of sliding straight. Default suits underslung box mags; the P90's
+// top-mounted mag lifts up and back off the rail instead.
+const VM_MAG_PULL = {
+  p90: { x: 0, y: 0.075, z: 0.15, rx: -0.25 },
+  default: { x: 0, y: -0.17, z: 0.06, rx: 0.45 },
+};
+
 // Camo palettes (#9e): 4 shades dark→light per camo, zero stat effect.
 // A part's original color maps onto the ramp by luminance (camoShade), so
 // recipe-local colors (SCAR tan, TAR-21 olive, P90 shell) recolor too —
@@ -271,15 +280,18 @@ function camoShade(orig, shades) {
 // (a mounted optic re-centers via userData.adsPos instead). Iron-sight
 // parts go through `s` (not `p`) so an optic can hide them; a built-in
 // vertical foregrip goes through `u` so the foregrip attachment replaces
-// it instead of doubling up (only the MP5K has one).
+// it instead of doubling up (only the MP5K has one); mag parts go through
+// `m` so the reload anim (#10b) can pull them — guns whose mag isn't a
+// separate visible part (pistol-grip mags, SPAS tube, Vector mag-in-grip)
+// skip it and only play the tilt + hand motion.
 // Weapons without a recipe fall back to the generic per-class body below.
 const VM_RECIPES = {
-  m4a1({ p, s, dark, mid, black }) {
+  m4a1({ p, s, m, dark, mid, black }) {
     p(0.055, 0.085, 0.46, dark, 0, 0, -0.23);        // receiver
     p(0.058, 0.068, 0.24, mid, 0, -0.005, -0.55);    // round handguard
     p(0.045, 0.016, 0.34, black, 0, 0.051, -0.29);   // flat-top rail
     p(0.024, 0.024, 0.18, mid, 0, 0.005, -0.72);     // barrel
-    p(0.038, 0.14, 0.09, mid, 0, -0.1, -0.18);       // straight STANAG mag
+    m(0.038, 0.14, 0.09, mid, 0, -0.1, -0.18);       // straight STANAG mag
     p(0.034, 0.045, 0.14, mid, 0, 0.008, 0.05);      // buffer tube
     p(0.05, 0.08, 0.06, dark, 0, -0.002, 0.14);      // collapsible stock pad
     p(0.03, 0.07, 0.035, dark, 0, -0.072, -0.05);    // pistol grip
@@ -287,11 +299,11 @@ const VM_RECIPES = {
     s(0.02, 0.032, 0.025, dark, 0, 0.058, -0.12);    // rear sight
     return 0.82;
   },
-  scar({ p, s, black }) {
+  scar({ p, s, m, black }) {
     const tan = 0x8d7c58, tanDk = 0x6f6248;
     p(0.055, 0.1, 0.56, tan, 0, 0.005, -0.27);       // tall slab receiver
     p(0.026, 0.026, 0.22, black, 0, 0.012, -0.65);   // barrel
-    p(0.04, 0.12, 0.085, tanDk, 0, -0.095, -0.16);   // 20-rd box mag
+    m(0.04, 0.12, 0.085, tanDk, 0, -0.095, -0.16);   // 20-rd box mag
     p(0.05, 0.09, 0.16, tan, 0, 0.005, 0.09);        // wide stock
     p(0.04, 0.028, 0.1, tanDk, 0, 0.062, 0.08);      // cheek riser
     p(0.03, 0.07, 0.035, black, 0, -0.07, -0.02);    // grip
@@ -299,45 +311,45 @@ const VM_RECIPES = {
     s(0.018, 0.034, 0.02, black, 0, 0.058, -0.08);
     return 0.78;
   },
-  acr({ p, s, dark, mid }) {
+  acr({ p, s, m, dark, mid }) {
     const poly = 0x454a52;
     p(0.055, 0.082, 0.4, poly, 0, 0, -0.22);         // upper
     p(0.06, 0.07, 0.26, dark, 0, -0.008, -0.5);      // wide handguard
     p(0.024, 0.024, 0.16, mid, 0, 0.006, -0.7);      // barrel
-    p(0.038, 0.13, 0.09, dark, 0, -0.1, -0.17);      // mag
+    m(0.038, 0.13, 0.09, dark, 0, -0.1, -0.17);      // mag
     p(0.046, 0.085, 0.18, poly, 0, -0.005, 0.08);    // folding stock
     p(0.03, 0.07, 0.035, dark, 0, -0.072, -0.04);    // grip
     s(0.014, 0.042, 0.02, dark, 0, 0.06, -0.56);
     s(0.018, 0.034, 0.02, dark, 0, 0.056, -0.1);
     return 0.78;
   },
-  tar21({ p, s, dark }) {
+  tar21({ p, s, m, dark }) {
     const olive = 0x565e49;
     p(0.06, 0.095, 0.62, olive, 0, 0, -0.19);        // one-piece bullpup body
     p(0.055, 0.075, 0.14, olive, 0, -0.028, -0.53);  // sloped fore-end
     p(0.026, 0.026, 0.16, dark, 0, 0.01, -0.62);     // barrel
-    p(0.038, 0.12, 0.08, dark, 0, -0.1, 0.04);       // mag BEHIND the grip
+    m(0.038, 0.12, 0.08, dark, 0, -0.1, 0.04);       // mag BEHIND the grip
     p(0.03, 0.062, 0.04, dark, 0, -0.072, -0.24);    // grip well forward
     s(0.014, 0.04, 0.02, dark, 0, 0.062, -0.44);
     s(0.018, 0.032, 0.02, dark, 0, 0.058, 0);
     return 0.7;
   },
-  famas({ p, s, dark, mid }) {
+  famas({ p, s, m, dark, mid }) {
     p(0.055, 0.08, 0.56, dark, 0, -0.005, -0.15);    // bullpup body
     p(0.026, 0.026, 0.26, mid, 0, 0.008, -0.55);     // barrel
     p(0.022, 0.022, 0.46, mid, 0, 0.055, -0.13);     // full-length carry handle
     p(0.016, 0.03, 0.02, mid, 0, 0.038, 0.07);       // handle posts
     p(0.016, 0.03, 0.02, mid, 0, 0.038, -0.33);
-    p(0.038, 0.115, 0.075, mid, 0, -0.1, 0.06);      // mag behind grip
+    m(0.038, 0.115, 0.075, mid, 0, -0.1, 0.06);      // mag behind grip
     p(0.03, 0.062, 0.04, dark, 0, -0.075, -0.2);     // grip
     s(0.012, 0.03, 0.018, dark, 0, 0.062, -0.34);    // sights at the handle ends
     s(0.014, 0.026, 0.018, dark, 0, 0.06, 0.08);
     return 0.7;
   },
-  fal({ p, s, dark, mid, wood }) {
+  fal({ p, s, m, dark, mid, wood }) {
     p(0.05, 0.08, 0.5, dark, 0, 0, -0.25);           // long slim receiver
     p(0.022, 0.022, 0.4, mid, 0, 0.008, -0.66);      // slim barrel
-    p(0.036, 0.12, 0.085, mid, 0, -0.095, -0.16);    // 20-rd mag
+    m(0.036, 0.12, 0.085, mid, 0, -0.095, -0.16);    // 20-rd mag
     p(0.05, 0.085, 0.18, wood, 0, -0.005, 0.08);     // wood stock
     p(0.03, 0.068, 0.04, wood, 0, -0.07, -0.04);     // wood grip
     p(0.054, 0.06, 0.18, wood, 0, -0.012, -0.44);    // wood handguard
@@ -345,24 +357,24 @@ const VM_RECIPES = {
     s(0.016, 0.032, 0.02, dark, 0, 0.055, -0.06);
     return 0.88;
   },
-  mp5k({ p, s, u, dark, mid }) {
+  mp5k({ p, s, u, m, dark, mid }) {
     p(0.05, 0.085, 0.3, dark, 0, 0, -0.13);          // stubby receiver
     p(0.026, 0.026, 0.07, mid, 0, 0.008, -0.3);      // snub barrel
     p(0.05, 0.07, 0.1, mid, 0, -0.02, -0.23);        // fat handguard
     u(0.034, 0.095, 0.045, dark, 0, -0.1, -0.23);    // built-in vertical foregrip
-    p(0.034, 0.1, 0.06, mid, 0, -0.09, -0.08);       // curved mag, upper...
-    const m2 = p(0.032, 0.09, 0.055, mid, 0, -0.165, -0.095); // ...and curl
+    m(0.034, 0.1, 0.06, mid, 0, -0.09, -0.08);       // curved mag, upper...
+    const m2 = m(0.032, 0.09, 0.055, mid, 0, -0.165, -0.095); // ...and curl
     m2.rotation.x = 0.35;
     p(0.045, 0.075, 0.04, dark, 0, 0, 0.04);         // receiver end cap
     s(0.02, 0.04, 0.02, dark, 0, 0.06, -0.27);       // front ring sight
     s(0.022, 0.034, 0.02, dark, 0, 0.058, 0);        // rear drum
     return 0.35;
   },
-  ump45({ p, s, dark }) {
+  ump45({ p, s, m, dark }) {
     const poly = 0x3d4148;
     p(0.052, 0.09, 0.4, poly, 0, 0, -0.17);          // polymer receiver
     p(0.024, 0.024, 0.13, dark, 0, 0.008, -0.43);    // barrel
-    const mag = p(0.034, 0.13, 0.07, dark, 0, -0.105, -0.1); // raked mag
+    const mag = m(0.034, 0.13, 0.07, dark, 0, -0.105, -0.1); // raked mag
     mag.rotation.x = 0.22;
     p(0.032, 0.022, 0.16, poly, 0, 0.025, 0.1);      // folding stock bar
     p(0.038, 0.065, 0.028, poly, 0, 0, 0.19);        // butt pad
@@ -383,10 +395,10 @@ const VM_RECIPES = {
     s(0.014, 0.03, 0.018, dark, 0, 0.058, 0);
     return 0.46;
   },
-  p90({ p, s, dark }) {
+  p90({ p, s, m, dark }) {
     const shell = 0x3c4038, magc = 0x6a7562;
     p(0.055, 0.09, 0.52, shell, 0, -0.025, -0.11);   // one-piece bullpup shell
-    p(0.045, 0.028, 0.36, magc, 0, 0.038, -0.14);    // top-mounted mag
+    m(0.045, 0.028, 0.36, magc, 0, 0.038, -0.14);    // top-mounted mag
     p(0.05, 0.06, 0.06, shell, 0, 0.03, 0.12);       // humped butt
     p(0.024, 0.024, 0.09, dark, 0, 0.02, -0.41);     // barrel stub
     p(0.04, 0.06, 0.05, shell, 0, -0.095, -0.2);     // trigger-loop grip
@@ -394,10 +406,10 @@ const VM_RECIPES = {
     s(0.012, 0.024, 0.016, dark, 0, 0.06, -0.32);
     return 0.46;
   },
-  rpd({ p, s, dark, mid, wood }) {
+  rpd({ p, s, m, dark, mid, wood }) {
     p(0.06, 0.09, 0.5, dark, 0, 0, -0.25);           // receiver
     p(0.028, 0.028, 0.42, mid, 0, 0.008, -0.68);     // long barrel
-    p(0.11, 0.11, 0.1, mid, 0, -0.09, -0.22);        // belt drum
+    m(0.11, 0.11, 0.1, mid, 0, -0.09, -0.22);        // belt drum
     p(0.048, 0.08, 0.16, wood, 0, -0.005, 0.06);     // wood stock
     p(0.03, 0.065, 0.04, wood, 0, -0.07, -0.06);     // wood grip
     p(0.054, 0.055, 0.14, wood, 0, -0.015, -0.47);   // wood handguard
@@ -407,7 +419,7 @@ const VM_RECIPES = {
     s(0.016, 0.034, 0.02, dark, 0, 0.058, -0.1);
     return 0.9;
   },
-  intervention({ p, cyl, dark, mid }) {
+  intervention({ p, m, cyl, dark, mid }) {
     p(0.045, 0.07, 0.6, dark, 0, 0, -0.3);           // chassis
     p(0.024, 0.024, 0.46, mid, 0, 0.006, -0.83);     // long fluted barrel
     p(0.04, 0.04, 0.08, dark, 0, 0.006, -1.09);      // muzzle brake
@@ -416,17 +428,17 @@ const VM_RECIPES = {
     p(0.024, 0.02, 0.18, dark, 0, -0.042, 0.13);     // skeleton lower rail
     p(0.034, 0.1, 0.035, dark, 0, -0.005, 0.24);     // butt plate
     p(0.03, 0.07, 0.04, mid, 0, -0.075, -0.1);       // grip
-    p(0.034, 0.055, 0.08, mid, 0, -0.06, -0.32);     // box mag
+    m(0.034, 0.055, 0.08, mid, 0, -0.06, -0.32);     // box mag
     p(0.012, 0.012, 0.16, dark, 0.02, -0.03, -0.85); // folded bipod
     p(0.012, 0.012, 0.16, dark, -0.02, -0.03, -0.85);
     return 1.15;
   },
-  barrett({ p, cyl, dark, mid }) {
+  barrett({ p, m, cyl, dark, mid }) {
     p(0.058, 0.09, 0.72, dark, 0, 0, -0.28);         // thick receiver
     p(0.03, 0.03, 0.3, mid, 0, 0.008, -0.78);        // barrel
     p(0.062, 0.055, 0.14, dark, 0, 0.008, -0.99);    // huge arrow muzzle brake
     p(0.095, 0.035, 0.07, mid, 0, 0.008, -0.97);     // brake side fins
-    p(0.042, 0.1, 0.15, mid, 0, -0.095, -0.3);       // long box mag
+    m(0.042, 0.1, 0.15, mid, 0, -0.095, -0.3);       // long box mag
     cyl(0.032, 0.22, 0x1c1e22, 0, 0.075, -0.18);     // scope
     p(0.05, 0.09, 0.045, dark, 0, -0.005, 0.1);      // butt pad
     p(0.03, 0.07, 0.04, dark, 0, -0.075, -0.04);     // grip
@@ -453,12 +465,12 @@ const VM_RECIPES = {
     p(0.018, 0.022, 0.015, dark, 0, 0.083, -0.02);
     return 0.29;
   },
-  g18({ p, dark, mid }) {
+  g18({ p, m, dark, mid }) {
     const poly = 0x33363b;
     p(0.038, 0.048, 0.22, dark, 0, 0.032, -0.095);   // compact slide
     p(0.036, 0.026, 0.17, poly, 0, -0.002, -0.085);  // frame
     p(0.034, 0.1, 0.055, poly, 0, -0.052, 0);        // grip
-    p(0.026, 0.1, 0.038, mid, 0, -0.15, 0.005);      // 33-rd extended mag
+    m(0.026, 0.1, 0.038, mid, 0, -0.15, 0.005);      // 33-rd extended mag
     p(0.011, 0.024, 0.014, dark, 0, 0.068, -0.185);
     p(0.014, 0.022, 0.014, dark, 0, 0.066, 0);
     return 0.22;
@@ -506,17 +518,19 @@ function buildViewModel(w) {
   const sight = (...a) => { const m = part(...a); irons.push(m); return m; };
   const builtinGrips = [];
   const ugrip = (...a) => { const m = part(...a); builtinGrips.push(m); return m; };
+  const magParts = [];
+  const magp = (...a) => { const m = part(...a); magParts.push(m); return m; };
   const dark = 0x26282c, mid = 0x3a3d42, wood = 0x6e5637, black = 0x1a1c1f;
   const type = w.model;
   const flashSize = VM_FLASH[type] || 0.12;
   let len = 0.62;
   const recipe = VM_RECIPES[w.key];
   if (recipe) {
-    len = recipe({ p: part, s: sight, u: ugrip, cyl, dark, mid, wood, black });
+    len = recipe({ p: part, s: sight, u: ugrip, m: magp, cyl, dark, mid, wood, black });
   } else if (type === 'ar') {
     part(0.055, 0.085, 0.62, dark, 0, 0, -0.31);
     part(0.03, 0.03, 0.3, mid, 0, 0.005, -0.68);         // barrel
-    part(0.04, 0.14, 0.1, mid, 0, -0.1, -0.2);           // mag
+    magp(0.04, 0.14, 0.1, mid, 0, -0.1, -0.2);           // mag
     part(0.05, 0.08, 0.16, dark, 0, -0.01, 0.02);        // stock
     sight(0.014, 0.045, 0.02, dark, 0, 0.062, -0.55);    // front sight
     sight(0.014, 0.04, 0.02, dark, 0, 0.06, -0.12);      // rear sight
@@ -524,14 +538,14 @@ function buildViewModel(w) {
   } else if (type === 'smg') {
     part(0.055, 0.09, 0.42, dark, 0, 0, -0.21);
     part(0.028, 0.028, 0.16, mid, 0, 0.008, -0.48);
-    part(0.038, 0.16, 0.08, mid, 0, -0.11, -0.12);
+    magp(0.038, 0.16, 0.08, mid, 0, -0.11, -0.12);
     sight(0.014, 0.04, 0.02, dark, 0, 0.062, -0.38);
     sight(0.014, 0.036, 0.02, dark, 0, 0.058, -0.06);
     len = 0.57;
   } else if (type === 'lmg') {
     part(0.065, 0.1, 0.7, dark, 0, 0, -0.35);
     part(0.034, 0.034, 0.3, mid, 0, 0.005, -0.83);
-    part(0.12, 0.12, 0.1, mid, 0, -0.1, -0.25);          // drum
+    magp(0.12, 0.12, 0.1, mid, 0, -0.1, -0.25);          // drum
     part(0.05, 0.08, 0.14, wood, 0, -0.01, 0.04);
     sight(0.014, 0.05, 0.02, dark, 0, 0.07, -0.62);
     len = 0.99;
@@ -583,6 +597,18 @@ function buildViewModel(w) {
     const shaft = part(0.032, 0.1, 0.04, black, 0, mnt.y - 0.062, mnt.z - 0.006);
     shaft.rotation.x = 0.12;                                             // slight forward rake
     part(0.036, 0.014, 0.044, black, 0, mnt.y - 0.115, mnt.z - 0.012);   // flared bottom cap
+  }
+  // mag handle (#10b): tagged mag parts re-parent into one group so the
+  // reload anim moves them as a unit — rest pose is the zero transform,
+  // and the per-gun pull direction rides userData with them. Guns with
+  // no tagged mag (pistol-grip mags, tube-fed) get no handle and only
+  // play the tilt + hand motion.
+  g.userData.magPull = VM_MAG_PULL[w.key] || VM_MAG_PULL.default;
+  if (magParts.length) {
+    const mg = new THREE.Group();
+    g.add(mg);
+    for (const pm of magParts) mg.add(pm);
+    g.userData.magPart = mg;
   }
   // hands (#10a): box-built arms as children of the gun group, so bob/
   // kick/sprint pose carries them for free. Two hand styles: 'grip'
@@ -636,8 +662,10 @@ function buildViewModel(w) {
   const sup = (w.attachments && w.attachments.includes('foregrip') && gm)
     ? [gm.y - 0.055, gm.z - 0.005, 'grip']                  // wrap the mounted grip shaft
     : hnd.sup || (gm ? [gm.y - 0.024, gm.z] : [-0.05, -0.4]);
-  // #10b/#10c animate the support arm
+  // #10b/#10c animate the support arm — rest pose saved so the animator
+  // can offset from it and snap back
   g.userData.armSupport = arm(sup[0], sup[1], sup[2] || 'cup', -1, -0.38, 0.68);
+  g.userData.armSupport.userData.rest = g.userData.armSupport.position.clone();
   // muzzle flash quad
   const flash = new THREE.Mesh(
     new THREE.PlaneGeometry(flashSize, flashSize),
@@ -2102,9 +2130,11 @@ function updatePlayer(dt) {
     player.stamina = Math.min(1, player.stamina + dt / 3);
   }
 
-  // ---- ADS amount (hold RMB or toggle with X)
+  // ---- ADS amount (hold RMB or toggle with X). Reloading lowers the gun
+  // out of ADS (COD-style) so the #10b reload roll never fights the sight
+  // line; a held RMB re-aims the moment reloadT runs out.
   const adsActive = player.adsHeld || player.adsToggle;
-  const adsTarget = (adsActive && !player.sprinting && player.switchT <= 0) ? 1 : 0;
+  const adsTarget = (adsActive && !player.sprinting && player.switchT <= 0 && player.reloadT <= 0) ? 1 : 0;
   const rate = dt / def.adsTime;
   player.adsAmt += THREE.MathUtils.clamp(adsTarget - player.adsAmt, -rate, rate);
   const fovBase = UI.settings.fov;
@@ -2351,6 +2381,8 @@ function firePlayerShot(w) {
 // Camera & viewmodel per-frame
 // ============================================================
 let swayT = 0, cookDip = 0;
+const _ss = u => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u); // clamped smoothstep
+
 function updateCameraAndViewmodel(dt) {
   const def = curW().def;
   swayT += dt;
@@ -2401,13 +2433,46 @@ function updateCameraAndViewmodel(dt) {
       target.x += dip * 0.16;
       target.y -= dip * 0.2;
     }
+    // reload (#10b): three lerp phases off the reloadT countdown,
+    // normalized to the live reload duration so Sleight of Hand plays
+    // the same anim at double speed. Phase 1 the gun rolls magwell-to-
+    // camera while the support hand pulls the mag down/out, phase 2 the
+    // hand seats the fresh mag, phase 3 racks the charging handle
+    // (quick z-jerk toward the camera).
+    let rTilt = 0, rOut = 0, rRack = 0;
+    if (player.reloadT > 0) {
+      const t = 1 - player.reloadT / (def.reload * (player.perks.has('soh') ? 0.5 : 1));
+      rTilt = _ss(t / 0.22) - _ss((t - 0.55) / 0.24);   // roll out, hold, roll back
+      rOut = _ss(t / 0.3) - _ss((t - 0.38) / 0.3);      // mag out 0→0.3, back in by 0.68
+      rRack = _ss((t - 0.8) / 0.09) - _ss((t - 0.9) / 0.09); // handle jerk at the end
+    }
+    target.x -= rTilt * 0.035;
+    target.y -= rTilt * 0.05;
+    target.z += rRack * 0.05;
+    const mag = vmGun.userData.magPart, pull = vmGun.userData.magPull;
+    if (mag) {
+      mag.position.set(pull.x * rOut, pull.y * rOut, pull.z * rOut);
+      mag.rotation.x = pull.rx * rOut;
+    }
+    const armS = vmGun.userData.armSupport;
+    if (armS && armS.userData.rest) {
+      const rest = armS.userData.rest;
+      armS.position.set(
+        rest.x + pull.x * rOut,
+        rest.y + pull.y * rOut + rRack * 0.05,
+        // rack slides the support hand back to the receiver (~z −0.06);
+        // hands already at/behind it (pistols) stay put
+        rest.z + pull.z * rOut + rRack * Math.max(0, -0.06 - rest.z));
+    }
     // while the knife is out the gun hides lowered, so the return lerp
     // reads as re-raising it
     if (melee) target.y -= 0.3;
     vmGun.position.lerp(target, Math.min(1, dt * 16));
-    vmGun.rotation.x = vmKick * 0.09 + (player.sprinting ? -0.5 : 0) - dip * 0.25;
+    vmGun.rotation.x = vmKick * 0.09 + (player.sprinting ? -0.5 : 0) - dip * 0.25 + rTilt * 0.12 - rRack * 0.08;
     vmGun.rotation.y = player.sprinting ? 0.4 : 0;
-    vmGun.rotation.z = dip * 0.5;
+    // roll is negative (top-to-the-right) so the magwell swings toward
+    // the camera instead of hiding behind the receiver
+    vmGun.rotation.z = dip * 0.5 - rTilt * 0.42;
     // hide gun when fully scoped
     const scoped = player.adsAmt > 0.85 && def.zoom > 3;
     vmGun.visible = !scoped && !melee;
