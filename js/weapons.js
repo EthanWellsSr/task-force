@@ -57,6 +57,22 @@ const WEAPONS = {
     spreadHip:.044, spreadAds:.0050, recoil:.017, bloom:.0038, zoom:1.35, adsTime:.34,
     speed:.87, range:[32,64], model:'lmg' },
 
+  // ---------- PRIMARY: SHOTGUNS ----------
+  // Pellet balance vs 100 HP: r870 one-shots to ~9-10 m (falloff + spread
+  // shed pellets past that), aa12 is a 2-shot DPS monster inside 6 m and
+  // useless past 15. rpm on the r870 is bot cadence/HUD only — the player's
+  // cycle is pumpTime, same as the SPAS-12.
+  r870: { slot:'primary', cat:'Shotgun', name:'REMINGTON 870 MCS',
+    dmg:20, minDmg:5, head:1.2, rpm:60, mag:6, reserve:30, reload:2.7, mode:'pump',
+    pellets:8, pumpTime:.8,
+    spreadHip:.034, spreadAds:.02, recoil:.048, bloom:.004, zoom:1.15, adsTime:.24,
+    speed:.94, range:[5,16], model:'shotgun' },
+  aa12: { slot:'primary', cat:'Shotgun', name:'ATCHISSON AA-12',
+    dmg:12, minDmg:4, head:1.2, rpm:300, mag:8, reserve:40, reload:2.5, mode:'semi',
+    pellets:8,
+    spreadHip:.05, spreadAds:.034, recoil:.028, bloom:.006, zoom:1.15, adsTime:.22,
+    speed:.93, range:[6,15], model:'shotgun' },
+
   // ---------- PRIMARY: SNIPERS ----------
   // Sniper balance: body shots one-shot only up close (Intervention) or never
   // (Barrett); headshots one-shot at any range. Falloff window sits in-map —
@@ -225,15 +241,21 @@ const BOT_LOADOUTS = [
   { primary:'vector', secondary:'g18' },
   { primary:'p90',    secondary:'usp' },
   { primary:'rpd',    secondary:'deagle' },
+  { primary:'r870',   secondary:'usp' },
+  { primary:'aa12',   secondary:'g18' },
   { primary:'intervention', secondary:'usp' },
 ];
 
 // Normalized 0..1 stats for the class editor bars
 function weaponStatBars(w) {
-  const dps = w.dmg * (w.rpm / 60);
+  // Pellet guns show full-blast damage (per-pellet dmg reads as a pea
+  // shooter), and pump guns cycle at pumpTime, not rpm (rpm is bot cadence).
+  const hit = w.dmg * (w.pellets || 1);
+  const cycleRpm = w.mode === 'pump' ? 60 / w.pumpTime : w.rpm;
+  const dps = hit * (cycleRpm / 60);
   return [
-    ['DAMAGE',    Math.min(1, w.dmg / 70)],
-    ['FIRE RATE', Math.min(1, w.rpm / 1100)],
+    ['DAMAGE',    Math.min(1, hit / 70)],
+    ['FIRE RATE', Math.min(1, cycleRpm / 1100)],
     ['DPS',       Math.min(1, dps / 420)],
     ['RANGE',     Math.min(1, w.range[1] / 100)],
     ['ACCURACY',  Math.min(1, 1 - w.recoil / .05)],

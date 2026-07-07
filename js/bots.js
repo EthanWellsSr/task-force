@@ -188,7 +188,7 @@ class Bot {
     // getting shot reveals the attacker
     if (attacker && attacker.team !== this.team && attacker.alive) {
       this.lastKnown = attacker.pos.clone();
-      if (!this.target) this.reactT = this.skill.react * 0.5;
+      if (!this.target) this.reactT = this.skill.react * 0.5 / 1000; // react is ms
     }
     if (this.hp <= 0) {
       this.alive = false;
@@ -397,7 +397,9 @@ class Bot {
         const px = Math.cos(wantYaw), pz = -Math.sin(wantYaw);
         moveX = px * this.strafeDir * 0.55;
         moveZ = pz * this.strafeDir * 0.55;
-        if (dist > 26) { moveX += Math.sin(wantYaw) * 0.5; moveZ += Math.cos(wantYaw) * 0.5; }
+        // shotgun bots push in to their falloff range instead of plinking
+        const pushDist = w.pellets ? 10 : 26;
+        if (dist > pushDist) { moveX += Math.sin(wantYaw) * 0.5; moveZ += Math.cos(wantYaw) * 0.5; }
       }
       // firing — only while the target is actually visible (canSee is
       // refreshed by the perception scan; _fireShot re-verifies per shot)
