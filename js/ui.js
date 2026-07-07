@@ -35,7 +35,8 @@ const UI = {
   loadClasses() {
     try {
       const c = JSON.parse(localStorage.getItem('tf_classes'));
-      if (Array.isArray(c) && c.length === 5) { this.classes = c; return; }
+      // normalizeClass migrates pre-attachment saves (bare weapon keys) in place
+      if (Array.isArray(c) && c.length === 5) { this.classes = c.map(normalizeClass); return; }
     } catch (e) {}
     this.classes = DEFAULT_CLASSES.map(c => JSON.parse(JSON.stringify(c)));
   },
@@ -149,10 +150,10 @@ const UI = {
       }
     };
     mkWeaponList('primaryList', 'primary', c.primary, key => {
-      c.primary = key; this.saveClasses(); this.renderClassEditor(); this.renderWeaponStats(key);
+      c.primary = key; normalizeClass(c); this.saveClasses(); this.renderClassEditor(); this.renderWeaponStats(key);
     });
     mkWeaponList('secondaryList', 'secondary', c.secondary, key => {
-      c.secondary = key; this.saveClasses(); this.renderClassEditor(); this.renderWeaponStats(key);
+      c.secondary = key; normalizeClass(c); this.saveClasses(); this.renderClassEditor(); this.renderWeaponStats(key);
     });
     this.renderWeaponStats(c.primary);
 
@@ -170,7 +171,11 @@ const UI = {
   },
 
   renderWeaponStats(key) {
-    const w = WEAPONS[key];
+    // the class's equipped weapons show attachment-modified stats; hovering
+    // an unequipped weapon shows its base def (no attachments picked yet)
+    const c = this.classes[this.editIdx];
+    const slot = key === c.primary ? 'primary' : key === c.secondary ? 'secondary' : null;
+    const w = slot ? resolveWeaponDef(key, c.attachments[slot]) : WEAPONS[key];
     const wrap = this.$('weaponStats');
     let html = `<div style="font-weight:700;letter-spacing:1px;margin-bottom:8px">${w.name} <span style="color:#6a7060;font-size:9px">${w.cat} &middot; ${fireModeLabel(w)} &middot; ${w.mag} RND MAG</span></div>`;
     for (const [label, val] of weaponStatBars(w)) {

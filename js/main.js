@@ -1566,11 +1566,13 @@ function deploy() {
   if (player.respawnT > 0) return;
   const cls = UI.classes[UI.selectedClass];
   player.perks = new Set(cls.perks);
-  const mkState = key => {
-    const w = WEAPONS[key];
+  const mkState = slot => {
+    // resolved def (base + attachment mods) — every curW().def consumer
+    // (fire path, startReload, HUD, viewmodel) reads modified stats from here
+    const w = resolveWeaponDef(cls[slot], cls.attachments && cls.attachments[slot]);
     return { def: w, mag: w.mag, reserve: w.reserve * (player.perks.has('scavenger') ? 2 : 1) };
   };
-  player.weapons = [mkState(cls.primary), mkState(cls.secondary)];
+  player.weapons = [mkState('primary'), mkState('secondary')];
   player.cur = 0;
   player.reloadT = 0; player.switchT = 0; player.burstQueue = 0; player.meleeT = 0;
   player.equipLeft = THROWABLES[player.equip].count;

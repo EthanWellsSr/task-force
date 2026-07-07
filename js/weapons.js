@@ -100,6 +100,70 @@ function fireModeLabel(w) {
 }
 
 // ============================================================
+// ATTACHMENTS — one pick per slot category, per weapon.
+// mods = stat multipliers applied to the base def by resolveWeaponDef.
+// cats = weapon categories the attachment mounts on (null = all).
+// ============================================================
+const ATTACH_SLOTS = ['optic', 'underbarrel', 'camo'];
+
+const ATTACHMENTS = {
+  reddot: { id:'reddot', name:'RED DOT SIGHT', slot:'optic',
+    cats:['Assault Rifle','SMG','LMG','Shotgun'],
+    mods:{ adsTime:.85, spreadAds:.9 } },
+  foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
+    cats:['Assault Rifle','SMG','LMG','Shotgun'],
+    mods:{ recoil:.8, bloom:.8 } },
+  camoDesert:   { id:'camoDesert',   name:'DESERT CAMO',   slot:'camo', cats:null, mods:{} },
+  camoWoodland: { id:'camoWoodland', name:'WOODLAND CAMO', slot:'camo', cats:null, mods:{} },
+  camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:null, mods:{} },
+  camoGold:     { id:'camoGold',     name:'GOLD',          slot:'camo', cats:null, mods:{} },
+};
+
+function attachmentAllowed(att, def) {
+  return !att.cats || att.cats.includes(def.cat);
+}
+
+// Single source of resolved weapon stats: base def + attachment modifiers.
+// Everything that reads weapon stats for the player (deploy's weapon state,
+// fire path, startReload, editor stat bars) must pull from this — never
+// apply modifiers ad hoc. Returns the base def itself when nothing valid
+// is attached; otherwise a copy carrying `attachments` (valid ids, for the
+// viewmodel to branch on) with mods multiplied in.
+function resolveWeaponDef(key, attIds) {
+  const base = WEAPONS[key];
+  const ids = (attIds || []).filter(id => ATTACHMENTS[id] && attachmentAllowed(ATTACHMENTS[id], base));
+  if (!ids.length) return base;
+  const def = Object.assign({}, base);
+  def.range = base.range.slice();
+  def.attachments = ids;
+  for (const id of ids) {
+    const mods = ATTACHMENTS[id].mods;
+    for (const stat in mods) def[stat] *= mods[stat];
+  }
+  return def;
+}
+
+// Migration + hygiene for saved classes: old bare-key saves get an empty
+// attachments field instead of being dropped; unknown ids, ids the weapon's
+// category can't mount, and duplicate slot-category picks are pruned
+// (weapon swaps in the editor route back through here too).
+function normalizeClass(c) {
+  if (!c.attachments || typeof c.attachments !== 'object') c.attachments = {};
+  for (const slot of ['primary', 'secondary']) {
+    const def = WEAPONS[c[slot]];
+    const ids = Array.isArray(c.attachments[slot]) ? c.attachments[slot] : [];
+    const used = new Set();
+    c.attachments[slot] = ids.filter(id => {
+      const a = ATTACHMENTS[id];
+      if (!a || !def || !attachmentAllowed(a, def) || used.has(a.slot)) return false;
+      used.add(a.slot);
+      return true;
+    });
+  }
+  return c;
+}
+
+// ============================================================
 // PERKS — three tiers, one pick per tier
 // ============================================================
 const PERKS = {
@@ -130,11 +194,11 @@ function perkById(id) {
 
 // Default classes
 const DEFAULT_CLASSES = [
-  { name:'CINDERLINE',  primary:'m4a1',         secondary:'usp',    perks:['soh','stopping','steadyaim'] },
-  { name:'IRONWAKE',    primary:'famas',        secondary:'g18',    perks:['marathon','lightweight','ninja'] },
-  { name:'ASHRUNNER',   primary:'rpd',          secondary:'deagle', perks:['scavenger','stopping','steadyaim'] },
-  { name:'RAVENFALL',   primary:'intervention', secondary:'usp',    perks:['soh','coldblooded','ninja'] },
-  { name:'DUSTKNIFE',   primary:'ump45',        secondary:'spas12', perks:['marathon','lightweight','commando'] },
+  { name:'CINDERLINE',  primary:'m4a1',         secondary:'usp',    perks:['soh','stopping','steadyaim'],      attachments:{ primary:[], secondary:[] } },
+  { name:'IRONWAKE',    primary:'famas',        secondary:'g18',    perks:['marathon','lightweight','ninja'],  attachments:{ primary:[], secondary:[] } },
+  { name:'ASHRUNNER',   primary:'rpd',          secondary:'deagle', perks:['scavenger','stopping','steadyaim'],attachments:{ primary:[], secondary:[] } },
+  { name:'RAVENFALL',   primary:'intervention', secondary:'usp',    perks:['soh','coldblooded','ninja'],       attachments:{ primary:[], secondary:[] } },
+  { name:'DUSTKNIFE',   primary:'ump45',        secondary:'spas12', perks:['marathon','lightweight','commando'],attachments:{ primary:[], secondary:[] } },
 ];
 
 // Loadout pool bots draw from
