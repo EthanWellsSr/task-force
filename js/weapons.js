@@ -126,6 +126,12 @@ const ATTACHMENTS = {
   reddot: { id:'reddot', name:'RED DOT SIGHT', slot:'optic',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
     mods:{ adsTime:.85, spreadAds:.9 } },
+  // Holo identity vs the red dot: the bigger window aims tighter but the
+  // bulkier housing aims up slower (still faster than irons). One optic per
+  // slot, so it's mutually exclusive with the red dot via normalizeClass.
+  holo: { id:'holo', name:'HOLOGRAPHIC SIGHT', slot:'optic',
+    cats:['Assault Rifle','SMG','LMG','Shotgun'],
+    mods:{ adsTime:.92, spreadAds:.82 } },
   foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
     mods:{ recoil:.8, bloom:.8 } },
@@ -137,6 +143,23 @@ const ATTACHMENTS = {
 
 function attachmentAllowed(att, def) {
   return !att.cats || att.cats.includes(def.cat);
+}
+
+// Reticle color presets (#19b) — applies to BOTH the red dot's dot and the
+// holo's circle-dot. Stored per class as attachments[slot+'DotColor'] (an id
+// string, not an attachment id — it isn't a slot pick), migrated to 'red'
+// in normalizeClass, resolved to a hex via resolveWeaponDef.reticleColor.
+const RETICLE_COLORS = [
+  { id:'red',     name:'RED',     hex:0xff2020 },
+  { id:'green',   name:'GREEN',   hex:0x35ff45 },
+  { id:'cyan',    name:'CYAN',    hex:0x25dcff },
+  { id:'amber',   name:'AMBER',   hex:0xffb025 },
+  { id:'magenta', name:'MAGENTA', hex:0xff35d5 },
+  { id:'white',   name:'WHITE',   hex:0xf2f2f2 },
+];
+function reticleHex(id) {
+  const rc = RETICLE_COLORS.find(rc => rc.id === id);
+  return (rc || RETICLE_COLORS[0]).hex;
 }
 
 // Short mod summary for the class editor rows ("ADS TIME -15% · ADS SPREAD -10%")
@@ -156,13 +179,14 @@ function attachmentDesc(att) {
 // apply modifiers ad hoc. Returns the base def itself when nothing valid
 // is attached; otherwise a copy carrying `attachments` (valid ids, for the
 // viewmodel to branch on) with mods multiplied in.
-function resolveWeaponDef(key, attIds) {
+function resolveWeaponDef(key, attIds, dotColor) {
   const base = WEAPONS[key];
   const ids = (attIds || []).filter(id => ATTACHMENTS[id] && attachmentAllowed(ATTACHMENTS[id], base));
   if (!ids.length) return base;
   const def = Object.assign({}, base);
   def.range = base.range.slice();
   def.attachments = ids;
+  def.reticleColor = reticleHex(dotColor); // buildViewModel tints the dot/holo reticle with this
   for (const id of ids) {
     const mods = ATTACHMENTS[id].mods;
     for (const stat in mods) def[stat] *= mods[stat];
@@ -186,6 +210,9 @@ function normalizeClass(c) {
       used.add(a.slot);
       return true;
     });
+    // reticle color (#19b): pre-color saves (and junk values) default to red
+    const ck = slot + 'DotColor';
+    if (!RETICLE_COLORS.some(rc => rc.id === c.attachments[ck])) c.attachments[ck] = 'red';
   }
   return c;
 }

@@ -38,7 +38,7 @@ const UI = {
       // normalizeClass migrates pre-attachment saves (bare weapon keys) in place
       if (Array.isArray(c) && c.length === 5) { this.classes = c.map(normalizeClass); return; }
     } catch (e) {}
-    this.classes = DEFAULT_CLASSES.map(c => JSON.parse(JSON.stringify(c)));
+    this.classes = DEFAULT_CLASSES.map(c => normalizeClass(JSON.parse(JSON.stringify(c))));
   },
   saveClasses() { localStorage.setItem('tf_classes', JSON.stringify(this.classes)); },
 
@@ -187,6 +187,27 @@ const UI = {
           };
           div.onmouseenter = () => this.renderWeaponStats(c[slot]);
           wrap.appendChild(div);
+        }
+        // reticle color chips (#19b): only while an optic is equipped —
+        // one shared pick per weapon, tints red dot and holo alike
+        if (cat === 'optic' && picked.some(id => ATTACHMENTS[id] && ATTACHMENTS[id].slot === 'optic')) {
+          const row = document.createElement('div');
+          row.className = 'reticle-row';
+          row.innerHTML = '<span class="reticle-label">SIGHT COLOR</span>';
+          const cur = c.attachments[slot + 'DotColor'] || 'red';
+          for (const rc of RETICLE_COLORS) {
+            const chip = document.createElement('div');
+            chip.className = 'reticle-chip' + (rc.id === cur ? ' selected' : '');
+            chip.style.background = '#' + rc.hex.toString(16).padStart(6, '0');
+            chip.title = rc.name;
+            chip.onclick = () => {
+              AudioSys.uiClick();
+              c.attachments[slot + 'DotColor'] = rc.id;
+              this.saveClasses(); this.renderClassEditor();
+            };
+            row.appendChild(chip);
+          }
+          wrap.appendChild(row);
         }
       }
     };

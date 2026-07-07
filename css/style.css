@@ -116,6 +116,14 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
   font-size:9px; letter-spacing:2px; color:#6a7060; padding:6px 10px 4px;
   background:rgba(255,255,255,.02); border-bottom:1px solid #1c2016;
 }
+.reticle-row {
+  display:flex; align-items:center; gap:7px; padding:7px 10px;
+  border-bottom:1px solid #1c2016;
+}
+.reticle-label { font-size:9px; letter-spacing:1px; color:#8a9078; margin-right:2px; }
+.reticle-chip { width:16px; height:16px; cursor:pointer; border:1px solid #1c2016; }
+.reticle-chip:hover { border-color:#8a9078; }
+.reticle-chip.selected { border-color:#e8a33d; box-shadow:0 0 0 1px #e8a33d; }
 .weapon-stats { border:1px solid #262b1e; padding:10px; font-size:11px; }
 .stat-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
 .stat-row .s-label { width:74px; color:#8a9078; font-size:9px; letter-spacing:1px; }

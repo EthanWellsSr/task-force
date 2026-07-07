@@ -604,23 +604,42 @@ function buildViewModel(w) {
     len = 0.24;
   }
   camoOn = null; // base gun built — attachments below stay black
-  // red dot (#9c): hide the irons, mount the optic on the rail, and shift
-  // the ADS anchor so the dot — not the 0.06 iron line — hits screen center
+  // optics (#9c red dot, #19b holo): hide the irons, mount the housing on
+  // the rail, and shift the ADS anchor so the reticle — not the 0.06 iron
+  // line — hits screen center. Reticle color comes off the resolved def
+  // (per-class pick, defaults red).
   g.userData.adsPos = VM_POS.ads.clone();
-  if (w.attachments && w.attachments.includes('reddot')) {
+  const opticId = w.attachments && (w.attachments.includes('reddot') ? 'reddot'
+    : w.attachments.includes('holo') ? 'holo' : null);
+  if (opticId) {
     for (const m of irons) m.visible = false;
     const mnt = VM_OPTIC[w.key] || VM_OPTIC[type] || { y: 0.045, z: -0.12 };
-    const dotY = mnt.y + 0.039;
-    part(0.04, 0.014, 0.08, black, 0, mnt.y + 0.007, mnt.z);        // rail base
-    part(0.007, 0.05, 0.026, black, -0.0215, mnt.y + 0.039, mnt.z); // housing walls
-    part(0.007, 0.05, 0.026, black, 0.0215, mnt.y + 0.039, mnt.z);
-    part(0.05, 0.007, 0.026, black, 0, mnt.y + 0.0675, mnt.z);      // housing top
-    const dot = new THREE.Mesh(
-      new THREE.BoxGeometry(0.008, 0.008, 0.004),
-      new THREE.MeshBasicMaterial({ color: 0xff2020 }));
-    dot.position.set(0, dotY, mnt.z);
-    g.add(dot);
-    g.userData.adsPos.y = -dotY; // camera-space y=0 at full ADS → dot exactly on the aim point
+    const glow = () => new THREE.MeshBasicMaterial({ color: w.reticleColor || 0xff2020, side: THREE.DoubleSide });
+    part(0.04, 0.014, 0.08, black, 0, mnt.y + 0.007, mnt.z);          // rail base
+    let retY;
+    if (opticId === 'reddot') {
+      retY = mnt.y + 0.039;
+      part(0.007, 0.05, 0.026, black, -0.0215, retY, mnt.z);          // tube walls
+      part(0.007, 0.05, 0.026, black, 0.0215, retY, mnt.z);
+      part(0.05, 0.007, 0.026, black, 0, mnt.y + 0.0675, mnt.z);      // tube top
+      const dot = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.008, 0.004), glow());
+      dot.position.set(0, retY, mnt.z);
+      g.add(dot);
+    } else {
+      // holo: wide flat open window frame with a circle-dot reticle
+      retY = mnt.y + 0.046;
+      part(0.008, 0.056, 0.03, black, -0.034, retY, mnt.z);           // window side walls
+      part(0.008, 0.056, 0.03, black, 0.034, retY, mnt.z);
+      part(0.076, 0.008, 0.03, black, 0, retY + 0.032, mnt.z);        // frame top
+      part(0.076, 0.012, 0.04, black, 0, retY - 0.034, mnt.z);        // emitter shelf
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.011, 0.0145, 20), glow());
+      ring.position.set(0, retY, mnt.z);
+      g.add(ring);
+      const dot = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.006, 0.003), glow());
+      dot.position.set(0, retY, mnt.z);
+      g.add(dot);
+    }
+    g.userData.adsPos.y = -retY; // camera-space y=0 at full ADS → reticle exactly on the aim point
   }
   // foregrip (#9d): vertical grip hung off the handguard underside — collar
   // at the mount, raked shaft, bottom cap. A recipe's built-in grip (MP5K)
@@ -1864,7 +1883,8 @@ function deploy() {
   const mkState = slot => {
     // resolved def (base + attachment mods) — every curW().def consumer
     // (fire path, startReload, HUD, viewmodel) reads modified stats from here
-    const w = resolveWeaponDef(cls[slot], cls.attachments && cls.attachments[slot]);
+    const w = resolveWeaponDef(cls[slot], cls.attachments && cls.attachments[slot],
+      cls.attachments && cls.attachments[slot + 'DotColor']);
     return { def: w, mag: w.mag, reserve: w.reserve * (player.perks.has('scavenger') ? 2 : 1) };
   };
   player.weapons = [mkState('primary'), mkState('secondary')];
