@@ -52,10 +52,20 @@ const WEAPONS = {
     speed:.99, range:[16,36], model:'smg' },
 
   // ---------- PRIMARY: LMG ----------
+  // Three-gun ladder, RPD in the middle: M240 is the slow heavy hitter,
+  // MG4 the fast light one, RPD between them on dmg/rpm/recoil/speed.
   rpd: { slot:'primary', cat:'LMG', name:'RPD',
     dmg:36, minDmg:28, head:1.4, rpm:660, mag:100, reserve:200, reload:4.4, mode:'auto',
     spreadHip:.044, spreadAds:.0050, recoil:.017, bloom:.0038, zoom:1.35, adsTime:.34,
     speed:.87, range:[32,64], model:'lmg' },
+  m240: { slot:'primary', cat:'LMG', name:'M240',
+    dmg:40, minDmg:32, head:1.4, rpm:600, mag:100, reserve:200, reload:5.0, mode:'auto',
+    spreadHip:.048, spreadAds:.0055, recoil:.022, bloom:.0046, zoom:1.35, adsTime:.38,
+    speed:.85, range:[34,68], model:'lmg' },
+  mg4: { slot:'primary', cat:'LMG', name:'HK MG4',
+    dmg:28, minDmg:20, head:1.4, rpm:850, mag:100, reserve:200, reload:4.0, mode:'auto',
+    spreadHip:.040, spreadAds:.0046, recoil:.013, bloom:.0034, zoom:1.35, adsTime:.30,
+    speed:.88, range:[28,56], model:'lmg' },
 
   // ---------- PRIMARY: SHOTGUNS ----------
   // Pellet balance vs 100 HP: r870 one-shots to ~9-10 m (falloff + spread
@@ -292,6 +302,8 @@ const BOT_LOADOUTS = [
   { primary:'vector', secondary:'g18' },
   { primary:'p90',    secondary:'usp' },
   { primary:'rpd',    secondary:'deagle' },
+  { primary:'m240',   secondary:'usp' },
+  { primary:'mg4',    secondary:'deagle' },
   { primary:'r870',   secondary:'usp' },
   { primary:'aa12',   secondary:'g18' },
   { primary:'intervention', secondary:'usp' },

@@ -163,6 +163,8 @@ const VM_OPTIC = {
   vector: { y: 0.05, z: -0.15 },
   p90: { y: 0.052, z: -0.18 },
   rpd: { y: 0.045, z: -0.15 },
+  m240: { y: 0.05, z: -0.16 },
+  mg4: { y: 0.046, z: -0.14 },
   spas12: { y: 0.04, z: -0.1 },
   r870: { y: 0.038, z: -0.1 },
   aa12: { y: 0.05, z: -0.14 },
@@ -186,6 +188,8 @@ const VM_GRIP = {
   vector: { y: -0.088, z: -0.33 },
   p90: { y: -0.07, z: -0.3 },
   rpd: { y: -0.042, z: -0.47 },
+  m240: { y: -0.045, z: -0.5 },
+  mg4: { y: -0.05, z: -0.5 },
   spas12: { y: -0.054, z: -0.4 },
   r870: { y: -0.054, z: -0.42 },
   aa12: { y: -0.04, z: -0.36 },
@@ -211,6 +215,8 @@ const VM_HANDS = {
   vector: { trig: [-0.105, -0.03] },
   p90: { trig: [-0.105, -0.2] },
   rpd: { trig: [-0.088, -0.06] },
+  m240: { trig: [-0.088, -0.05] },
+  mg4: { trig: [-0.088, -0.05] },
   intervention: { trig: [-0.092, -0.1], sup: [-0.052, -0.45] },
   barrett: { trig: [-0.092, -0.04], sup: [-0.062, -0.5] },
   usp: { trig: [-0.075, -0.01], sup: [-0.105, 0.008, 'grip'] },
@@ -428,6 +434,43 @@ const VM_RECIPES = {
     s(0.014, 0.05, 0.02, dark, 0, 0.065, -0.84);     // tall front sight
     s(0.016, 0.034, 0.02, dark, 0, 0.058, -0.1);
     return 0.9;
+  },
+  // M240 — the heavy: all-steel black, long barrel, boxy hanging ammo box
+  // (not the RPD's round drum), folding carry handle on a top rail.
+  m240({ p, s, m, dark, mid }) {
+    p(0.066, 0.1, 0.56, dark, 0, 0, -0.26);          // heavy receiver
+    p(0.034, 0.034, 0.5, mid, 0, 0.006, -0.76);      // long heavy barrel
+    p(0.03, 0.05, 0.14, dark, 0, 0.022, -0.56);      // gas tube / bipod collar
+    m(0.1, 0.13, 0.15, dark, 0, -0.115, -0.15);      // rectangular ammo box
+    p(0.055, 0.02, 0.05, mid, 0, -0.045, -0.15);     // belt feed lip
+    p(0.022, 0.05, 0.3, dark, 0, 0.056, -0.28);      // top carry-handle rail
+    p(0.03, 0.05, 0.055, dark, 0, 0.084, -0.4);      // folding carry handle
+    p(0.05, 0.085, 0.16, dark, 0, -0.005, 0.08);     // solid stock
+    p(0.04, 0.06, 0.03, dark, 0, -0.005, 0.18);      // butt pad
+    p(0.03, 0.065, 0.04, dark, 0, -0.072, -0.05);    // grip
+    p(0.012, 0.012, 0.26, dark, 0.03, -0.04, -0.82); // folded bipod legs
+    p(0.012, 0.012, 0.26, dark, -0.03, -0.04, -0.82);
+    s(0.014, 0.05, 0.02, dark, 0, 0.066, -0.86);     // tall front sight
+    s(0.016, 0.034, 0.02, dark, 0, 0.058, -0.08);    // rear
+    return 0.98;
+  },
+  // MG4 — the fast light one: modern olive polymer, ventilated handguard,
+  // smaller plastic ammo box, full-length top rail, skeletal folding stock.
+  mg4({ p, s, m, dark, mid }) {
+    const poly = 0x4a4d42;
+    p(0.058, 0.092, 0.5, poly, 0, 0, -0.23);         // polymer receiver
+    p(0.028, 0.028, 0.44, mid, 0, 0.006, -0.7);      // barrel
+    p(0.05, 0.05, 0.2, dark, 0, -0.008, -0.5);       // ventilated handguard
+    m(0.085, 0.11, 0.12, poly, 0, -0.1, -0.16);      // plastic ammo box
+    p(0.02, 0.05, 0.32, dark, 0, 0.056, -0.25);      // full-length top rail
+    p(0.046, 0.075, 0.16, poly, 0, -0.005, 0.07);    // folding stock
+    p(0.024, 0.03, 0.1, dark, 0, 0.024, 0.1);        // stock strut
+    p(0.03, 0.065, 0.04, dark, 0, -0.072, -0.05);    // grip
+    p(0.012, 0.012, 0.22, dark, 0.025, -0.038, -0.78); // folded bipod legs
+    p(0.012, 0.012, 0.22, dark, -0.025, -0.038, -0.78);
+    s(0.014, 0.044, 0.02, dark, 0, 0.06, -0.8);      // front sight
+    s(0.016, 0.032, 0.02, dark, 0, 0.056, -0.06);    // rear
+    return 0.92;
   },
   intervention({ p, m, k, cyl, dark, mid }) {
     p(0.045, 0.07, 0.6, dark, 0, 0, -0.3);           // chassis
