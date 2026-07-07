@@ -90,6 +90,7 @@ const player = {
   adsHeld: false, adsToggle: false, adsAmt: 0, bloom: 0,
   meleeT: 0, sinceDamage: 99, respawnT: 0, spawnProtectT: 0,
   speedNow: 0, onGround: true,
+  airVX: 0, airVZ: 0, airSpeedCap: 0, // #18d: horizontal momentum preserved through a jump
   vault: null, forceCrouch: false,
   lastShotTime: -99,
   _stepT: 0, _killStreakCount: 0, _lastKillTime: -99, _streakKills: 0,
@@ -840,20 +841,40 @@ const vmKnife = (() => {
   part(0.01, 0.032, 0.17, 0xb9c0c8, 0, 0.003, -0.094);  // blade
   part(0.01, 0.017, 0.05, 0xb9c0c8, 0, 0.01, -0.2);     // tip
   part(0.011, 0.008, 0.145, 0x878f98, 0, -0.014, -0.085); // edge
+  // left hand + forearm gripping the knife — a fist thrust reads as a stab
+  // instead of a floating blade; the forearm trails back-and-down toward the
+  // shoulder so the arm comes in from the lower-left as the stab drives right
+  const skin = 0xc49a6c, glove = 0x24261f, sleeve = 0x44503b;
+  part(0.052, 0.05, 0.078, glove, 0, -0.006, 0.078);    // fist wrapping the grip
+  part(0.05, 0.014, 0.052, skin, 0, 0.026, 0.062);      // knuckles
+  part(0.016, 0.03, 0.03, skin, -0.031, 0.004, 0.045);  // thumb, camera side
+  const fore = new THREE.Group();
+  fore.position.set(0, -0.012, 0.1);
+  fore.rotation.set(0.32, -0.85, 0);                    // trail off toward screen-left
+  const seg = (w, h, d, c, z) => {
+    const geo = new THREE.BoxGeometry(w, h, d); geo.translate(0, 0, d / 2 + z);
+    const m = new THREE.Mesh(geo, mat(c)); fore.add(m); return m;
+  };
+  seg(0.055, 0.052, 0.04, skin, 0.0);                   // wrist
+  seg(0.07, 0.066, 0.06, sleeve, 0.03);                 // rolled cuff
+  seg(0.062, 0.058, 0.5, sleeve, 0.08);                 // forearm, runs off-frame
+  g.add(fore);
   g.visible = false;
   vmRoot.add(g);
   return g;
 })();
 
-// swing keyframes (camera-space pos + euler), meleeT-relative: raise from
-// off-screen bottom-left, slash across to low-right, drop out. The blade
-// stays in right profile (rot.y ~ +1.1..+1.4) so it reads as a blade, not a
-// grip-on box; the slash itself is the rot.x sweep tip-up -> tip-down
+// stab keyframes (camera-space pos + euler), meleeT-relative: the left fist
+// enters from the lower-LEFT, cocks back, then THRUSTS the blade forward while
+// crossing to the RIGHT, and retracts down-right. The blade points forward
+// (rot.y ~ 0, small ± yaw) the whole time so it reads as a stab, not a slash;
+// the thrust is the z push (pulled-back -0.3 -> extended -0.7), the left->right
+// is the x sweep (-0.34 -> +0.2)
 const KNIFE_POSES = {
-  start:  { p: new THREE.Vector3(-0.45, -0.55, -0.5),  r: new THREE.Vector3(0.3, 1.4, -0.4) },
-  windup: { p: new THREE.Vector3(-0.3, -0.14, -0.44),  r: new THREE.Vector3(0.6, 1.35, -0.4) },
-  end:    { p: new THREE.Vector3(0.3, -0.35, -0.48),   r: new THREE.Vector3(-0.7, 1.1, 0.3) },
-  exit:   { p: new THREE.Vector3(0.32, -0.62, -0.5),   r: new THREE.Vector3(-1.0, 1.1, 0.3) },
+  start:  { p: new THREE.Vector3(-0.36, -0.32, -0.42), r: new THREE.Vector3(0.1, 0.5, 0.05) },
+  windup: { p: new THREE.Vector3(-0.26, -0.22, -0.4),  r: new THREE.Vector3(0.06, 0.45, 0.05) },
+  end:    { p: new THREE.Vector3(0.16, -0.2, -0.72),   r: new THREE.Vector3(0.02, -0.15, -0.05) },
+  exit:   { p: new THREE.Vector3(0.3, -0.5, -0.5),     r: new THREE.Vector3(0.15, -0.25, -0.05) },
 };
 function poseKnife(a, b, u) {
   vmKnife.position.lerpVectors(a.p, b.p, u);
@@ -2275,12 +2296,20 @@ function updatePlayer(dt) {
   if (player.stamina <= 0) player.winded = true;
   else if (player.stamina >= 0.25) player.winded = false;
   const wantSprint = (keys['ShiftLeft'] || keys['ShiftRight']) && keys['KeyW'] && !player.adsHeld && !firing && !player.crouched;
-  if (wantSprint && (!player.winded || player.perks.has('marathon'))) {
-    player.sprinting = true;
-    player.adsToggle = false;
-    if (!player.perks.has('marathon')) player.stamina = Math.max(0, player.stamina - dt / 4.5);
+  // #18d: sprint can only start/stop on the ground — the state is then frozen
+  // through the jump so a sprint-jump stays fast and a walk-jump can't flip
+  // into a sprint mid-air (the ×1.42 speed only bakes in at takeoff)
+  if (player.onGround) {
+    if (wantSprint && (!player.winded || player.perks.has('marathon'))) {
+      player.sprinting = true;
+      player.adsToggle = false;
+      if (!player.perks.has('marathon')) player.stamina = Math.max(0, player.stamina - dt / 4.5);
+    } else {
+      player.sprinting = false;
+      player.stamina = Math.min(1, player.stamina + dt / 3);
+    }
   } else {
-    player.sprinting = false;
+    // airborne: sprint frozen at its takeoff value; stamina trickles back
     player.stamina = Math.min(1, player.stamina + dt / 3);
   }
 
@@ -2331,13 +2360,37 @@ function updatePlayer(dt) {
       player.vel.y = 5.5;
       player.onGround = false;
     }
+    // #18d: horizontal velocity actually applied this frame. On the ground the
+    // keys drive it directly (full authority) and we keep a takeoff snapshot
+    // fresh every grounded frame — so the moment you leave the ground (jump OR
+    // walk off a ledge) that momentum is preserved. Airborne, it carries: zero
+    // input coasts (no mid-air stop), input only *steers* the arc at low
+    // authority and can never push speed past the takeoff cap.
+    let mvx, mvz;
+    if (player.onGround) {
+      mvx = vx; mvz = vz;
+      player.airVX = vx; player.airVZ = vz; player.airSpeedCap = Math.hypot(vx, vz);
+    } else {
+      if (ilen > 0) {
+        const k = Math.min(1, 2.0 * dt); // ~air-steer authority toward the wanted dir
+        player.airVX += (vx - player.airVX) * k;
+        player.airVZ += (vz - player.airVZ) * k;
+        const m = Math.hypot(player.airVX, player.airVZ);
+        if (m > player.airSpeedCap) {
+          player.airVX = player.airVX / m * player.airSpeedCap;
+          player.airVZ = player.airVZ / m * player.airSpeedCap;
+        }
+      }
+      mvx = player.airVX; mvz = player.airVZ;
+    }
+    player.speedNow = Math.hypot(mvx, mvz);
     const height = THREE.MathUtils.lerp(1.75, 1.25, player.crouchAmt);
     // step assist: on the ground it climbs low ledges; mid-jump it vaults crate tops
     const stepUp = player.onGround ? 0.55 : (player.vel.y > -3 ? 0.6 : 0);
-    player.onGround = moveEntity(player.pos, 0.38, height, vx * dt, player.vel.y * dt, vz * dt, G.colliders, stepUp);
+    player.onGround = moveEntity(player.pos, 0.38, height, mvx * dt, player.vel.y * dt, mvz * dt, G.colliders, stepUp);
     if (player.onGround && player.vel.y < 0) player.vel.y = 0;
     // airborne movement into a window opening starts an assisted vault
-    if (!player.onGround) tryStartVault(vx, vz);
+    if (!player.onGround) tryStartVault(mvx, mvz);
   }
 
   // ---- footstep audio
