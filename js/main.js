@@ -374,29 +374,38 @@ const VM_RECIPES = {
     return 0.88;
   },
   mp5k({ p, s, u, m, dark, mid }) {
-    p(0.05, 0.085, 0.3, dark, 0, 0, -0.13);          // stubby receiver
-    p(0.026, 0.026, 0.07, mid, 0, 0.008, -0.3);      // snub barrel
-    p(0.05, 0.07, 0.1, mid, 0, -0.02, -0.23);        // fat handguard
-    u(0.034, 0.095, 0.045, dark, 0, -0.1, -0.23);    // built-in vertical foregrip
-    m(0.034, 0.1, 0.06, mid, 0, -0.09, -0.08);       // curved mag, upper...
-    const m2 = m(0.032, 0.09, 0.055, mid, 0, -0.165, -0.095); // ...and curl
-    m2.rotation.x = 0.35;
-    p(0.045, 0.075, 0.04, dark, 0, 0, 0.04);         // receiver end cap
-    s(0.02, 0.04, 0.02, dark, 0, 0.06, -0.27);       // front ring sight
-    s(0.022, 0.034, 0.02, dark, 0, 0.058, 0);        // rear drum
-    return 0.35;
+    // MP5K identity: ultra-short front, vertical foregrip, a forward-curling
+    // 30-rd banana ahead of the pistol grip, no stock, HK drum rear sight.
+    p(0.05, 0.078, 0.34, dark, 0, 0, -0.12);         // slim stubby receiver
+    p(0.026, 0.026, 0.06, mid, 0, 0.004, -0.33);     // very short snub barrel
+    p(0.055, 0.06, 0.11, mid, 0, -0.03, -0.26);      // fat front handguard
+    u(0.036, 0.098, 0.05, dark, 0, -0.108, -0.26);   // built-in vertical foregrip
+    m(0.032, 0.092, 0.052, mid, 0, -0.07, -0.12);    // 30-rd banana, upper body...
+    const m2 = m(0.03, 0.092, 0.05, mid, 0, -0.162, -0.138); // ...lower half, meeting it
+    m2.rotation.x = 0.4;                             // curls forward toward the muzzle
+    const grip = p(0.032, 0.076, 0.048, dark, 0, -0.052, -0.005); // pistol grip
+    grip.rotation.x = -0.2;                          // raked back
+    p(0.044, 0.078, 0.05, dark, 0, 0, 0.055);        // short receiver rear cap (no stock)
+    s(0.022, 0.038, 0.024, dark, 0, 0.06, -0.3);     // hooded front sight
+    s(0.026, 0.032, 0.024, dark, 0, 0.056, 0.02);    // HK drum rear sight
+    return 0.34;
   },
   ump45({ p, s, m, dark }) {
+    // UMP45 identity: long flat polymer receiver, a long slightly forward-
+    // raked .45 stick mag, and a skeletal side-folding stock (thin strut +
+    // buttplate) reading from the over-the-shoulder angle.
     const poly = 0x3d4148;
-    p(0.052, 0.09, 0.4, poly, 0, 0, -0.17);          // polymer receiver
-    p(0.024, 0.024, 0.13, dark, 0, 0.008, -0.43);    // barrel
-    const mag = m(0.034, 0.13, 0.07, dark, 0, -0.105, -0.1); // raked mag
-    mag.rotation.x = 0.22;
-    p(0.032, 0.022, 0.16, poly, 0, 0.025, 0.1);      // folding stock bar
-    p(0.038, 0.065, 0.028, poly, 0, 0, 0.19);        // butt pad
-    p(0.03, 0.065, 0.038, dark, 0, -0.07, -0.05);    // grip
-    s(0.013, 0.038, 0.02, dark, 0, 0.062, -0.36);
-    s(0.015, 0.032, 0.02, dark, 0, 0.058, -0.02);
+    p(0.05, 0.084, 0.44, poly, 0, 0, -0.16);         // long flat polymer receiver
+    p(0.024, 0.024, 0.12, dark, 0, 0.006, -0.44);    // barrel
+    const mag = m(0.034, 0.16, 0.062, dark, 0, -0.12, -0.11); // long .45 stick mag
+    mag.rotation.x = 0.16;                            // slight forward rake
+    const grip = p(0.032, 0.072, 0.046, dark, 0, -0.055, 0.0); // pistol grip
+    grip.rotation.x = -0.16;                          // raked back
+    p(0.026, 0.024, 0.19, poly, 0, 0.028, 0.135);    // upper folding-stock strut
+    p(0.02, 0.05, 0.02, poly, 0, -0.008, 0.135);     // stock crossbar
+    p(0.03, 0.088, 0.026, poly, 0, 0.02, 0.235);     // buttplate
+    s(0.013, 0.038, 0.02, dark, 0, 0.06, -0.37);     // front post
+    s(0.015, 0.032, 0.02, dark, 0, 0.057, -0.02);    // rear sight
     return 0.5;
   },
   vector({ p, s, dark, mid }) {
