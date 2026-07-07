@@ -563,7 +563,9 @@ function buildNuketown(scene, colliders) {
 // #8b blockout: proportions + masses; #8c tower climb routes; #8d
 // detail/cover pass (raised Control Room + slide into the faked-low
 // Maintenance basin, generator pipes, dune pipe spur, zone garnish);
-// y-aware nav for the tower/derrick/pipeline is #8e.
+// #8e y-aware nav: seeds up the tower routes/platforms, a new derrick
+// crate chain + rail gap feeding seeds on the derrick deck and the
+// pipeline top.
 // ============================================================
 function buildRust(scene, colliders) {
   const k = new MapKit(scene, colliders);
@@ -675,13 +677,23 @@ function buildRust(scene, colliders) {
     k.box(px, 1.15, -2, 0.5, 2.3, 0.5, rust);
   k.box(24.2, 1.15, 8, 0.5, 2.3, 0.5, rust);         // dune-spur support
 
-  // ---- Oil Derrick (NW): raised platform with top/ground/under levels
+  // ---- Oil Derrick (NW): raised platform with top/ground/under levels.
+  // Crate-step chain up the east face (#8e — the platform had no access;
+  // same idiom as the tower's east chain, risers 0.5, last 0.35 onto the
+  // 3.35 deck), and the pipeline-side rail is split with a gap so the
+  // deck steps across onto the pipeline top (3.35 -> 3.75, riser 0.4;
+  // the 0.3 m horizontal gap is bridged by the 0.76 body width)
   for (const [lx, lz] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]])
     k.box(17.5 + lx, 1.6, -17.5 + lz, 0.45, 3.2, 0.45, rust);
   k.box(17.5, 3.2, -17.5, 5.4, 0.3, 5.4, DECK);
-  k.box(17.5, 3.65, -20.1, 5.4, 0.6, 0.15, rust);    // rail on the open faces
-  k.box(20.1, 3.65, -17.5, 0.15, 0.6, 5.4, rust);
+  k.box(17.5, 3.65, -20.1, 5.4, 0.6, 0.15, rust);    // rail on the perimeter faces
+  k.box(20.1, 3.65, -19.3, 0.15, 0.6, 1.8, rust);    // pipeline-side rail, split:
+  k.box(20.1, 3.65, -15.7, 0.15, 0.6, 1.8, rust);    // step-across gap z -18.4..-16.6
   k.box(16.8, 0.75, -16.8, 1.6, 1.5, 1.4, MACHINE);  // machinery underneath
+  for (let i = 0; i < 6; i++) {
+    const top = 0.5 * (i + 1);
+    k.box(16.3, top / 2, -8.2 - 1.2 * i, 1.2, top, 1.2, i % 2 ? 0x6e5e40 : 0x7a6a4a);
+  }
 
   // ---- Comms Station (NE, by the Front Gate): small corrugated shed
   k.wall('z', 9.5, 13, 16.6, 2.5, 0.2, SHED);
@@ -827,8 +839,11 @@ function buildRust(scene, colliders) {
   pallet(-15, -7.5);                                 // basin pallet stack
   k.box(-15, 0.59, -7.3, 0.9, 0.9, 0.9, 0x7a6a4a);   // crate on the pallet
 
-  // ---- waypoints: ground grid for the new footprint + lane/door seeds;
-  // y-aware tower/derrick/pipeline seeds are #8e
+  // ---- waypoints: ground grid for the new footprint + lane/door seeds +
+  // y-aware seeds (#8e) for the tower levels/climb routes, the derrick
+  // deck, and the pipeline top. Elevated seeds sit ON their surface (the
+  // graph's test box floats 0.56 above the seed y, clearing the next
+  // 0.5/0.53 riser of a chain by design)
   const grid = [];
   for (const x of [-23, -17.5, -11.5, -5.5, 0, 5.5, 11.5, 17.5, 23])
     for (const z of [-23, -17.5, -11.5, -5.5, 0, 5.5, 11.5, 17.5, 23])
@@ -845,6 +860,27 @@ function buildRust(scene, colliders) {
     [-21.5, -15],                   // Loading Dock west lane
     [0, -20.6],                     // Blue Containers dogleg
     [4.5, -3.5], [-4.5, 3.5],       // tower corners
+    // tower east crate chain (crates 0/2/4) -> mid platform arrival; the
+    // mid seed links straight to the stair mount landing across the deck
+    [1.2, 9.9, 0.5], [1.2, 7.5, 1.5], [1.2, 5.1, 2.5],
+    [1.2, 2.2, 3.45],
+    [-1.95, -3.65, 3.975],          // west stair mount landing
+    [2.02, -3.65, 9.225],           // west stair top tread (one link per flight,
+                                    // Nuketown-stair style)
+    [1.8, -1.8, 9.75], [-1.8, 1.8, 9.75], // top platform (stair / chute rail gaps)
+    [-13.3, 1.5],                   // chute ground apron
+    // south chute, columns 1/6/11/16 — each seed sits 0.2 down-slope of
+    // its column center: the columns are 0.5 deep vs the 0.76 body, so a
+    // centered seed leaves a descending bot's feet propped 0.53 above the
+    // node by the next column up, and the Δy<0.5 reach check never fires
+    [-11.875, 1.5, 0.53], [-9.375, 1.5, 3.18],
+    [-6.875, 1.5, 5.83], [-4.375, 1.5, 8.48],
+    [16.3, -8.2, 0.5], [16.3, -11.8, 2.0],      // derrick crate chain (crates 0/3)
+    [17.5, -17.5, 3.35], [19.4, -17.5, 3.35],   // derrick deck + rail-gap edge
+    [21.5, -17.5, 3.75],            // pipeline top: derrick step-across junction
+    [21.5, -22, 3.75], [21.5, -10, 3.75], [21.5, -2, 3.75], // main run
+    [21.5, 6, 3.75], [21.5, 13, 3.75], [21.5, 20, 3.75],
+    [16, -2, 3.75], [10, -2, 3.75], // tower-spur top (dead-ends short of the tip)
   ];
 
   return {
@@ -867,7 +903,22 @@ const MAPS = { nuketown: buildNuketown, rust: buildRust };
 // Waypoint graph — filter seeds that land inside geometry, then
 // connect pairs with clear waist-height line of sight.
 // Seeds are [x, z] (ground) or [x, z, y] (elevated: stairs, floors).
+// Steep links (beyond the 0.55 step-up) are DIRECTED: bidirectional
+// only when the terrain under the link rises with it (stairs, chutes,
+// crate chains — climbable both ways); open-air links (a clear ray off
+// a ledge/pipe to the ground) get the downhill direction only. Before
+// this, BFS hop-counts preferred those drop links uphill and bots
+// jittered under waypoints they could never reach (#8e).
 // ============================================================
+const _cbMid = new THREE.Vector3();
+const _cbDown = new THREE.Vector3(0, -1, 0);
+function _climbable(pa, pb, colliders) {
+  const hiY = Math.max(pa.y, pb.y), loY = Math.min(pa.y, pb.y);
+  _cbMid.set((pa.x + pb.x) / 2, hiY + 0.3, (pa.z + pb.z) / 2);
+  const hit = rayWorld(_cbMid, _cbDown, hiY + 1.3, colliders);
+  const ground = hit ? hit.point.y : 0;
+  return ground >= (hiY + loY) / 2 - 0.6;
+}
 function buildNavGraph(seeds, colliders) {
   const pts = [];
   const testMin = new THREE.Vector3(), testMax = new THREE.Vector3();
@@ -891,7 +942,15 @@ function buildNavGraph(seeds, colliders) {
       if (d > 8.6) continue;
       a.copy(pts[i]); a.y += 1.1;
       b.copy(pts[j]); b.y += 1.1;
-      if (corridorClear(a, b, colliders)) { edges[i].push(j); edges[j].push(i); }
+      if (!corridorClear(a, b, colliders)) continue;
+      const dy = pts[j].y - pts[i].y;
+      if (Math.abs(dy) <= 0.55 || _climbable(pts[i], pts[j], colliders)) {
+        edges[i].push(j); edges[j].push(i);
+      } else if (dy > 0) {
+        edges[j].push(i);              // j higher: drop-only, j -> i
+      } else {
+        edges[i].push(j);              // i higher: drop-only, i -> j
+      }
     }
   }
   return { points: pts, edges };
