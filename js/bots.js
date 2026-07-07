@@ -69,11 +69,24 @@ function buildSoldierMesh(team, name, showTag) {
   return g;
 }
 
+// Per-tier combat knobs beyond the classic four (acc/react/burst/view),
+// all consumed in _fireShot / the burst logic — these used to be flat
+// constants shared by every tier:
+//   head    — headshot chance per landed hit (×w.head damage)
+//   dmg     — global damage multiplier (the old flat ×0.8 nerf; veterans
+//             hit for full weapon damage)
+//   movePen — hit-chance multiplier vs a fast target (>4 m/s); high tiers
+//             track a strafing player instead of whiffing
+//   fall    — distance divisor in the hit-chance falloff clamp; bigger
+//             stays lethal further out
+//   scatter — miss-tracer jitter scale; small = misses read as grazes
+//   pause   — burst pause [min,max] seconds (uptime between bursts)
+//   lost    — seconds a lost target stays engaged before dropping to patrol
 const BOT_SKILL = {
-  recruit:  { acc: 0.10, react: 850, burst: [2, 5],  view: 38 },
-  regular:  { acc: 0.17, react: 550, burst: [3, 6],  view: 45 },
-  hardened: { acc: 0.26, react: 380, burst: [4, 8],  view: 52 },
-  veteran:  { acc: 0.36, react: 250, burst: [5, 10], view: 60 },
+  recruit:  { acc: 0.10, react: 850, burst: [2, 5],  view: 38, head: 0.05, dmg: 0.8, movePen: 0.65, fall: 40, scatter: 1.4, pause: [0.60, 1.40], lost: 2.0 },
+  regular:  { acc: 0.17, react: 550, burst: [3, 6],  view: 45, head: 0.10, dmg: 0.8, movePen: 0.72, fall: 45, scatter: 1.0, pause: [0.45, 1.05], lost: 2.5 },
+  hardened: { acc: 0.30, react: 300, burst: [5, 9],  view: 55, head: 0.18, dmg: 0.9, movePen: 0.82, fall: 55, scatter: 0.6, pause: [0.30, 0.70], lost: 3.5 },
+  veteran:  { acc: 0.60, react: 150, burst: [8, 14], view: 70, head: 0.30, dmg: 1.0, movePen: 0.92, fall: 70, scatter: 0.3, pause: [0.15, 0.40], lost: 5.0 },
 };
 
 let _botCounter = 0;
@@ -104,7 +117,7 @@ class Bot {
 
     const s = BOT_SKILL[world.api.difficulty] || BOT_SKILL.regular;
     const v = 0.8 + Math.random() * 0.4;
-    this.skill = { acc: s.acc * v, react: s.react / v, burst: s.burst, view: s.view };
+    this.skill = { ...s, acc: s.acc * v, react: s.react / v };
 
     this.mesh = buildSoldierMesh(team, name, team === 'tf');
     this.mesh.visible = false;
@@ -280,7 +293,9 @@ class Bot {
       this.lostT = 0;
     } else if (this.target) {
       this.lostT += 0.15;
-      if (this.lostT > 2.5) { this.target = null; this.path = null; }
+      // high tiers hold the engagement on a lost target longer before
+      // shrugging and going back to patrol
+      if (this.lostT > this.skill.lost) { this.target = null; this.path = null; }
     }
   }
 
@@ -297,9 +312,10 @@ class Bot {
     const blocked = !losClear(muzzle, chestCheck, this.world.colliders) ||
       this.world.api.smokeBlocked(muzzle, chestCheck);
 
-    // skill roll
-    let chance = this.skill.acc * THREE.MathUtils.clamp(1.55 - dist / 45, 0.25, 1.2);
-    if (t.speedNow > 4) chance *= 0.72;
+    // skill roll — falloff distance, moving-target penalty, headshot rate
+    // and the damage multiplier all come off the tier (see BOT_SKILL)
+    let chance = this.skill.acc * THREE.MathUtils.clamp(1.55 - dist / this.skill.fall, 0.25, 1.2);
+    if (t.speedNow > 4) chance *= this.skill.movePen;
     if (t.crouched) chance *= 0.85;
     if (w.model === 'sniper') chance *= 1.25;
     if (this.dazeT > 0) chance *= 0.25; // stun aftermath: can barely aim
@@ -307,17 +323,19 @@ class Bot {
 
     // damage with falloff
     const fall = THREE.MathUtils.clamp((dist - w.range[0]) / (w.range[1] - w.range[0]), 0, 1);
-    let dmg = THREE.MathUtils.lerp(w.dmg, w.minDmg, fall) * 0.8;
+    let dmg = THREE.MathUtils.lerp(w.dmg, w.minDmg, fall) * this.skill.dmg;
     if (w.pellets) dmg *= w.pellets * 0.5;
-    const headshot = hit && Math.random() < 0.1;
+    const headshot = hit && Math.random() < this.skill.head;
     if (headshot) dmg *= w.head;
 
-    // tracer: to the chest if hit, offset if missed
+    // tracer: to the chest if hit, offset if missed — high tiers scatter
+    // tight, so even their misses crack close
     const aim = new THREE.Vector3(t.pos.x, t.pos.y + 1.2, t.pos.z);
     if (!hit) {
-      aim.x += (Math.random() - 0.5) * 2.4;
-      aim.y += (Math.random() - 0.3) * 1.6;
-      aim.z += (Math.random() - 0.5) * 2.4;
+      const sc = this.skill.scatter;
+      aim.x += (Math.random() - 0.5) * 2.4 * sc;
+      aim.y += (Math.random() - 0.3) * 1.6 * sc;
+      aim.z += (Math.random() - 0.5) * 2.4 * sc;
     }
     const dir = aim.clone().sub(muzzle).normalize();
     const wallHit = rayWorld(muzzle, dir, muzzle.distanceTo(aim) + 2, this.world.colliders);
@@ -409,10 +427,11 @@ class Bot {
           this.burstPause -= dt;
           if (this.burstPause <= 0) {
             const [bMin, bMax] = this.skill.burst;
+            const [pMin, pMax] = this.skill.pause;
             this.burstLeft = w.mode === 'auto' ? bMin + Math.floor(Math.random() * (bMax - bMin + 1)) : 1;
-            this.burstPause = 0.45 + Math.random() * 0.6;
+            this.burstPause = pMin + Math.random() * (pMax - pMin);
             if (w.mode === 'bolt') this.burstPause += 0.9;
-            if (w.mode === 'semi') this.burstPause = 0.25 + Math.random() * 0.3;
+            if (w.mode === 'semi') this.burstPause = Math.min(this.burstPause, 0.25 + Math.random() * 0.3);
           }
         }
         if (this.burstLeft > 0 && this.shotT <= 0) {
