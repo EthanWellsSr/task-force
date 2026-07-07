@@ -111,6 +111,11 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
 .perk-list { border:1px solid #262b1e; margin-bottom:10px; }
 .perk-item { flex-direction:column; }
 .perk-item .p-desc { font-size:10px; color:#8a9078; }
+.attach-list { border:1px solid #262b1e; max-height:220px; overflow-y:auto; }
+.attach-cat {
+  font-size:9px; letter-spacing:2px; color:#6a7060; padding:6px 10px 4px;
+  background:rgba(255,255,255,.02); border-bottom:1px solid #1c2016;
+}
 .weapon-stats { border:1px solid #262b1e; padding:10px; font-size:11px; }
 .stat-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
 .stat-row .s-label { width:74px; color:#8a9078; font-size:9px; letter-spacing:1px; }

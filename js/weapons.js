@@ -123,6 +123,17 @@ function attachmentAllowed(att, def) {
   return !att.cats || att.cats.includes(def.cat);
 }
 
+// Short mod summary for the class editor rows ("ADS TIME -15% · ADS SPREAD -10%")
+const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', recoil:'RECOIL', bloom:'BLOOM' };
+function attachmentDesc(att) {
+  const parts = [];
+  for (const stat in att.mods) {
+    const pct = Math.round((att.mods[stat] - 1) * 100);
+    parts.push((ATTACH_STAT_LABELS[stat] || stat.toUpperCase()) + ' ' + (pct > 0 ? '+' : '') + pct + '%');
+  }
+  return parts.length ? parts.join(' · ') : 'COSMETIC';
+}
+
 // Single source of resolved weapon stats: base def + attachment modifiers.
 // Everything that reads weapon stats for the player (deploy's weapon state,
 // fire path, startReload, editor stat bars) must pull from this — never

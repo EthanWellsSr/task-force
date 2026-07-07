@@ -155,6 +155,43 @@ const UI = {
     mkWeaponList('secondaryList', 'secondary', c.secondary, key => {
       c.secondary = key; normalizeClass(c); this.saveClasses(); this.renderClassEditor(); this.renderWeaponStats(key);
     });
+
+    // attachment picker: per slot-category rows for the equipped weapon,
+    // click toggles (picking another in a category swaps it out)
+    const mkAttachList = (elId, slot) => {
+      const wrap = this.$(elId);
+      wrap.innerHTML = '';
+      const def = WEAPONS[c[slot]];
+      const picked = c.attachments[slot];
+      for (const cat of ATTACH_SLOTS) {
+        const opts = Object.values(ATTACHMENTS).filter(a => a.slot === cat && attachmentAllowed(a, def));
+        if (!opts.length) continue;
+        const head = document.createElement('div');
+        head.className = 'attach-cat';
+        head.textContent = cat.toUpperCase();
+        wrap.appendChild(head);
+        for (const a of opts) {
+          const div = document.createElement('div');
+          div.className = 'weapon-item' + (picked.includes(a.id) ? ' selected' : '');
+          div.innerHTML = `<span>${a.name}</span><span class="w-cat">${attachmentDesc(a)}</span>`;
+          div.onclick = () => {
+            AudioSys.uiClick();
+            const i = picked.indexOf(a.id);
+            if (i >= 0) picked.splice(i, 1);
+            else {
+              for (let j = picked.length - 1; j >= 0; j--)
+                if (ATTACHMENTS[picked[j]].slot === cat) picked.splice(j, 1);
+              picked.push(a.id);
+            }
+            this.saveClasses(); this.renderClassEditor(); this.renderWeaponStats(c[slot]);
+          };
+          div.onmouseenter = () => this.renderWeaponStats(c[slot]);
+          wrap.appendChild(div);
+        }
+      }
+    };
+    mkAttachList('primaryAttach', 'primary');
+    mkAttachList('secondaryAttach', 'secondary');
     this.renderWeaponStats(c.primary);
 
     [1, 2, 3].forEach(tier => {
