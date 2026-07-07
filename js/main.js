@@ -186,6 +186,35 @@ const VM_GRIP = {
   lmg: { y: -0.05, z: -0.5 }, shotgun: { y: -0.07, z: -0.42 },
 };
 
+// Hand anchors (#10a): trigger-hand fist [y, z] on the pistol grip per
+// weapon key (model-type keys cover the generic fallback bodies). The
+// support fist derives from VM_GRIP (handguard underside / pump sleeve);
+// `sup` overrides it where no grip point exists (pistols: mag well,
+// snipers: fore stock) or where the derivation sits wrong (MP5K wraps
+// its built-in vertical grip).
+const VM_HANDS = {
+  m4a1: { trig: [-0.09, -0.05] },
+  scar: { trig: [-0.088, -0.02] },
+  acr: { trig: [-0.09, -0.04] },
+  tar21: { trig: [-0.088, -0.24] },
+  famas: { trig: [-0.092, -0.2] },
+  fal: { trig: [-0.086, -0.04] },
+  mp5k: { trig: [-0.072, -0.02], sup: [-0.115, -0.23, 'grip'] },
+  ump45: { trig: [-0.088, -0.05] },
+  vector: { trig: [-0.105, -0.03] },
+  p90: { trig: [-0.105, -0.2] },
+  rpd: { trig: [-0.088, -0.06] },
+  intervention: { trig: [-0.092, -0.1], sup: [-0.052, -0.45] },
+  barrett: { trig: [-0.092, -0.04], sup: [-0.062, -0.5] },
+  usp: { trig: [-0.075, -0.01], sup: [-0.105, 0.008, 'grip'] },
+  deagle: { trig: [-0.08, 0], sup: [-0.115, 0.015, 'grip'] },
+  g18: { trig: [-0.068, 0], sup: [-0.1, 0.012, 'grip'] },
+  spas12: { trig: [-0.085, -0.03] },
+  ar: { trig: [-0.088, -0.06] }, smg: { trig: [-0.09, -0.02] },
+  lmg: { trig: [-0.088, -0.05] }, sniper: { trig: [-0.08, -0.08], sup: [-0.055, -0.45] },
+  shotgun: { trig: [-0.085, -0.03] }, pistol: { trig: [-0.068, 0], sup: [-0.096, 0.012, 'grip'] },
+};
+
 // Camo palettes (#9e): 4 shades dark→light per camo, zero stat effect.
 // A part's original color maps onto the ramp by luminance (camoShade), so
 // recipe-local colors (SCAR tan, TAR-21 olive, P90 shell) recolor too —
@@ -555,6 +584,60 @@ function buildViewModel(w) {
     shaft.rotation.x = 0.12;                                             // slight forward rake
     part(0.036, 0.014, 0.044, black, 0, mnt.y - 0.115, mnt.z - 0.012);   // flared bottom cap
   }
+  // hands (#10a): box-built arms as children of the gun group, so bob/
+  // kick/sprint pose carries them for free. Two hand styles: 'grip'
+  // wraps a vertical grip (fingers stacked down the front face), 'cup'
+  // cradles the handguard from below (fingers curling up the far side).
+  // The sleeve hangs off a wrist pivot GROUP behind the hand, so wrist +
+  // cuff + forearm rotate together like a joint — no hand/sleeve gap at
+  // any angle. Built after camoOn clears so skin/sleeve never remap;
+  // mat() is plain Lambert here.
+  const skin = 0xc49a6c, glove = 0x24261f, sleeve = 0x44503b;
+  const arm = (hy, hz, style, side, foreYaw, forePitch) => {
+    const a = new THREE.Group();
+    a.position.set(style === 'grip' ? side * 0.006 : 0, hy, hz);
+    const b = (wd, hh, dd, c, px, py, pz) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(wd, hh, dd), mat(c));
+      m.position.set(px, py, pz);
+      a.add(m);
+      return m;
+    };
+    if (style === 'grip') {
+      b(0.05, 0.052, 0.055, glove, 0, 0.004, 0.012);        // back of hand over the grip
+      for (let i = 0; i < 3; i++)                           // fingers wrap the front face
+        b(0.048, 0.0125, 0.026, skin, 0, 0.014 - i * 0.016, -0.024);
+      b(0.014, 0.03, 0.018, skin, side * -0.03, 0.014, -0.002); // thumb, camera side
+    } else {
+      b(0.056, 0.05, 0.062, glove, 0, -0.006, 0);           // palm under the handguard
+      for (let i = 0; i < 3; i++)                           // fingers curl up the far side
+        b(0.014, 0.038, 0.014, skin, 0.028, 0.018, -0.018 + i * 0.018);
+      b(0.014, 0.03, 0.017, skin, -0.029, 0.01, 0.01);      // thumb, camera side
+    }
+    const wrist = new THREE.Group();                        // joint pivot at the hand's back edge
+    wrist.position.set(side * 0.004, -0.01, style === 'grip' ? 0.03 : 0.046);
+    wrist.rotation.set(forePitch, foreYaw, side * -0.12);
+    a.add(wrist);
+    const seg = (wd, hh, dd, c, pz) => {                    // origin at the segment's front face
+      const geo = new THREE.BoxGeometry(wd, hh, dd);
+      geo.translate(0, 0, dd / 2 + pz);
+      const m = new THREE.Mesh(geo, mat(c));
+      wrist.add(m);
+      return m;
+    };
+    seg(0.042, 0.042, 0.034, skin, -0.01);                  // bare wrist
+    seg(0.066, 0.062, 0.05, sleeve, 0.02);                  // rolled jacket cuff
+    seg(0.058, 0.054, 0.5, sleeve, 0.064);                  // forearm sleeve (runs off-frame)
+    g.add(a);
+    return a;
+  };
+  const hnd = VM_HANDS[w.key] || VM_HANDS[type] || VM_HANDS.ar;
+  g.userData.armTrigger = arm(hnd.trig[0], hnd.trig[1], 'grip', 1, 0.18, 0.66);
+  const gm = VM_GRIP[w.key] || VM_GRIP[type];
+  const sup = (w.attachments && w.attachments.includes('foregrip') && gm)
+    ? [gm.y - 0.055, gm.z - 0.005, 'grip']                  // wrap the mounted grip shaft
+    : hnd.sup || (gm ? [gm.y - 0.024, gm.z] : [-0.05, -0.4]);
+  // #10b/#10c animate the support arm
+  g.userData.armSupport = arm(sup[0], sup[1], sup[2] || 'cup', -1, -0.38, 0.68);
   // muzzle flash quad
   const flash = new THREE.Mesh(
     new THREE.PlaneGeometry(flashSize, flashSize),
