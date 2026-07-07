@@ -879,9 +879,12 @@ function buildNukeBomb() {
   return g;
 }
 
-// low-poly mushroom cloud sized to the map (unit height ~1.3×B), grown
-// from ~0 by the cinematic; returns the group + the glow light inside it
+// Tsar Bomba-scale low-poly mushroom cloud: total height ~5× the map's
+// half-extent and a cap wider than the whole play area, so the map reads
+// as a diorama under it. Grown from ~0 by the cinematic; returns the
+// group + the glow light inside it
 function buildMushroomCloud(B) {
+  const H = B * 5; // ground zero → cap dome
   const g = new THREE.Group();
   const puff = (r, x, y, z, c) => {
     const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8),
@@ -891,21 +894,32 @@ function buildMushroomCloud(B) {
     return m;
   };
   const gray = 0x9a9284, dust = 0x8a8072;
-  // stem
-  puff(B * 0.14, 0, B * 0.12, 0, dust);
-  puff(B * 0.17, 0, B * 0.38, 0, dust);
-  puff(B * 0.20, 0, B * 0.66, 0, gray);
-  // cap: center dome + a ring of puffs curling under it
-  puff(B * 0.36, 0, B * 1.02, 0, gray);
+  // stem: a fat column of puffs all the way up to the cap
+  puff(H * 0.09, 0, H * 0.05, 0, dust);
+  puff(H * 0.11, 0, H * 0.16, 0, dust);
+  puff(H * 0.13, 0, H * 0.30, 0, dust);
+  puff(H * 0.14, 0, H * 0.45, 0, gray);
+  puff(H * 0.15, 0, H * 0.60, 0, gray);
+  // ground-dust skirt around the stem base
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2;
+    puff(H * 0.10, Math.sin(a) * H * 0.13, H * 0.07, Math.cos(a) * H * 0.13, dust);
+  }
+  // cap: center dome + a wide ring curling under it + an upper crown
+  puff(H * 0.30, 0, H * 0.88, 0, gray);
+  for (let i = 0; i < 11; i++) {
+    const a = i / 11 * Math.PI * 2;
+    puff(H * 0.15, Math.sin(a) * H * 0.24, H * 0.74, Math.cos(a) * H * 0.24, dust);
+  }
   for (let i = 0; i < 7; i++) {
-    const a = i / 7 * Math.PI * 2;
-    puff(B * 0.19, Math.sin(a) * B * 0.33, B * 0.88, Math.cos(a) * B * 0.33, dust);
+    const a = (i + 0.5) / 7 * Math.PI * 2;
+    puff(H * 0.13, Math.sin(a) * H * 0.15, H * 1.0, Math.cos(a) * H * 0.15, gray);
   }
   // fireball glow at the base
-  puff(B * 0.16, 0, B * 0.10, 0, 0xffa040).material =
+  puff(H * 0.11, 0, H * 0.06, 0, 0xffa040).material =
     new THREE.MeshBasicMaterial({ color: 0xff9030 });
-  const light = new THREE.PointLight(0xff8030, 6, B * 3);
-  light.position.y = B * 0.25;
+  const light = new THREE.PointLight(0xff8030, 10, H * 2);
+  light.position.y = H * 0.12;
   g.add(light);
   return { group: g, light };
 }
@@ -936,11 +950,23 @@ function startNukeCinematic(endWin) {
       .add(G.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(12)),
     camTo: new THREE.Vector3(0, B * 1.15, B * 2.3),
     lookTo: new THREE.Vector3(0, 4, 0),
+    // post-impact pull-back: far/high enough that the full-grown ~5×B
+    // cloud fits in frame with the map a diorama under it
+    camFar: new THREE.Vector3(0, B * 2.9, B * 4.7),
+    lookFar: new THREE.Vector3(0, B * 2.3, 0),
     plane, planeSpeed: span / 3.2, dropped: false,
     bomb: null, bombT: 0, dropY: 0,
     cloud: null, impactT: -1, shake: 0,
+    fogNear: G.scene.fog.near, fogFar: G.scene.fog.far,
+    camFarPlane: G.camera.far,
     endWin,
   };
+  // the pull-back vantage sits inside the gameplay fog band and near the
+  // 300 far plane — push both out for the show, restored at finish
+  G.scene.fog.near = B * 7;
+  G.scene.fog.far = B * 16;
+  G.camera.far = B * 18;
+  G.camera.updateProjectionMatrix();
   AudioSys.nukePlane();
 }
 
@@ -992,13 +1018,20 @@ function updateNukeCine(dt) {
   if (!c) return;
   c.t += dt;
 
-  // camera: smoothstep glide out, then hold (plus impact shake)
+  // camera: smoothstep glide out to the drop vantage, then after impact a
+  // second, much longer pull-back that tracks the cloud's growth (plus
+  // impact shake)
   const u = Math.min(1, c.t / 2.2), e = u * u * (3 - 2 * u);
   _cineCamPos.lerpVectors(c.camFrom, c.camTo, e);
   _cineLook.lerpVectors(c.lookFrom, c.lookTo, e);
+  if (c.impactT >= 0) {
+    const z = Math.min(1, c.impactT / 6.5), ez = z * z * (3 - 2 * z);
+    _cineCamPos.lerpVectors(c.camTo, c.camFar, ez);
+    _cineLook.lerpVectors(c.lookTo, c.lookFar, ez);
+  }
   if (c.shake > 0) {
-    c.shake -= dt * 0.8;
-    const s = Math.max(0, c.shake) * 0.5;
+    c.shake -= dt * 0.16;
+    const s = Math.max(0, c.shake) * c.B * 0.14;
     _cineCamPos.x += (Math.random() - 0.5) * s;
     _cineCamPos.y += (Math.random() - 0.5) * s;
     _cineCamPos.z += (Math.random() - 0.5) * s;
@@ -1036,13 +1069,17 @@ function updateNukeCine(dt) {
   // after impact: the cloud swells while the flash fades, then match end
   if (c.impactT >= 0) {
     c.impactT += dt;
-    const g = Math.min(1, c.impactT / 4);
+    const g = Math.min(1, c.impactT / 6.5);
     const s = 0.05 + 0.95 * (1 - Math.pow(1 - g, 3)); // fast rise, slow finish
     c.cloud.group.scale.set(s, s, s);
-    c.cloud.group.rotation.y += dt * 0.12;
-    c.cloud.light.intensity = Math.max(0, 6 * (1 - c.impactT / 3));
+    c.cloud.group.rotation.y += dt * 0.06;
+    c.cloud.light.intensity = Math.max(0, 10 * (1 - c.impactT / 7));
     for (const b of G.bots) if (!b.alive) b.update(dt); // death anims play out
-    if (c.impactT >= 4.5) {
+    if (c.impactT >= 10.5) {
+      G.scene.fog.near = c.fogNear;
+      G.scene.fog.far = c.fogFar;
+      G.camera.far = c.camFarPlane;
+      G.camera.updateProjectionMatrix();
       // end-of-match nuke shows the held result; the killstreak nuke
       // wins for the owner's team no matter the score
       const win = c.endWin !== undefined ? c.endWin : true;

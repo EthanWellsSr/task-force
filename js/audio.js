@@ -391,28 +391,53 @@ const AudioSys = {
     }
   },
 
-  // nuke detonation: long low rumble + deep sub boom (the whiteout sound)
+  // nuke detonation (Tsar scale): a peak that momentarily drowns the whole
+  // mix, then a ~10 s decaying rumble tail that carries through the
+  // cinematic's post-impact hold. The cranked peaks route through a
+  // compressor into master so they saturate instead of hard-clipping.
   nukeBlast() {
     if (!this.ensure()) return;
     const t = this.ctx.currentTime;
+    const comp = this.ctx.createDynamicsCompressor();
+    comp.threshold.value = -12; comp.knee.value = 10;
+    comp.ratio.value = 14; comp.attack.value = 0.002; comp.release.value = 0.5;
+    comp.connect(this.master);
+    // main rumble: looped noise (buffer is 1 s), crack then a long tail
     const src = this.ctx.createBufferSource();
-    src.buffer = this.noiseBuf; src.loop = true; // buffer is 1 s, rumble is longer
+    src.buffer = this.noiseBuf; src.loop = true;
     const lp = this.ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(1400, t);
-    lp.frequency.exponentialRampToValueAtTime(60, t + 2.2);
+    lp.frequency.setValueAtTime(1600, t);
+    lp.frequency.exponentialRampToValueAtTime(55, t + 6.5);
     const g = this.ctx.createGain();
-    this._env(g, 1.0, 2.4);
-    src.connect(lp); lp.connect(g); g.connect(this.master);
-    src.start(t); src.stop(t + 2.6);
+    g.gain.setValueAtTime(2.8, t);
+    g.gain.exponentialRampToValueAtTime(0.55, t + 1.3);
+    g.gain.exponentialRampToValueAtTime(0.05, t + 9); // shallow, audible tail
+    g.gain.exponentialRampToValueAtTime(0.001, t + 10);
+    src.connect(lp); lp.connect(g); g.connect(comp);
+    src.start(t); src.stop(t + 10.2);
+    // deep sub boom, diving low and holding
     const osc = this.ctx.createOscillator();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(90, t);
-    osc.frequency.exponentialRampToValueAtTime(28, t + 1.2);
+    osc.frequency.setValueAtTime(84, t);
+    osc.frequency.exponentialRampToValueAtTime(21, t + 3);
     const g2 = this.ctx.createGain();
-    this._env(g2, 0.9, 1.6);
-    osc.connect(g2); g2.connect(this.master);
-    osc.start(t); osc.stop(t + 1.8);
+    g2.gain.setValueAtTime(2.2, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 6);
+    osc.connect(g2); g2.connect(comp);
+    osc.start(t); osc.stop(t + 6.2);
+    // aftershock swell riding under the tail
+    const src2 = this.ctx.createBufferSource();
+    src2.buffer = this.noiseBuf; src2.loop = true;
+    const lp2 = this.ctx.createBiquadFilter();
+    lp2.type = 'lowpass'; lp2.frequency.value = 90;
+    const g3 = this.ctx.createGain();
+    g3.gain.setValueAtTime(0.001, t);
+    g3.gain.exponentialRampToValueAtTime(1.1, t + 1.8);
+    g3.gain.exponentialRampToValueAtTime(0.06, t + 9); // shallow, audible tail
+    g3.gain.exponentialRampToValueAtTime(0.001, t + 9.5);
+    src2.connect(lp2); lp2.connect(g3); g3.connect(comp);
+    src2.start(t); src2.stop(t + 9.7);
   },
 
   // killstreak reward earned (banked, not yet deployed): two bright notes
