@@ -186,6 +186,56 @@ const VM_GRIP = {
   lmg: { y: -0.05, z: -0.5 }, shotgun: { y: -0.07, z: -0.42 },
 };
 
+// Camo palettes (#9e): 4 shades dark→light per camo, zero stat effect.
+// A part's original color maps onto the ramp by luminance (camoShade), so
+// recipe-local colors (SCAR tan, TAR-21 olive, P90 shell) recolor too —
+// swapping only the injected dark/mid/wood would leave those guns bare.
+// pattern camos multiply a shared grayscale blotch CanvasTexture into the
+// Lambert color; gold is a flat swap. Attachment parts stay black.
+const VM_CAMOS = {
+  camoDesert:   { shades: [0x4f4530, 0x7d6c48, 0xa38e61, 0xc4ad7e], pattern: true },
+  camoWoodland: { shades: [0x1f2b1a, 0x3a4f2e, 0x59683f, 0x7c8656], pattern: true },
+  camoDigital:  { shades: [0x2b3134, 0x4a555b, 0x6b797f, 0x93a1a6], pattern: true },
+  camoGold:     { shades: [0x7a5714, 0xa87c1e, 0xd2a428, 0xf0c94e], pattern: false },
+};
+
+// Shared blotch overlay for pattern camos — white base so the Lambert
+// color shows through, gray ellipses darken into camo splotches. Box UVs
+// stretch it per face, so splotch scale varies per part like real wraps.
+let _camoTex = null;
+function camoTexture() {
+  if (_camoTex) return _camoTex;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 64;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, 64, 64);
+  const blots = [
+    [9, 11, 12, 7, '#a0a0a0'], [34, 5, 10, 8, '#c4c4c4'], [55, 14, 11, 9, '#adadad'],
+    [20, 30, 9, 11, '#b8b8b8'], [45, 34, 13, 8, '#9c9c9c'], [4, 44, 8, 9, '#c0c0c0'],
+    [26, 52, 12, 8, '#a6a6a6'], [54, 54, 9, 10, '#bcbcbc'], [40, 20, 6, 6, '#949494'],
+  ];
+  for (const [x, y, rx, ry, c] of blots) {
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  _camoTex = new THREE.CanvasTexture(cv);
+  return _camoTex;
+}
+
+// Map an original part color onto a camo shade ramp by luminance —
+// gradient stops, not bands, so within-gun contrast (receiver vs mag vs
+// furniture) survives the swap instead of flattening to one shade.
+function camoShade(orig, shades) {
+  const c = new THREE.Color(orig);
+  const l = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+  const t = Math.min(1, l / 0.55) * (shades.length - 1);
+  const i = Math.min(shades.length - 2, Math.floor(t));
+  return new THREE.Color(shades[i]).lerp(new THREE.Color(shades[i + 1]), t - i);
+}
+
 // Per-weapon viewmodel recipes: each builds the real gun's silhouette from
 // part()/cyl() primitives and returns the muzzle distance (len). Sight line
 // stays at local y ~0.06 so the shared VM_POS.ads still centers the irons
@@ -402,7 +452,14 @@ const VM_RECIPES = {
 function buildViewModel(w) {
   if (vmGun) { vmRoot.remove(vmGun); }
   const g = new THREE.Group();
-  const mat = c => new THREE.MeshLambertMaterial({ color: c });
+  // camo (#9e): while camoOn, every part color routes through the shade
+  // ramp (+ blotch map for pattern camos); cleared after the base gun so
+  // mounted attachments (optic, foregrip) keep their black furniture
+  const camoId = w.attachments && w.attachments.find(id => VM_CAMOS[id]);
+  let camoOn = camoId ? VM_CAMOS[camoId] : null;
+  const mat = c => new THREE.MeshLambertMaterial(camoOn
+    ? { color: camoShade(c, camoOn.shades), map: camoOn.pattern ? camoTexture() : null }
+    : { color: c });
   const part = (wd, h, d, c, x, y, z) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(wd, h, d), mat(c));
     m.position.set(x, y, z);
@@ -468,6 +525,7 @@ function buildViewModel(w) {
     part(0.012, 0.03, 0.015, dark, 0, 0.078, -0.2);
     len = 0.24;
   }
+  camoOn = null; // base gun built — attachments below stay black
   // red dot (#9c): hide the irons, mount the optic on the rail, and shift
   // the ADS anchor so the dot — not the 0.06 iron line — hits screen center
   g.userData.adsPos = VM_POS.ads.clone();
