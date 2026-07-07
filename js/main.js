@@ -283,7 +283,8 @@ function camoShade(orig, shades) {
 // it instead of doubling up (only the MP5K has one); mag parts go through
 // `m` so the reload anim (#10b) can pull them — guns whose mag isn't a
 // separate visible part (pistol-grip mags, SPAS tube, Vector mag-in-grip)
-// skip it and only play the tilt + hand motion.
+// skip it and only play the tilt + hand motion; pump sleeves / bolt
+// handles go through `k` so the cycle anim (#10c) can slide them.
 // Weapons without a recipe fall back to the generic per-class body below.
 const VM_RECIPES = {
   m4a1({ p, s, m, dark, mid, black }) {
@@ -419,11 +420,13 @@ const VM_RECIPES = {
     s(0.016, 0.034, 0.02, dark, 0, 0.058, -0.1);
     return 0.9;
   },
-  intervention({ p, m, cyl, dark, mid }) {
+  intervention({ p, m, k, cyl, dark, mid }) {
     p(0.045, 0.07, 0.6, dark, 0, 0, -0.3);           // chassis
     p(0.024, 0.024, 0.46, mid, 0, 0.006, -0.83);     // long fluted barrel
     p(0.04, 0.04, 0.08, dark, 0, 0.006, -1.09);      // muzzle brake
     cyl(0.034, 0.24, 0x1c1e22, 0, 0.072, -0.26);     // scope
+    k(0.055, 0.016, 0.016, mid, 0.048, 0.03, -0.07); // bolt handle arm, right side
+    k(0.02, 0.022, 0.022, dark, 0.082, 0.03, -0.07); // bolt knob
     p(0.028, 0.024, 0.22, dark, 0, 0.028, 0.12);     // skeleton stock spine
     p(0.024, 0.02, 0.18, dark, 0, -0.042, 0.13);     // skeleton lower rail
     p(0.034, 0.1, 0.035, dark, 0, -0.005, 0.24);     // butt plate
@@ -475,12 +478,12 @@ const VM_RECIPES = {
     p(0.014, 0.022, 0.014, dark, 0, 0.066, 0);
     return 0.22;
   },
-  spas12({ p, s, dark, mid }) {
+  spas12({ p, s, k, dark, mid }) {
     const poly = 0x2c2f34;
     p(0.05, 0.08, 0.34, dark, 0, 0, -0.11);          // receiver
     p(0.038, 0.042, 0.42, mid, 0, 0.03, -0.44);      // barrel + heat shield
     p(0.028, 0.028, 0.4, dark, 0, -0.028, -0.43);    // mag tube below
-    p(0.05, 0.052, 0.15, poly, 0, -0.028, -0.4);     // pump sleeve
+    k(0.05, 0.052, 0.15, poly, 0, -0.028, -0.4);     // pump sleeve
     p(0.026, 0.02, 0.16, mid, 0, 0.035, 0.1);        // folding-stock top bar
     p(0.04, 0.062, 0.03, dark, 0, 0.01, 0.19);       // butt pad
     p(0.03, 0.065, 0.04, dark, 0, -0.068, -0.03);    // grip
@@ -520,13 +523,15 @@ function buildViewModel(w) {
   const ugrip = (...a) => { const m = part(...a); builtinGrips.push(m); return m; };
   const magParts = [];
   const magp = (...a) => { const m = part(...a); magParts.push(m); return m; };
+  const cycleParts = [];
+  const cyclep = (...a) => { const m = part(...a); cycleParts.push(m); return m; };
   const dark = 0x26282c, mid = 0x3a3d42, wood = 0x6e5637, black = 0x1a1c1f;
   const type = w.model;
   const flashSize = VM_FLASH[type] || 0.12;
   let len = 0.62;
   const recipe = VM_RECIPES[w.key];
   if (recipe) {
-    len = recipe({ p: part, s: sight, u: ugrip, m: magp, cyl, dark, mid, wood, black });
+    len = recipe({ p: part, s: sight, u: ugrip, m: magp, k: cyclep, cyl, dark, mid, wood, black });
   } else if (type === 'ar') {
     part(0.055, 0.085, 0.62, dark, 0, 0, -0.31);
     part(0.03, 0.03, 0.3, mid, 0, 0.005, -0.68);         // barrel
@@ -558,7 +563,7 @@ function buildViewModel(w) {
   } else if (type === 'shotgun') {
     part(0.05, 0.08, 0.7, dark, 0, 0, -0.35);
     part(0.03, 0.03, 0.24, mid, 0, -0.045, -0.5);        // tube
-    part(0.045, 0.05, 0.14, wood, 0, -0.045, -0.42);     // pump
+    cyclep(0.045, 0.05, 0.14, wood, 0, -0.045, -0.42);   // pump
     part(0.05, 0.075, 0.16, wood, 0, -0.005, 0.03);
     sight(0.014, 0.04, 0.02, dark, 0, 0.056, -0.66);
     len = 0.72;
@@ -610,6 +615,15 @@ function buildViewModel(w) {
     for (const pm of magParts) mg.add(pm);
     g.userData.magPart = mg;
   }
+  // pump/bolt handle (#10c): tagged cycle parts (pump sleeve, bolt arm +
+  // knob) re-parent into one group at zero transform like the mag, so the
+  // cycle anim slides them as a unit and rest = identity.
+  if (cycleParts.length) {
+    const pg = new THREE.Group();
+    g.add(pg);
+    for (const pm of cycleParts) pg.add(pm);
+    g.userData.pumpPart = pg;
+  }
   // hands (#10a): box-built arms as children of the gun group, so bob/
   // kick/sprint pose carries them for free. Two hand styles: 'grip'
   // wraps a vertical grip (fingers stacked down the front face), 'cup'
@@ -658,6 +672,9 @@ function buildViewModel(w) {
   };
   const hnd = VM_HANDS[w.key] || VM_HANDS[type] || VM_HANDS.ar;
   g.userData.armTrigger = arm(hnd.trig[0], hnd.trig[1], 'grip', 1, 0.18, 0.66);
+  // #10c moves the trigger hand to the bolt handle — rest saved like the
+  // support arm's below
+  g.userData.armTrigger.userData.rest = g.userData.armTrigger.position.clone();
   const gm = VM_GRIP[w.key] || VM_GRIP[type];
   const sup = (w.attachments && w.attachments.includes('foregrip') && gm)
     ? [gm.y - 0.055, gm.z - 0.005, 'grip']                  // wrap the mounted grip shaft
@@ -2446,14 +2463,37 @@ function updateCameraAndViewmodel(dt) {
       rOut = _ss(t / 0.3) - _ss((t - 0.38) / 0.3);      // mag out 0→0.3, back in by 0.68
       rRack = _ss((t - 0.8) / 0.09) - _ss((t - 0.9) / 0.09); // handle jerk at the end
     }
+    // pump/bolt cycle (#10c): for pump/bolt weapons fireCooldown IS the
+    // cycle window (pumpTime / 60÷rpm), so the anim normalizes against it
+    // like reload does against reloadT. Pump: the tagged sleeve slides
+    // back then forward with the support hand riding it. Bolt: the
+    // trigger hand leaves the grip, works the handle back/forward while
+    // the gun rolls its right side up into view, then returns. Reload
+    // owns the arms when both would run (R during a cycle); the switchT
+    // gate keeps a residual fireCooldown from the PREVIOUS gun (it's
+    // per-player) from playing a cycle tail on a freshly switched one.
+    let pOut = 0, bReach = 0;
+    const boltMode = def.mode === 'bolt';
+    if (player.reloadT <= 0 && player.switchT <= 0 && player.fireCooldown > 0 &&
+        (def.mode === 'pump' || boltMode)) {
+      const ct = 1 - player.fireCooldown / (boltMode ? 60 / def.rpm : def.pumpTime);
+      if (boltMode) {
+        bReach = _ss((ct - 0.06) / 0.16) - _ss((ct - 0.76) / 0.18); // hand to the bolt, home at the end
+        pOut = _ss((ct - 0.28) / 0.16) - _ss((ct - 0.5) / 0.16);    // bolt back 0.28–0.44, forward 0.5–0.66
+      } else {
+        pOut = _ss((ct - 0.18) / 0.24) - _ss((ct - 0.58) / 0.3);    // back 0.18–0.42, forward 0.58–0.88
+      }
+    }
     target.x -= rTilt * 0.035;
-    target.y -= rTilt * 0.05;
+    target.y -= rTilt * 0.05 + bReach * 0.02;
     target.z += rRack * 0.05;
     const mag = vmGun.userData.magPart, pull = vmGun.userData.magPull;
     if (mag) {
       mag.position.set(pull.x * rOut, pull.y * rOut, pull.z * rOut);
       mag.rotation.x = pull.rx * rOut;
     }
+    const cyc = vmGun.userData.pumpPart;
+    if (cyc) cyc.position.z = pOut * (boltMode ? 0.06 : 0.075);
     const armS = vmGun.userData.armSupport;
     if (armS && armS.userData.rest) {
       const rest = armS.userData.rest;
@@ -2462,17 +2502,30 @@ function updateCameraAndViewmodel(dt) {
         rest.y + pull.y * rOut + rRack * 0.05,
         // rack slides the support hand back to the receiver (~z −0.06);
         // hands already at/behind it (pistols) stay put
-        rest.z + pull.z * rOut + rRack * Math.max(0, -0.06 - rest.z));
+        rest.z + pull.z * rOut + rRack * Math.max(0, -0.06 - rest.z) +
+          (boltMode ? 0 : pOut * 0.075));
+    }
+    const armT = vmGun.userData.armTrigger;
+    if (armT && armT.userData.rest) {
+      const rt = armT.userData.rest;
+      // bolt work: fist up/right to the handle, ride the pull, back home
+      armT.position.set(
+        rt.x + bReach * 0.07,
+        rt.y + bReach * 0.115,
+        rt.z + bReach * 0.04 + (boltMode ? pOut * 0.06 : 0));
     }
     // while the knife is out the gun hides lowered, so the return lerp
     // reads as re-raising it
     if (melee) target.y -= 0.3;
     vmGun.position.lerp(target, Math.min(1, dt * 16));
-    vmGun.rotation.x = vmKick * 0.09 + (player.sprinting ? -0.5 : 0) - dip * 0.25 + rTilt * 0.12 - rRack * 0.08;
+    // pump yank tips the muzzle up a touch (bolt pOut skips it — the
+    // gun holds still while only the hand works the handle)
+    vmGun.rotation.x = vmKick * 0.09 + (player.sprinting ? -0.5 : 0) - dip * 0.25 + rTilt * 0.12 - rRack * 0.08 + (boltMode ? 0 : pOut * 0.05);
     vmGun.rotation.y = player.sprinting ? 0.4 : 0;
     // roll is negative (top-to-the-right) so the magwell swings toward
-    // the camera instead of hiding behind the receiver
-    vmGun.rotation.z = dip * 0.5 - rTilt * 0.42;
+    // the camera instead of hiding behind the receiver; bolt work rolls
+    // positive so the right-side handle comes up into view
+    vmGun.rotation.z = dip * 0.5 - rTilt * 0.42 + bReach * 0.18;
     // hide gun when fully scoped
     const scoped = player.adsAmt > 0.85 && def.zoom > 3;
     vmGun.visible = !scoped && !melee;
