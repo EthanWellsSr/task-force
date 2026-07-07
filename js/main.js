@@ -846,14 +846,14 @@ const vmKnife = (() => {
 })();
 
 // swing keyframes (camera-space pos + euler), meleeT-relative: raise from
-// off-screen bottom-right, slash across to low-left, drop out. The blade
-// stays in left profile (rot.y ~ -1.1..-1.4) so it reads as a blade, not a
+// off-screen bottom-left, slash across to low-right, drop out. The blade
+// stays in right profile (rot.y ~ +1.1..+1.4) so it reads as a blade, not a
 // grip-on box; the slash itself is the rot.x sweep tip-up -> tip-down
 const KNIFE_POSES = {
-  start:  { p: new THREE.Vector3(0.45, -0.55, -0.5),  r: new THREE.Vector3(0.3, -1.4, 0.4) },
-  windup: { p: new THREE.Vector3(0.3, -0.14, -0.44),  r: new THREE.Vector3(0.6, -1.35, 0.4) },
-  end:    { p: new THREE.Vector3(-0.3, -0.35, -0.48), r: new THREE.Vector3(-0.7, -1.1, -0.3) },
-  exit:   { p: new THREE.Vector3(-0.32, -0.62, -0.5), r: new THREE.Vector3(-1.0, -1.1, -0.3) },
+  start:  { p: new THREE.Vector3(-0.45, -0.55, -0.5),  r: new THREE.Vector3(0.3, 1.4, -0.4) },
+  windup: { p: new THREE.Vector3(-0.3, -0.14, -0.44),  r: new THREE.Vector3(0.6, 1.35, -0.4) },
+  end:    { p: new THREE.Vector3(0.3, -0.35, -0.48),   r: new THREE.Vector3(-0.7, 1.1, 0.3) },
+  exit:   { p: new THREE.Vector3(0.32, -0.62, -0.5),   r: new THREE.Vector3(-1.0, 1.1, 0.3) },
 };
 function poseKnife(a, b, u) {
   vmKnife.position.lerpVectors(a.p, b.p, u);
