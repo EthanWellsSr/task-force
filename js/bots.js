@@ -106,7 +106,8 @@ class Bot {
     this.onGround = true;
     this.alive = false;
     this.hp = 100;
-    this.kills = 0; this.deaths = 0;
+    this.kills = 0; this.deaths = 0; this.assists = 0;
+    this.recentDamagers = []; // #16d: enemy hits this life (assist source)
     this.speedNow = 0;
     this.crouched = false;
 
@@ -175,6 +176,7 @@ class Bot {
     // off the spawn instantly
     this.grenLeft = this.lethal ? 1 : 0;
     this.grenCdT = 3 + Math.random() * 3;
+    this.recentDamagers.length = 0; // #16d: fresh life clears assist sources
   }
 
   // A shot rang out: enemies within earshot learn the shooter's position
@@ -208,6 +210,7 @@ class Bot {
     if (!this.alive) return;
     if (this.spawnProtectT > 0 && !bypassProtect) return; // #18a spawn invuln
     this.hp -= dmg;
+    this.world.api.recordDamage(this, attacker); // #16d: assist tracking
     // getting shot reveals the attacker
     if (attacker && attacker.team !== this.team && attacker.alive) {
       this.lastKnown = attacker.pos.clone();

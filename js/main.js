@@ -81,7 +81,8 @@ const player = {
   isPlayer: true, name: 'YOU', team: 'tf',
   pos: new THREE.Vector3(), vel: new THREE.Vector3(),
   yaw: 0, pitch: 0,
-  hp: 100, alive: false, kills: 0, deaths: 0,
+  hp: 100, alive: false, kills: 0, deaths: 0, assists: 0,
+  recentDamagers: [], // #16d: who's chipped me this engagement (assist source)
   crouched: false, crouchAmt: 0,
   stamina: 1, sprinting: false, winded: false,
   perks: new Set(),
@@ -1917,8 +1918,30 @@ function deployKillstreak() {
   refreshStreakTag();
 }
 
+// #16d: log an enemy hit on the victim (assist source). Only enemy damage
+// is recorded — friendly fire and self-damage never earn an assist. One
+// entry per attacker, its time refreshed on each new hit.
+const ASSIST_WINDOW = 5; // seconds of "current engagement" (~the regen delay)
+function recordDamage(victim, attacker) {
+  if (!attacker || attacker === victim || attacker.team === victim.team) return;
+  if (!victim.recentDamagers) victim.recentDamagers = [];
+  const e = victim.recentDamagers.find(d => d.attacker === attacker);
+  if (e) e.t = G.time;
+  else victim.recentDamagers.push({ attacker, t: G.time });
+}
+
 function registerKill(killer, victim, weaponName, headshot) {
   if (killer && killer.team !== victim.team) {
+    // #16d: everyone who damaged the victim this engagement (within the
+    // window) other than the killer gets an assist; the player gets a ping
+    if (victim.recentDamagers) {
+      for (const d of victim.recentDamagers) {
+        if (d.attacker === killer || G.time - d.t > ASSIST_WINDOW) continue;
+        d.attacker.assists = (d.attacker.assists || 0) + 1;
+        if (d.attacker.isPlayer) UI.showKillMsg('+ASSIST', false);
+      }
+      victim.recentDamagers.length = 0; // engagement's over
+    }
     G.scores[killer.team]++;
     UI.killfeed(killer.name, killer.team, victim.name, victim.team, weaponName, headshot);
     if (killer.isPlayer) {
@@ -1979,7 +2002,8 @@ function startMatch(mapId) {
   G.scores = { tf: 0, sp: 0 };
   G.timeLeft = UI.settings.timeLimit > 0 ? UI.settings.timeLimit : Infinity;
   G.time = 0;
-  player.kills = 0; player.deaths = 0;
+  player.kills = 0; player.deaths = 0; player.assists = 0;
+  player.recentDamagers.length = 0; // #16d
   player._streakKills = 0;
   player._bankedStreaks = []; player._streakSel = 0;
   refreshStreakTag();
@@ -2003,6 +2027,7 @@ function startMatch(mapId) {
       pickSpawn, getEnemies, registerKill, noteShot, audioPan, smokeBlocked,
       tracer: fxTracer,
       throwGrenade: spawnBotThrowable, // #16b: bot lobs a frag
+      recordDamage,                    // #16d: log a damager for assists
 
       playerPos: () => player.pos,
       playerTeam: player.team,
@@ -2051,6 +2076,7 @@ function deploy() {
   player.equipTacLeft = player.equipTac ? THROWABLES[player.equipTac].count : 0;
   player.throwT = 0; player.cooking = null; player.cookKind = null; player.cookSlot = null;
   player.stunT = 0;
+  player.recentDamagers.length = 0; // #16d: fresh life, no carried-over damagers
   player.adsAmt = 0; player.adsToggle = false; player.bloom = 0;
   player.hp = 100;
   player.spawnProtectT = 3; // #18a: 3 s of spawn invuln, cancelled by firing/throwing
@@ -2079,6 +2105,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect) {
   if (player.spawnProtectT > 0 && !bypassProtect) return; // #18a spawn invuln
   player.hp -= dmg;
   player.sinceDamage = 0;
+  recordDamage(player, attacker); // #16d
   AudioSys.hurt();
   if (attacker) {
     const worldAng = Math.atan2(attacker.pos.x - player.pos.x, attacker.pos.z - player.pos.z);
@@ -2478,8 +2505,11 @@ function updatePlayer(dt) {
 
   // ---- health regen
   player.sinceDamage += dt;
-  if (player.sinceDamage > 4 && player.hp < 100 && player.hp > 0)
+  if (player.sinceDamage > 4 && player.hp < 100 && player.hp > 0) {
     player.hp = Math.min(100, player.hp + 42 * dt);
+    // healed to full: the engagement's over, so those hits can't assist (#16d)
+    if (player.hp >= 100) player.recentDamagers.length = 0;
+  }
 
   // ---- timers
   if (player.switchT > 0) player.switchT -= dt;

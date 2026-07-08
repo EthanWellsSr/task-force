@@ -494,7 +494,7 @@ const UI = {
     this.$('sbScoreSP').textContent = sp;
     for (const team of ['tf', 'sp']) {
       const table = this.$(team === 'tf' ? 'sbTableTF' : 'sbTableSP');
-      table.querySelector('thead tr').innerHTML = '<th>NAME</th><th>K</th><th>D</th><th>K/D</th>';
+      table.querySelector('thead tr').innerHTML = '<th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th>';
       const tbody = table.querySelector('tbody');
       tbody.innerHTML = '';
       combatants.filter(c => c.team === team)
@@ -503,7 +503,7 @@ const UI = {
           const kd = c.deaths > 0 ? (c.kills / c.deaths).toFixed(2) : c.kills.toFixed(2);
           const tr = document.createElement('tr');
           if (c.isPlayer) tr.className = 'me';
-          tr.innerHTML = `<td>${c.name}</td><td>${c.kills}</td><td>${c.deaths}</td><td>${kd}</td>`;
+          tr.innerHTML = `<td>${c.name}</td><td>${c.kills}</td><td>${c.assists || 0}</td><td>${c.deaths}</td><td>${kd}</td>`;
           tbody.appendChild(tr);
         });
     }
@@ -518,9 +518,9 @@ const UI = {
     const boards = this.$('endBoards');
     boards.innerHTML = `
       <div class="sb-team"><div class="sb-head tf">TASK FORCE</div>
-        <table><thead><tr><th>NAME</th><th>K</th><th>D</th><th>K/D</th></tr></thead><tbody id="endTF"></tbody></table></div>
+        <table><thead><tr><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody id="endTF"></tbody></table></div>
       <div class="sb-team"><div class="sb-head sp">SPETSNAZ</div>
-        <table><thead><tr><th>NAME</th><th>K</th><th>D</th><th>K/D</th></tr></thead><tbody id="endSP"></tbody></table></div>`;
+        <table><thead><tr><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody id="endSP"></tbody></table></div>`;
     for (const team of ['tf', 'sp']) {
       const tbody = this.$(team === 'tf' ? 'endTF' : 'endSP');
       combatants.filter(c => c.team === team)
@@ -529,7 +529,7 @@ const UI = {
           const kd = c.deaths > 0 ? (c.kills / c.deaths).toFixed(2) : c.kills.toFixed(2);
           const tr = document.createElement('tr');
           if (c.isPlayer) tr.className = 'me';
-          tr.innerHTML = `<td>${c.name}</td><td>${c.kills}</td><td>${c.deaths}</td><td>${kd}</td>`;
+          tr.innerHTML = `<td>${c.name}</td><td>${c.kills}</td><td>${c.assists || 0}</td><td>${c.deaths}</td><td>${kd}</td>`;
           tbody.appendChild(tr);
         });
     }
