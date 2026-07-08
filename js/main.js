@@ -1596,9 +1596,20 @@ const THROWABLES = {
   },
 };
 const GREN_R = 0.08, GREN_H = 0.16, GREN_BOUNCE = 0.42;
+const GREN_GRAVITY = 13;
+const GREN_STEP_BOUNCED = 1, GREN_STEP_REST = 2;
+const GREN_PREVIEW_DT = 1 / 60, GREN_PREVIEW_POINTS = 64;
+const GREN_PREVIEW_ARC_SKIP = 0.08;
+const GREN_THROW_FORWARD = 0.28, GREN_THROW_RIGHT = 0.34;
 const _throwables = [];
 const _blastAt = new THREE.Vector3();
 const _victimAt = new THREE.Vector3();
+let _grenadePreview = null;
+const _grenPreviewPos = new THREE.Vector3();
+const _grenPreviewVel = new THREE.Vector3();
+const _grenPreviewDir = new THREE.Vector3();
+const _grenThrowRight = new THREE.Vector3();
+const _grenWorldUp = new THREE.Vector3(0, 1, 0);
 
 // Branched on the def's model, not a kind check (defs carry behavior):
 // default is the frag/smoke sphere-and-cap silhouette; 'flashbang' is the
@@ -1632,10 +1643,44 @@ function buildGrenadeMesh(def) {
   return g;
 }
 
+function initGrenadePreview(scene) {
+  const group = new THREE.Group();
+  group.visible = false;
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.34, 0.43, 40),
+    new THREE.MeshBasicMaterial({
+      color: 0x9eff8c, transparent: true, opacity: 0.88,
+      depthWrite: false, side: THREE.DoubleSide,
+    }));
+  ring.rotation.x = -Math.PI / 2;
+  group.add(ring);
+
+  const positions = new Float32Array(GREN_PREVIEW_POINTS * 3);
+  const dotsGeo = new THREE.BufferGeometry();
+  dotsGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  dotsGeo.setDrawRange(0, 0);
+  const dots = new THREE.Points(dotsGeo, new THREE.PointsMaterial({
+    color: 0xdfffd6, size: 4.5, transparent: true, opacity: 0.62,
+    depthWrite: false, sizeAttenuation: false,
+  }));
+  group.add(dots);
+  scene.add(group);
+  _grenadePreview = { group, ring, dots, positions };
+}
+
+function setPlayerThrowableLaunch(out, dir) {
+  G.camera.getWorldDirection(dir);
+  _grenThrowRight.crossVectors(dir, _grenWorldUp);
+  if (_grenThrowRight.lengthSq() < 1e-5) _grenThrowRight.set(1, 0, 0);
+  else _grenThrowRight.normalize();
+  return out.set(player.pos.x, player.pos.y + eyeHeight() - 0.12, player.pos.z)
+    .addScaledVector(_grenThrowRight, GREN_THROW_RIGHT)
+    .addScaledVector(dir, GREN_THROW_FORWARD);
+}
+
 function spawnThrowable(def, fuse, speed, up) {
   const dir = G.camera.getWorldDirection(_shotDir);
-  const pos = new THREE.Vector3(player.pos.x, player.pos.y + eyeHeight() - 0.1, player.pos.z)
-    .addScaledVector(dir, 0.35);
+  const pos = setPlayerThrowableLaunch(new THREE.Vector3(), dir);
   const vel = new THREE.Vector3().copy(dir).multiplyScalar(speed);
   vel.y += up; // lob arc
   const mesh = buildGrenadeMesh(def);
@@ -1714,6 +1759,112 @@ function releaseThrow(slot) {
 // instant pin-pull + lob in one call (DEBUG / tests)
 function throwEquipment(slot = 'lethal') { startCooking(slot); releaseThrow(slot); }
 
+function settleThrowableBounce(v, dt) {
+  let result = 0;
+  if (-v.y * GREN_BOUNCE < 1.0) { v.y = 0; result |= GREN_STEP_REST; }
+  else { v.y *= -GREN_BOUNCE; result |= GREN_STEP_BOUNCED; }
+  v.x *= 0.75; v.z *= 0.75;
+  if (result & GREN_STEP_REST) {
+    const f = Math.max(0, 1 - 4 * dt);
+    v.x *= f; v.z *= f;
+  }
+  return result;
+}
+
+function applyThrowableGroundFriction(v, dt) {
+  const f = Math.max(0, 1 - 4 * dt);
+  v.x *= f; v.z *= f;
+}
+
+function stepThrowableMotion(p, v, dt, colliders) {
+  let result = 0;
+  v.y -= GREN_GRAVITY * dt;
+  p.x += v.x * dt;
+  for (const c of colliders) {
+    if (c.max.y <= 0.02) continue;
+    if (_boxOverlap(c, p, GREN_R, GREN_H)) {
+      p.x = v.x > 0 ? c.min.x - GREN_R - 0.001 : c.max.x + GREN_R + 0.001;
+      v.x *= -GREN_BOUNCE;
+      result |= GREN_STEP_BOUNCED;
+    }
+  }
+  p.z += v.z * dt;
+  for (const c of colliders) {
+    if (c.max.y <= 0.02) continue;
+    if (_boxOverlap(c, p, GREN_R, GREN_H)) {
+      p.z = v.z > 0 ? c.min.z - GREN_R - 0.001 : c.max.z + GREN_R + 0.001;
+      v.z *= -GREN_BOUNCE;
+      result |= GREN_STEP_BOUNCED;
+    }
+  }
+  p.y += v.y * dt;
+  for (const c of colliders) {
+    if (c.max.y <= 0.02) continue;
+    if (_boxOverlap(c, p, GREN_R, GREN_H)) {
+      if (v.y < 0) { p.y = c.max.y + 0.001; result |= settleThrowableBounce(v, dt); }
+      else { p.y = c.min.y - GREN_H - 0.001; v.y *= -GREN_BOUNCE; result |= GREN_STEP_BOUNCED; }
+    }
+  }
+  if (p.y <= 0 && v.y <= 0) {
+    p.y = 0;
+    if (v.y < 0) result |= settleThrowableBounce(v, dt);
+    else { result |= GREN_STEP_REST; applyThrowableGroundFriction(v, dt); }
+  }
+  return result;
+}
+
+function writeGrenadePreviewPoint(gp, pointCount, pos) {
+  const j = pointCount * 3;
+  gp.positions[j] = pos.x;
+  gp.positions[j + 1] = pos.y + 0.025;
+  gp.positions[j + 2] = pos.z;
+}
+
+function updateGrenadePreview() {
+  if (!_grenadePreview) return;
+  const gp = _grenadePreview;
+  if (G.state !== 'playing' || !player.alive || player.cooking === null) {
+    gp.group.visible = false;
+    return;
+  }
+  const def = THROWABLES[player.cookKind];
+  if (!def) {
+    gp.group.visible = false;
+    return;
+  }
+
+  setPlayerThrowableLaunch(_grenPreviewPos, _grenPreviewDir);
+  _grenPreviewVel.copy(_grenPreviewDir).multiplyScalar(def.throwSpeed);
+  _grenPreviewVel.y += def.throwUp;
+
+  let remaining = Math.max(0, player.cooking);
+  const maxSteps = Math.min(360, Math.max(0, Math.floor(remaining / GREN_PREVIEW_DT)));
+  const sampleEvery = Math.max(1, Math.ceil(maxSteps / (GREN_PREVIEW_POINTS - 1)));
+  let pointCount = 0, steps = 0, lastWrite = -1;
+  const skipSteps = Math.min(maxSteps, Math.floor(GREN_PREVIEW_ARC_SKIP / GREN_PREVIEW_DT));
+  if (skipSteps === 0) {
+    writeGrenadePreviewPoint(gp, pointCount++, _grenPreviewPos);
+    lastWrite = steps;
+  }
+  while (remaining > GREN_PREVIEW_DT && steps < 360) {
+    remaining -= GREN_PREVIEW_DT;
+    steps++;
+    stepThrowableMotion(_grenPreviewPos, _grenPreviewVel, GREN_PREVIEW_DT, G.colliders);
+    if (steps >= skipSteps && steps % sampleEvery === 0 && pointCount < GREN_PREVIEW_POINTS) {
+      writeGrenadePreviewPoint(gp, pointCount++, _grenPreviewPos);
+      lastWrite = steps;
+    }
+  }
+  if (lastWrite !== steps && pointCount < GREN_PREVIEW_POINTS) {
+    writeGrenadePreviewPoint(gp, pointCount++, _grenPreviewPos);
+  }
+
+  gp.dots.geometry.setDrawRange(0, pointCount);
+  gp.dots.geometry.attributes.position.needsUpdate = true;
+  gp.ring.position.set(_grenPreviewPos.x, _grenPreviewPos.y + 0.03, _grenPreviewPos.z);
+  gp.group.visible = true;
+}
+
 function updateThrowables(dt) {
   for (let i = _throwables.length - 1; i >= 0; i--) {
     const t = _throwables[i];
@@ -1726,52 +1877,13 @@ function updateThrowables(dt) {
     }
     const p = t.pos, v = t.vel;
     t.sinceBounce += dt;
-    v.y -= 13 * dt; // same gravity as the player
-    let bounced = false;
-    // axis-separated sweep like moveEntity, but reflecting instead of stopping
-    p.x += v.x * dt;
-    for (const c of G.colliders) {
-      if (c.max.y <= 0.02) continue;
-      if (_boxOverlap(c, p, GREN_R, GREN_H)) {
-        p.x = v.x > 0 ? c.min.x - GREN_R - 0.001 : c.max.x + GREN_R + 0.001;
-        v.x *= -GREN_BOUNCE;
-        bounced = true;
-      }
-    }
-    p.z += v.z * dt;
-    for (const c of G.colliders) {
-      if (c.max.y <= 0.02) continue;
-      if (_boxOverlap(c, p, GREN_R, GREN_H)) {
-        p.z = v.z > 0 ? c.min.z - GREN_R - 0.001 : c.max.z + GREN_R + 0.001;
-        v.z *= -GREN_BOUNCE;
-        bounced = true;
-      }
-    }
-    p.y += v.y * dt;
-    let rest = false;
-    const landed = () => { // downward hit: bounce, or settle when nearly spent
-      if (-v.y * GREN_BOUNCE < 1.0) { v.y = 0; rest = true; }
-      else { v.y *= -GREN_BOUNCE; bounced = true; }
-      v.x *= 0.75; v.z *= 0.75; // ground hits scrub lateral speed too
-    };
-    for (const c of G.colliders) {
-      if (c.max.y <= 0.02) continue;
-      if (_boxOverlap(c, p, GREN_R, GREN_H)) {
-        if (v.y < 0) { p.y = c.max.y + 0.001; landed(); }
-        else { p.y = c.min.y - GREN_H - 0.001; v.y *= -GREN_BOUNCE; bounced = true; }
-      }
-    }
-    if (p.y <= 0 && v.y <= 0) { p.y = 0; if (v.y < 0) landed(); else rest = true; }
-    if (rest) { // rolling friction
-      const f = Math.max(0, 1 - 4 * dt);
-      v.x *= f; v.z *= f;
-    }
-    if (bounced && t.sinceBounce > 0.12 && Math.hypot(v.x, v.y, v.z) > 1.2) {
+    const step = stepThrowableMotion(p, v, dt, G.colliders);
+    if ((step & GREN_STEP_BOUNCED) && t.sinceBounce > 0.12 && Math.hypot(v.x, v.y, v.z) > 1.2) {
       t.sinceBounce = 0;
       AudioSys.grenadeBounce(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(p));
     }
     t.mesh.position.copy(p);
-    if (!rest) {
+    if (!(step & GREN_STEP_REST)) {
       t.mesh.rotation.x += t.spin * dt;
       t.mesh.rotation.z += t.spin * 0.6 * dt;
     }
@@ -2178,6 +2290,7 @@ function startMatch(mapId) {
 
   G.graph = buildNavGraph(G.map.waypointSeeds, G.colliders);
   initFxPools(G.scene);
+  initGrenadePreview(G.scene);
   buildMinimapBg();
 
   // combatants
@@ -3124,6 +3237,7 @@ function loop() {
 
     fxUpdate(dt);
     updateThrowables(dt);
+    updateGrenadePreview();
     updateTomahawks(dt); // #16c
     updateSmokeClouds(dt);
     updateNapalm(dt);
@@ -3179,6 +3293,7 @@ window.MAIN = {
 window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
   nukeT: v => v === undefined ? _nukeT : (_nukeT = v),
   throwables: () => _throwables, throwEquipment, startCooking, releaseThrow,
+  grenadePreview: () => _grenadePreview,
   spawnBotThrowable, // #16b
   tomahawks: () => _tomahawks, axePickups: () => _axePickups, throwTomahawk, // #16c
   updateTomahawks, switchWeapon, curW,
