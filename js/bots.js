@@ -160,6 +160,7 @@ class Bot {
     this.onGround = true;
     this.hp = 100;
     this.alive = true;
+    this._looted = false; // #6: fresh corpse can be looted again by SCAVENGER
     this.magLeft = this.weapon.mag;
     this.reloadT = 0;
     this.target = null; this.lastKnown = null;

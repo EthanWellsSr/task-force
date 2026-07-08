@@ -2361,7 +2361,9 @@ function deploy() {
     const w = resolveWeaponDef(cls[slot], cls.attachments && cls.attachments[slot],
       cls.attachments && cls.attachments[slot + 'DotColor'],
       cls.attachments && cls.attachments[slot + 'LaserColor']);
-    return { def: w, mag: w.mag, reserve: w.reserve * (player.perks.has('scavenger') ? 2 : 1) };
+    // SCAVENGER no longer doubles reserve here (#6) — it resupplies off
+    // corpses in updateScavenger(); everyone spawns with normal reserve
+    return { def: w, mag: w.mag, reserve: w.reserve };
   };
   player.weapons = [mkState('primary'), mkState('secondary')];
   player.cur = 0;
@@ -2686,6 +2688,31 @@ function updateVault(dt) {
     player.vault = null;
     player.forceCrouch = true; // stay low until there's headroom to stand
     player.vel.y = 0;
+  }
+}
+
+// SCAVENGER (#6): while alive with the perk, passing within ~1.2 m of any
+// corpse (enemy or teammate) that hasn't been looted yet tops up reserve ammo
+// on both guns — capped at each def's max reserve. Each body resupplies once
+// (`_looted`, cleared on respawn). The tomahawk slot refills off its own
+// ground pickup, so it's skipped here.
+const SCAV_R = 1.2;
+function updateScavenger() {
+  if (!player.alive || !player.perks.has('scavenger')) return;
+  for (const b of G.bots) {
+    if (b.alive || b._looted) continue;
+    if (Math.abs(b.pos.y - player.pos.y) > 2) continue; // don't loot through floors
+    if (Math.hypot(b.pos.x - player.pos.x, b.pos.z - player.pos.z) > SCAV_R) continue;
+    b._looted = true;
+    let gained = false;
+    for (const wp of player.weapons) {
+      if (wp.def.throwWeapon) continue;
+      const max = wp.def.reserve;
+      if (wp.reserve >= max) continue;
+      wp.reserve = Math.min(max, wp.reserve + Math.ceil(wp.def.mag * 1.5)); // ~1.5 mags
+      gained = true;
+    }
+    if (gained) { UI.showKillMsg('+AMMO', false); AudioSys.reload(); }
   }
 }
 
@@ -3262,6 +3289,7 @@ function loop() {
 
     if (G.state === 'playing' && player.alive) {
       updatePlayer(dt);
+      updateScavenger(); // #6: resupply reserve off corpses
       updateTargetName(dt);
     }
     if (G.state === 'dead') {

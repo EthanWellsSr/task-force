@@ -273,7 +273,7 @@ const PERKS = {
   1: [
     { id:'marathon',  name:'MARATHON',          desc:'Unlimited sprint' },
     { id:'soh',       name:'SLEIGHT OF HAND',   desc:'Reload 50% faster' },
-    { id:'scavenger', name:'SCAVENGER',         desc:'Double reserve ammo' },
+    { id:'scavenger', name:'SCAVENGER',         desc:'Resupply ammo from bodies you pass over' },
   ],
   2: [
     { id:'stopping',    name:'STOPPING POWER', desc:'+25% bullet damage' },
