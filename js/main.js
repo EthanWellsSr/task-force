@@ -587,6 +587,10 @@ const VM_RECIPES = {
 
 function buildViewModel(w) {
   if (vmGun) { vmRoot.remove(vmGun); }
+  // #16c: the tomahawk is its own held viewmodel (an axe + one fist), built
+  // apart from the gun machinery — no sights/mag/attachments. axeBody groups
+  // the hatchet so it can hide while the axe is out (thrown, mag 0).
+  if (w.model === 'tomahawk') { vmGun = buildAxeViewModel(); vmRoot.add(vmGun); return; }
   const g = new THREE.Group();
   // camo (#9e): while camoOn, every part color routes through the shade
   // ramp (+ blotch map for pattern camos); cleared after the base gun so
@@ -830,6 +834,46 @@ function buildViewModel(w) {
   g.position.copy(VM_POS.hip);
   vmGun = g;
   vmRoot.add(g);
+}
+
+// #16c: held tomahawk viewmodel — a box-built hatchet gripped in one fist.
+// The hatchet lives in a userData.axeBody group so updateCameraAndViewmodel
+// can hide it while the axe is airborne/on the ground (mag 0), leaving the
+// empty hand. Safe with the shared update loop: it carries adsPos +
+// muzzleLocal and no magPart/pumpPart/laser, all of which are guarded there.
+function buildAxeViewModel() {
+  const g = new THREE.Group();
+  const mat = c => new THREE.MeshLambertMaterial({ color: c });
+  const box = (wd, h, d, c, x, y, z, group) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(wd, h, d), mat(c));
+    m.position.set(x, y, z);
+    (group || g).add(m);
+    return m;
+  };
+  const wood = 0x6e5637, steel = 0x9aa0a6, edge = 0xc6ccd2, glove = 0x24261f, skin = 0xc49a6c, sleeve = 0x44503b;
+  // the hatchet, tilted so the head reads against the sky as you hold it
+  const axe = new THREE.Group();
+  axe.rotation.set(0.15, 0, -0.12);
+  g.add(axe);
+  box(0.028, 0.028, 0.44, wood, 0, 0, -0.14, axe);         // haft (runs forward)
+  box(0.03, 0.02, 0.05, wood, 0, 0.03, 0.06, axe);         // pommel knob
+  box(0.026, 0.15, 0.06, steel, 0, 0.055, -0.34, axe);     // head cheek
+  box(0.02, 0.17, 0.03, edge, -0.01, 0.055, -0.37, axe);   // bit / cutting edge
+  box(0.03, 0.05, 0.06, steel, 0, 0.055, -0.29, axe);      // poll behind the eye
+  g.userData.axeBody = axe;
+  // a single fist wrapping the haft (camera-side thumb), with a short sleeve
+  const hand = new THREE.Group();
+  hand.position.set(0, -0.01, -0.02);
+  box(0.05, 0.052, 0.06, glove, 0, 0, 0, hand);            // back of hand
+  for (let i = 0; i < 3; i++) box(0.048, 0.0125, 0.026, skin, 0, 0.014 - i * 0.016, -0.03, hand); // fingers
+  box(0.014, 0.03, 0.018, skin, -0.03, 0.014, -0.004, hand); // thumb
+  box(0.06, 0.055, 0.16, sleeve, 0, -0.015, 0.09, hand);   // cuff + forearm running off-frame
+  g.add(hand);
+  // shared-loop contract: an ADS anchor and a (never-shown) muzzle point
+  g.userData.adsPos = new THREE.Vector3(0.04, -0.12, -0.4);
+  g.userData.muzzleLocal = new THREE.Vector3(0, 0, -0.4);
+  g.position.copy(VM_POS.hip);
+  return g;
 }
 
 // melee knife viewmodel — built once, shown only during the meleeT swing
@@ -1734,6 +1778,144 @@ function updateThrowables(dt) {
   }
 }
 
+// ============================================================
+// #16c: Tomahawk — a thrown, retrievable, instant-kill secondary.
+// Reuses the grenade integrator's feel (gravity 13, axis sweeps) but sticks
+// on first contact instead of bouncing, adds per-step segment-vs-bot hit
+// detection (any hit = kill), and drops a ground pickup that the owner walks
+// over to reload. `_tomahawks` = in flight, `_axePickups` = resting.
+// ============================================================
+const _tomahawks = [];
+const _axePickups = [];
+const TOMA_R = 0.09, TOMA_H = 0.1;   // sweep box half-size (thin blade)
+const TOMA_SPEED = 27, TOMA_UP = 1.6; // flatter/faster than a lobbed grenade
+const TOMA_PICKUP_R = 1.3;           // walk-over retrieval radius
+const _axeRay = new THREE.Ray();
+const _axeBox = new THREE.Box3();
+const _axeHitPt = new THREE.Vector3();
+const _axeStep = new THREE.Vector3();
+
+// box-built hatchet used for both the thrown mesh and the ground pickup
+function buildTomahawkMesh() {
+  const g = new THREE.Group();
+  const mat = c => new THREE.MeshLambertMaterial({ color: c });
+  const box = (wd, h, d, c, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(wd, h, d), mat(c));
+    m.position.set(x, y, z); m.castShadow = true; g.add(m);
+  };
+  box(0.03, 0.03, 0.4, 0x6e5637, 0, 0, 0);        // haft along z
+  box(0.026, 0.15, 0.06, 0x9aa0a6, 0, 0.04, -0.2); // head
+  box(0.02, 0.17, 0.03, 0xc6ccd2, -0.01, 0.04, -0.23); // bit
+  return g;
+}
+
+function throwTomahawk(w) {
+  const dir = G.camera.getWorldDirection(_shotDir);
+  const pos = new THREE.Vector3(player.pos.x, player.pos.y + eyeHeight() - 0.05, player.pos.z)
+    .addScaledVector(dir, 0.4);
+  const vel = new THREE.Vector3().copy(dir).multiplyScalar(TOMA_SPEED);
+  vel.y += TOMA_UP;
+  const mesh = buildTomahawkMesh();
+  mesh.position.copy(pos);
+  G.scene.add(mesh);
+  _tomahawks.push({ mesh, pos, vel, spin: 26 });
+  w.mag = 0;                 // it's out of hand now
+  player.spawnProtectT = 0;  // throwing ends spawn invuln (like firing)
+  player.throwT = 0.55;      // drives the viewmodel throw dip
+  AudioSys.throwWhoosh();
+}
+
+// a landed axe: rests on the ground/wall as a walk-over pickup
+function dropAxePickup(at) {
+  const mesh = buildTomahawkMesh();
+  mesh.position.copy(at);
+  mesh.rotation.set(Math.PI * 0.5, Math.random() * Math.PI, 0); // lie flat, random spin
+  G.scene.add(mesh);
+  _axePickups.push({ mesh, pos: at.clone() });
+}
+
+function updateTomahawks(dt) {
+  for (let i = _tomahawks.length - 1; i >= 0; i--) {
+    const t = _tomahawks[i], p = t.pos, v = t.vel;
+    v.y -= 13 * dt; // grenade gravity
+    _axeStep.copy(v).multiplyScalar(dt);
+    const stepLen = _axeStep.length();
+
+    // --- in-flight kill: sweep this frame's segment vs enemy body boxes,
+    // take the nearest hit. Any contact is lethal (dmg ≫ max hp).
+    if (stepLen > 1e-4) {
+      _axeRay.origin.copy(p);
+      _axeRay.direction.copy(_axeStep).multiplyScalar(1 / stepLen);
+      let hitBot = null, hitDist = stepLen;
+      for (const b of G.bots) {
+        if (!b.alive || b.team === player.team || b.spawnProtectT > 0) continue;
+        _axeBox.min.set(b.pos.x - 0.4, b.pos.y, b.pos.z - 0.4);
+        _axeBox.max.set(b.pos.x + 0.4, b.pos.y + 1.8, b.pos.z + 0.4);
+        if (_axeRay.intersectBox(_axeBox, _axeHitPt)) {
+          const d = _axeHitPt.distanceTo(p);
+          if (d <= hitDist) { hitDist = d; hitBot = b; }
+        }
+      }
+      if (hitBot) {
+        hitBot.hurt(9999, player, 'TOMAHAWK', false); // instant kill
+        UI.showHitmarker(true);
+        AudioSys.hit(false);
+        _axeRay.at(hitDist, _axeHitPt);
+        _axeHitPt.y = Math.max(0, _axeHitPt.y);
+        G.scene.remove(t.mesh);
+        _tomahawks.splice(i, 1);
+        dropAxePickup(_axeHitPt); // drops where it struck (retrieve on foot)
+        continue;
+      }
+    }
+
+    // --- integrate + stick on first solid contact (axis sweeps, no bounce)
+    let stuck = false;
+    p.x += v.x * dt;
+    for (const c of G.colliders) {
+      if (c.max.y <= 0.02) continue;
+      if (_boxOverlap(c, p, TOMA_R, TOMA_H)) { p.x = v.x > 0 ? c.min.x - TOMA_R - 0.001 : c.max.x + TOMA_R + 0.001; stuck = true; }
+    }
+    p.z += v.z * dt;
+    for (const c of G.colliders) {
+      if (c.max.y <= 0.02) continue;
+      if (_boxOverlap(c, p, TOMA_R, TOMA_H)) { p.z = v.z > 0 ? c.min.z - TOMA_R - 0.001 : c.max.z + TOMA_R + 0.001; stuck = true; }
+    }
+    p.y += v.y * dt;
+    for (const c of G.colliders) {
+      if (c.max.y <= 0.02) continue;
+      if (_boxOverlap(c, p, TOMA_R, TOMA_H)) { p.y = v.y < 0 ? c.max.y + 0.001 : c.min.y - TOMA_H - 0.001; stuck = true; }
+    }
+    if (p.y <= 0 && v.y <= 0) { p.y = 0; stuck = true; }
+    t.mesh.position.copy(p);
+    t.mesh.rotation.x += t.spin * dt; // end-over-end tumble
+    if (stuck) {
+      AudioSys.grenadeBounce(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(p));
+      G.scene.remove(t.mesh);
+      _tomahawks.splice(i, 1);
+      dropAxePickup(p);
+    }
+  }
+
+  // --- retrieval: walk over a landed axe to refill the tomahawk slot
+  if (player.alive) {
+    const slot = player.weapons.find(wp => wp.def.throwWeapon);
+    if (slot && slot.mag < 1) {
+      for (let i = _axePickups.length - 1; i >= 0; i--) {
+        const pk = _axePickups[i];
+        if (Math.abs(pk.pos.y - player.pos.y) < 2 &&
+            Math.hypot(pk.pos.x - player.pos.x, pk.pos.z - player.pos.z) < TOMA_PICKUP_R) {
+          slot.mag = 1; // back in hand
+          G.scene.remove(pk.mesh);
+          _axePickups.splice(i, 1);
+          AudioSys.reload();
+          break; // only one axe exists at a time
+        }
+      }
+    }
+  }
+}
+
 // blast center is knee height (+0.4) so table/crate tops don't shadow a
 // bot standing right next to them; victims checked at chest height.
 // Returns dist/radius (0 = ground zero, 1 = edge), or -1 when out of
@@ -2010,6 +2192,8 @@ function startMatch(mapId) {
   G.uavUntil = 0; // G.time restarts at 0, so a stale value would be a free UAV
   _napalmDrops.length = 0; // no strikes carry across a rematch
   _throwables.length = 0;  // in-flight grenades die with the old scene
+  _tomahawks.length = 0;   // #16c: flying axes + ground pickups die with it too
+  _axePickups.length = 0;
   _smokeClouds.length = 0; // active smoke too (sprites rebuild with the pools)
   player.stunT = 0;        // a rematch shakes the stars off
   UI.stunOverlay(0);
@@ -2540,7 +2724,14 @@ function updatePlayer(dt) {
   if (firing && player.sprinting) player.sprinting = false;
   const canFire = player.reloadT <= 0 && player.switchT <= 0 && player.meleeT <= 0.5 &&
     player.cooking === null; // the trigger hand is holding a live grenade
-  if (canFire && player.fireCooldown <= 0) {
+  if (canFire && player.fireCooldown <= 0 && def.throwWeapon) {
+    // #16c: a throw weapon lobs on the trigger edge instead of shooting;
+    // an empty hand (already thrown, mag 0) just dry-clicks until retrieved
+    if (triggerEdge) {
+      if (w.mag > 0) { throwTomahawk(w); player.fireCooldown = 0.6; }
+      else AudioSys.dry();
+    }
+  } else if (canFire && player.fireCooldown <= 0) {
     let wants = false;
     if (def.mode === 'auto') wants = firing;
     else if (def.mode === 'burst') {
@@ -2731,6 +2922,9 @@ function updateCameraAndViewmodel(dt) {
 
   // viewmodel position: hip <-> ads, bob, kick
   if (vmGun) {
+    // #16c: the held hatchet vanishes while it's airborne/on the ground
+    // (mag 0), leaving the empty throwing hand until it's retrieved
+    if (vmGun.userData.axeBody) vmGun.userData.axeBody.visible = curW().mag > 0;
     const target = new THREE.Vector3().lerpVectors(VM_POS.hip, vmGun.userData.adsPos || VM_POS.ads, player.adsAmt);
     if (player.speedNow > 0.5 && player.onGround) {
       bobPhase += dt * (player.sprinting ? 11 : 8);
@@ -2930,6 +3124,7 @@ function loop() {
 
     fxUpdate(dt);
     updateThrowables(dt);
+    updateTomahawks(dt); // #16c
     updateSmokeClouds(dt);
     updateNapalm(dt);
     updateNuke(dt);
@@ -2985,6 +3180,8 @@ window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
   nukeT: v => v === undefined ? _nukeT : (_nukeT = v),
   throwables: () => _throwables, throwEquipment, startCooking, releaseThrow,
   spawnBotThrowable, // #16b
+  tomahawks: () => _tomahawks, axePickups: () => _axePickups, throwTomahawk, // #16c
+  updateTomahawks, switchWeapon, curW,
   smokeClouds: () => _smokeClouds, smokeBlocked };
 
 UI.init();

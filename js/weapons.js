@@ -114,6 +114,16 @@ const WEAPONS = {
     pellets:8, pumpTime:.55,
     spreadHip:.045, spreadAds:.028, recoil:.045, bloom:.004, zoom:1.15, adsTime:.22,
     speed:.98, range:[8,22], model:'shotgun' },
+
+  // #16c: thrown, retrievable, instant-kill hatchet. `throwWeapon` reroutes
+  // the fire path from firePlayerShot to throwTomahawk; mag is the one in
+  // hand (1 held / 0 out), reserve 0 — retrieval (walking over the landed
+  // axe) is the reload. Bots never get it (not in BOT_LOADOUTS). Stats are
+  // mostly cosmetic (editor bars / HUD) since it neither shoots nor ADS-aims.
+  tomahawk: { slot:'secondary', cat:'Melee', name:'TOMAHAWK',
+    dmg:135, minDmg:135, head:1, rpm:60, mag:1, reserve:0, reload:0, mode:'throw',
+    spreadHip:0, spreadAds:0, recoil:0, bloom:0, zoom:1.0, adsTime:.16,
+    speed:1.0, range:[8,30], model:'tomahawk', throwWeapon:true },
 };
 
 // Annotate each def with its own key so per-weapon systems (viewmodel
@@ -122,7 +132,7 @@ for (const k in WEAPONS) WEAPONS[k].key = k;
 
 // Fire mode label shown on the HUD
 function fireModeLabel(w) {
-  return { auto:'AUTO', semi:'SEMI', burst:'3-RND BURST', bolt:'BOLT ACTION', pump:'PUMP' }[w.mode];
+  return { auto:'AUTO', semi:'SEMI', burst:'3-RND BURST', bolt:'BOLT ACTION', pump:'PUMP', throw:'THROWN' }[w.mode];
 }
 
 // ============================================================
