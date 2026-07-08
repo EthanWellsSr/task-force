@@ -247,6 +247,26 @@ const UI = {
         wrap.appendChild(div);
       });
     });
+
+    // #16a: equipment pickers — a per-slot throwable (from THROWABLES) or NONE.
+    // The tactical slot is the real choice (stun vs smoke).
+    const mkThrowList = (elId, slotField, cat) => {
+      const wrap = this.$(elId);
+      wrap.innerHTML = '';
+      const opts = Object.keys(THROWABLES).filter(id => THROWABLES[id].slot === cat)
+        .map(id => ({ id, name: THROWABLES[id].name }));
+      opts.push({ id: 'none', name: 'NONE' });
+      const cur = c[slotField] || 'none';
+      for (const o of opts) {
+        const div = document.createElement('div');
+        div.className = 'weapon-item' + (o.id === cur ? ' selected' : '');
+        div.innerHTML = `<span>${o.name}</span>`;
+        div.onclick = () => { AudioSys.uiClick(); c[slotField] = o.id; this.saveClasses(); this.renderClassEditor(); };
+        wrap.appendChild(div);
+      }
+    };
+    mkThrowList('lethalList', 'lethal', 'lethal');
+    mkThrowList('tacticalList', 'tactical', 'tactical');
   },
 
   renderWeaponStats(key) {
@@ -271,9 +291,13 @@ const UI = {
       const div = document.createElement('div');
       div.className = 'spawn-class' + (i === this.selectedClass ? ' active' : '');
       const perkNames = c.perks.map(id => { const p = perkById(id); return p ? p.name : id; }).join(' / ');
+      // #16a: equipment line — lethal + tactical picks (skip NONE slots)
+      const eq = [c.lethal, c.tactical].filter(k => k && k !== 'none' && THROWABLES[k])
+        .map(k => THROWABLES[k].name).join(' / ') || 'NO EQUIPMENT';
       div.innerHTML = `<div class="sc-name">${c.name}</div>
         <div class="sc-weap">${WEAPONS[c.primary].name} + ${WEAPONS[c.secondary].name}</div>
-        <div class="sc-perks">${perkNames}</div>`;
+        <div class="sc-perks">${perkNames}</div>
+        <div class="sc-perks">${eq}</div>`;
       div.onclick = () => { AudioSys.uiClick(); this.selectedClass = i; this.renderSpawnScreen(deathInfo); };
       wrap.appendChild(div);
     });
@@ -325,23 +349,28 @@ const UI = {
     if (c.mode !== mode) { c.mode = mode; this.$('fireMode').textContent = mode; }
     const low = state.mag <= Math.max(3, weapon.mag * 0.2);
     if (c.low !== low) { c.low = low; this.$('ammoCount').classList.toggle('low', low); }
-    if (c.equipLeft !== p.equipLeft) {
-      c.equipLeft = p.equipLeft;
+    // #16a: two equipment counters — lethal [F], tactical [T]. An unequipped
+    // (null) slot hides entirely; the kind is part of the cache key so a
+    // class change relabels it (frag→none, stun→smoke, etc.)
+    const lethalKey = (p.equip || 'none') + ':' + p.equipLeft;
+    if (c.lethalKey !== lethalKey) {
+      c.lethalKey = lethalKey;
       const el = this.$('grenadeCount');
-      el.textContent = THROWABLES[p.equip].name + ' ×' + p.equipLeft + '  [F]';
-      el.classList.toggle('none', p.equipLeft <= 0);
+      if (p.equip) {
+        el.textContent = THROWABLES[p.equip].name + ' ×' + p.equipLeft + '  [F]';
+        el.classList.toggle('none', p.equipLeft <= 0);
+        el.classList.remove('hidden');
+      } else el.classList.add('hidden');
     }
-    if (c.tacLeft !== p.equipTacLeft) {
-      c.tacLeft = p.equipTacLeft;
+    const tacKey = (p.equipTac || 'none') + ':' + p.equipTacLeft;
+    if (c.tacKey !== tacKey) {
+      c.tacKey = tacKey;
       const el = this.$('tacCount');
-      el.textContent = THROWABLES[p.equipTac].name + ' ×' + p.equipTacLeft + '  [T]';
-      el.classList.toggle('none', p.equipTacLeft <= 0);
-    }
-    if (c.smokeLeft !== p.equipSmokeLeft) {
-      c.smokeLeft = p.equipSmokeLeft;
-      const el = this.$('smokeCount');
-      el.textContent = THROWABLES[p.equipSmoke].name + ' ×' + p.equipSmokeLeft + '  [E]';
-      el.classList.toggle('none', p.equipSmokeLeft <= 0);
+      if (p.equipTac) {
+        el.textContent = THROWABLES[p.equipTac].name + ' ×' + p.equipTacLeft + '  [T]';
+        el.classList.toggle('none', p.equipTacLeft <= 0);
+        el.classList.remove('hidden');
+      } else el.classList.add('hidden');
     }
     if (c.hp !== p.hp) {
       c.hp = p.hp;

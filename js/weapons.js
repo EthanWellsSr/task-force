@@ -248,6 +248,11 @@ function normalizeClass(c) {
     const lk = slot + 'LaserColor';
     if (!LASER_COLORS.some(lc => lc.id === c.attachments[lk])) c.attachments[lk] = 'green';
   }
+  // throwables (#16a): pre-#16a saves have no equipment fields — default to
+  // the classic FRAG + STUN loadout (smoke is now a tactical alternative, not
+  // an always-on third slot). Junk values fall back too.
+  if (c.lethal !== 'frag' && c.lethal !== 'none') c.lethal = 'frag';
+  if (c.tactical !== 'stun' && c.tactical !== 'smoke' && c.tactical !== 'none') c.tactical = 'stun';
   return c;
 }
 
@@ -282,11 +287,11 @@ function perkById(id) {
 
 // Default classes
 const DEFAULT_CLASSES = [
-  { name:'CINDERLINE',  primary:'m4a1',         secondary:'usp',    perks:['soh','stopping','steadyaim'],      attachments:{ primary:[], secondary:[] } },
-  { name:'IRONWAKE',    primary:'famas',        secondary:'g18',    perks:['marathon','lightweight','ninja'],  attachments:{ primary:[], secondary:[] } },
-  { name:'ASHRUNNER',   primary:'rpd',          secondary:'deagle', perks:['scavenger','stopping','steadyaim'],attachments:{ primary:[], secondary:[] } },
-  { name:'RAVENFALL',   primary:'intervention', secondary:'usp',    perks:['soh','coldblooded','ninja'],       attachments:{ primary:[], secondary:[] } },
-  { name:'DUSTKNIFE',   primary:'ump45',        secondary:'spas12', perks:['marathon','lightweight','commando'],attachments:{ primary:[], secondary:[] } },
+  { name:'CINDERLINE',  primary:'m4a1',         secondary:'usp',    perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  attachments:{ primary:[], secondary:[] } },
+  { name:'IRONWAKE',    primary:'famas',        secondary:'g18',    perks:['marathon','lightweight','ninja'],  lethal:'frag', tactical:'smoke', attachments:{ primary:[], secondary:[] } },
+  { name:'ASHRUNNER',   primary:'rpd',          secondary:'deagle', perks:['scavenger','stopping','steadyaim'],lethal:'frag', tactical:'stun',  attachments:{ primary:[], secondary:[] } },
+  { name:'RAVENFALL',   primary:'intervention', secondary:'usp',    perks:['soh','coldblooded','ninja'],       lethal:'frag', tactical:'smoke', attachments:{ primary:[], secondary:[] } },
+  { name:'DUSTKNIFE',   primary:'ump45',        secondary:'spas12', perks:['marathon','lightweight','commando'],lethal:'frag', tactical:'stun',  attachments:{ primary:[], secondary:[] } },
 ];
 
 // Loadout pool bots draw from

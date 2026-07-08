@@ -96,8 +96,9 @@ const player = {
   lastShotTime: -99,
   _stepT: 0, _killStreakCount: 0, _lastKillTime: -99, _streakKills: 0,
   _bankedStreaks: [], _streakSel: 0,
+  // #16a: one lethal ([F]) + one tactical ([T]) equipment, chosen per class
+  // (either can be null = NONE). Set from the class in deploy().
   equip: 'frag', equipLeft: 0, equipTac: 'stun', equipTacLeft: 0,
-  equipSmoke: 'smoke', equipSmokeLeft: 0,
   throwT: 0, cooking: null, cookKind: null, cookSlot: null,
   stunT: 0, stunMax: 1,
 };
@@ -1516,9 +1517,12 @@ function updateNukeCine(dt) {
 // with distance falloff, blocked by walls (losClear), COD-style — hurts
 // enemies (credited to the thrower) and the thrower (uncredited, so no
 // friendly-kill score), never teammates.
+// #16a: each throwable carries its loadout `slot` — 'lethal' ([F]) or
+// 'tactical' ([T]). A class picks one per slot (or NONE); the tactical slot
+// is a real stun-vs-smoke choice. The old always-on third smoke slot is gone.
 const THROWABLES = {
   frag: {
-    name: 'FRAG', count: 2, fuse: 3.6, radius: 7, dmg: 125, minDmg: 25,
+    name: 'FRAG', slot: 'lethal', count: 2, fuse: 3.6, radius: 7, dmg: 125, minDmg: 25,
     color: 0x3d4a33, throwSpeed: 15, throwUp: 3.4,
     detonate: fragDetonate,
   },
@@ -1531,7 +1535,7 @@ const THROWABLES = {
   // model: 'flashbang' gives it its own mesh (cylinder, no bulge) so it
   // reads as a stun in flight, not a recolored frag.
   stun: {
-    name: 'STUN', count: 2, fuse: 1.8, radius: 8, dmg: 0, minDmg: 0,
+    name: 'STUN', slot: 'tactical', count: 2, fuse: 1.8, radius: 8, dmg: 0, minDmg: 0,
     stunMax: 4, stunMin: 1.2, noCookOff: true, model: 'flashbang',
     color: 0x5a6a72, throwSpeed: 17, throwUp: 3.0,
     detonate: stunDetonate,
@@ -1540,7 +1544,7 @@ const THROWABLES = {
   // the cloud's, not a blast's) that blocks sight lines both ways via
   // smokeBlocked. Own slot on [E]; one per life, it's strong cover.
   smoke: {
-    name: 'SMOKE', count: 1, fuse: 1.5, radius: 4.5, dmg: 0, minDmg: 0,
+    name: 'SMOKE', slot: 'tactical', count: 1, fuse: 1.5, radius: 4.5, dmg: 0, minDmg: 0,
     smokeDur: 8,
     color: 0x4a5346, throwSpeed: 15, throwUp: 3.2,
     detonate: smokeDetonate,
@@ -1599,12 +1603,12 @@ function spawnThrowable(def, fuse, speed, up) {
 // COD-style cooking: key down pulls the pin (committed — the grenade is
 // spent and its fuse burns in hand), key up throws with the remaining
 // fuse. Cook too long and it detonates in hand; dying mid-cook drops it.
-// The slots share one pair of hands — 'lethal' ([F]), 'tactical' ([T]),
-// 'smoke' ([E]) — so only one grenade cooks at a time.
+// The two slots share one pair of hands — 'lethal' ([F]), 'tactical' ([T])
+// — so only one grenade cooks at a time. An empty slot's kind is null, so
+// startCooking no-ops on it (THROWABLES[null] is undefined).
 const EQUIP_SLOTS = {
-  lethal:   { kind: 'equip',      left: 'equipLeft' },
-  tactical: { kind: 'equipTac',   left: 'equipTacLeft' },
-  smoke:    { kind: 'equipSmoke', left: 'equipSmokeLeft' },
+  lethal:   { kind: 'equip',    left: 'equipLeft' },
+  tactical: { kind: 'equipTac', left: 'equipTacLeft' },
 };
 function startCooking(slot = 'lethal') {
   if (G.state !== 'playing' || !player.alive) return;
@@ -1997,9 +2001,12 @@ function deploy() {
   player.weapons = [mkState('primary'), mkState('secondary')];
   player.cur = 0;
   player.reloadT = 0; player.switchT = 0; player.burstQueue = 0; player.meleeT = 0;
-  player.equipLeft = THROWABLES[player.equip].count;
-  player.equipTacLeft = THROWABLES[player.equipTac].count;
-  player.equipSmokeLeft = THROWABLES[player.equipSmoke].count;
+  // #16a: equipment is a per-class pick now — an unequipped slot ('none') is
+  // null with a 0 count, so its key no-ops and its HUD counter hides
+  player.equip = (cls.lethal && cls.lethal !== 'none') ? cls.lethal : null;
+  player.equipTac = (cls.tactical && cls.tactical !== 'none') ? cls.tactical : null;
+  player.equipLeft = player.equip ? THROWABLES[player.equip].count : 0;
+  player.equipTacLeft = player.equipTac ? THROWABLES[player.equipTac].count : 0;
   player.throwT = 0; player.cooking = null; player.cookKind = null; player.cookSlot = null;
   player.stunT = 0;
   player.adsAmt = 0; player.adsToggle = false; player.bloom = 0;
@@ -2165,8 +2172,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Digit2') switchWeapon(1);
   if (e.code === 'KeyV') tryMelee();
   if (e.code === 'KeyF') startCooking('lethal');   // pin out; leaves on release
-  if (e.code === 'KeyT') startCooking('tactical'); // stun, same cook mechanics
-  if (e.code === 'KeyE') startCooking('smoke');    // smoke, same cook mechanics
+  if (e.code === 'KeyT') startCooking('tactical'); // tactical (stun/smoke), same mechanics
   if (e.code === 'KeyX') player.adsToggle = !player.adsToggle;
   if (e.code === 'KeyG') deployKillstreak();
   if (e.code === 'Digit3') cycleKillstreak();
@@ -2176,7 +2182,6 @@ document.addEventListener('keyup', e => {
   if (e.code === 'Tab') UI.$('scoreboard').classList.add('hidden');
   if (e.code === 'KeyF') releaseThrow('lethal');
   if (e.code === 'KeyT') releaseThrow('tactical');
-  if (e.code === 'KeyE') releaseThrow('smoke');
 });
 // Losing window focus never fires keyup/mouseup, so held inputs would stick
 // (e.g. alt-tab while holding W = infinite auto-run). Clear everything on blur.
