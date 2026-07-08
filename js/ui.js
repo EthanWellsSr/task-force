@@ -350,6 +350,14 @@ const UI = {
       hb.style.background = p.hp > 55 ? '#7fb069' : p.hp > 25 ? '#d9a13d' : '#d05040';
       this.$('vignette').style.opacity = p.hp < 100 ? Math.min(0.9, (100 - p.hp) / 90) * (p.hp < 40 ? 1 : 0.6) : 0;
     }
+    // #18e: live zoom readout, shown only while scoped on a high-zoom optic
+    const zoomTxt = (weapon.zoom > 3 && p.adsAmt > 0.5) ? p.zoomLevel.toFixed(1) + '×' : '';
+    if (c.zoom !== zoomTxt) {
+      c.zoom = zoomTxt;
+      const el = this.$('zoomLevel');
+      el.textContent = zoomTxt;
+      el.classList.toggle('hidden', !zoomTxt);
+    }
   },
 
   updateScores(tf, sp, timeLeft) {

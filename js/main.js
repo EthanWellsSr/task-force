@@ -88,6 +88,7 @@ const player = {
   weapons: [], cur: 0,
   reloadT: 0, switchT: 0, fireCooldown: 0, burstQueue: 0,
   adsHeld: false, adsToggle: false, adsAmt: 0, bloom: 0,
+  zoomLevel: 6, // #18e: live sniper zoom (×), wheel-adjustable while scoped
   meleeT: 0, sinceDamage: 99, respawnT: 0, spawnProtectT: 0,
   speedNow: 0, onGround: true,
   airVX: 0, airVZ: 0, airSpeedCap: 0, // #18d: horizontal momentum preserved through a jump
@@ -103,6 +104,9 @@ const player = {
 
 const keys = {};
 let firing = false, triggerEdge = false;
+
+// #18e: sniper wheel-zoom range/step (×)
+const ZOOM_MIN = 3, ZOOM_MAX = 8, ZOOM_STEP = 0.5;
 
 const BOT_NAMES = {
   tf: ['HAVOC', 'FLINT', 'JESTER', 'MUSTANG', 'TALON', 'RATTLER', 'ONYX', 'DRIFTER', 'SABLE', 'VANDAL', 'CUTTER'],
@@ -2130,6 +2134,20 @@ document.addEventListener('mouseup', e => {
 });
 document.addEventListener('contextmenu', e => e.preventDefault());
 
+// #18e: mouse-wheel variable zoom while scoped on a high-zoom optic. Wheel up
+// zooms in, down zooms out, clamped 3×–8×. No-ops (but still eats the scroll)
+// unscoped or on a non-sniper — we deliberately don't bind wheel to weapon
+// switch. zoomLevel resets to the def's base each time you leave ADS (see
+// updatePlayer), so every scope-in starts at the weapon's default zoom.
+document.addEventListener('wheel', e => {
+  if (!G.pointerLocked || G.state !== 'playing') return;
+  e.preventDefault();
+  const def = curW().def;
+  if (def.zoom <= 3 || player.adsAmt < 0.5) return; // only while actually scoped
+  const step = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+  player.zoomLevel = THREE.MathUtils.clamp(player.zoomLevel + step, ZOOM_MIN, ZOOM_MAX);
+}, { passive: false });
+
 document.addEventListener('keydown', e => {
   if (e.code === 'Tab' && (G.state === 'playing' || G.state === 'dead')) {
     e.preventDefault();
@@ -2321,7 +2339,12 @@ function updatePlayer(dt) {
   const rate = dt / def.adsTime;
   player.adsAmt += THREE.MathUtils.clamp(adsTarget - player.adsAmt, -rate, rate);
   const fovBase = UI.settings.fov;
-  G.camera.fov = THREE.MathUtils.lerp(fovBase, fovBase / def.zoom, player.adsAmt);
+  // #18e: high-zoom optics use the wheel-adjusted zoomLevel; it resets to the
+  // def's base whenever you're out of ADS so each scope-in starts at default.
+  // Everything else (non-snipers) just uses def.zoom directly.
+  if (def.zoom > 3) { if (player.adsAmt < 0.05) player.zoomLevel = def.zoom; }
+  const effZoom = def.zoom > 3 ? player.zoomLevel : def.zoom;
+  G.camera.fov = THREE.MathUtils.lerp(fovBase, fovBase / effZoom, player.adsAmt);
   G.camera.updateProjectionMatrix();
 
   // ---- movement
