@@ -138,6 +138,21 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
   background:#0d0f0a; color:#e8e6de; border:1px solid #3a4030; padding:6px 10px; font-size:12px; letter-spacing:1px;
 }
 .setting-row span { width:44px; text-align:right; font-size:12px; color:#e8a33d; }
+.settings-section-title {
+  margin:20px 0 8px; color:#e8a33d; font-size:11px; letter-spacing:3px; font-weight:800;
+}
+.keybind-list { border:1px solid #262b1e; max-height:280px; overflow-y:auto; }
+.keybind-row {
+  display:flex; align-items:center; justify-content:space-between; gap:14px;
+  padding:7px 10px; border-bottom:1px solid #1c2016; font-size:12px;
+}
+.keybind-row:last-child { border-bottom:0; }
+.keybind-btn {
+  min-width:94px; padding:5px 9px; background:#0d0f0a; color:#e8a33d;
+  border:1px solid #3a4030; font-size:11px; letter-spacing:1px; font-weight:700;
+}
+.keybind-btn:hover, .keybind-btn.listening { border-color:#e8a33d; background:rgba(232,163,61,.1); }
+.keybind-status { min-height:16px; margin-top:8px; font-size:11px; color:#8a9078; }
 
 /* ================= SPAWN SCREEN ================= */
 #spawnScreen { display:flex; align-items:center; justify-content:center; background:rgba(8,10,6,.88); }

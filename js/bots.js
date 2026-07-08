@@ -330,7 +330,8 @@ class Bot {
     // and the damage multiplier all come off the tier (see BOT_SKILL)
     let chance = this.skill.acc * THREE.MathUtils.clamp(1.55 - dist / this.skill.fall, 0.25, 1.2);
     if (t.speedNow > 4) chance *= this.skill.movePen;
-    if (t.crouched) chance *= 0.85;
+    if (t.prone) chance *= 0.55;      // flat on the deck: hardest target
+    else if (t.crouched) chance *= 0.85;
     if (w.model === 'sniper') chance *= 1.25;
     if (this.dazeT > 0) chance *= 0.25; // stun aftermath: can barely aim
     const hit = !blocked && Math.random() < chance;

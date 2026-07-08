@@ -77,7 +77,7 @@
         <button id="btnClasses" class="menu-btn">CREATE A CLASS</button>
         <button id="btnSettings" class="menu-btn">OPTIONS</button>
       </div>
-      <div class="menu-hint">Click a map to deploy &middot; WASD move &middot; Mouse aim &middot; LMB fire &middot; X toggles aim down sights</div>
+      <div id="menuControlHint" class="menu-hint">Click a map to deploy &middot; WASD move &middot; Mouse aim &middot; LMB fire &middot; X toggles aim down sights</div>
     </div>
   </div>
 
@@ -114,9 +114,9 @@
               <div id="perk2List" class="perk-list"></div>
               <label>PERK 3</label>
               <div id="perk3List" class="perk-list"></div>
-              <label style="margin-top:14px">LETHAL [F]</label>
+              <label id="lethalLabel" style="margin-top:14px">LETHAL [F]</label>
               <div id="lethalList" class="weapon-list"></div>
-              <label>TACTICAL [T]</label>
+              <label id="tacticalLabel">TACTICAL [T]</label>
               <div id="tacticalList" class="weapon-list"></div>
             </div>
           </div>
@@ -164,6 +164,9 @@
           <option value="900">15 MIN</option>
           <option value="0">NONE</option>
         </select></div>
+      <div class="settings-section-title">KEY BINDS</div>
+      <div id="keybindList" class="keybind-list"></div>
+      <div id="keybindStatus" class="keybind-status"></div>
       <div class="panel-buttons">
         <button id="btnSettingsBack" class="menu-btn">BACK</button>
       </div>
@@ -180,7 +183,7 @@
       <h2 id="spawnTitle">CHOOSE YOUR LOADOUT</h2>
       <div id="spawnClasses" class="spawn-classes"></div>
       <button id="btnDeploy" class="menu-btn deploy">DEPLOY</button>
-      <div class="menu-hint">WASD move &middot; X aim down sights &middot; SHIFT sprint &middot; SPACE jump &middot; C crouch &middot; R reload &middot; 1/2 or Q swap weapon &middot; V melee &middot; F frag grenade &middot; T stun grenade &middot; E smoke grenade &middot; G deploy killstreak &middot; 3 cycle killstreaks &middot; TAB scoreboard &middot; ESC pause</div>
+      <div id="spawnControlHint" class="menu-hint">WASD move &middot; X aim down sights &middot; SHIFT sprint &middot; SPACE jump &middot; C crouch &middot; Z prone &middot; R reload &middot; 1/2 or Q swap weapon &middot; V melee &middot; F frag grenade &middot; T stun grenade &middot; G deploy killstreak &middot; 3 cycle killstreaks &middot; TAB scoreboard &middot; ESC pause</div>
     </div>
   </div>
 

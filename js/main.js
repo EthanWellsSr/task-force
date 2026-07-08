@@ -84,6 +84,7 @@ const player = {
   hp: 100, alive: false, kills: 0, deaths: 0, assists: 0,
   recentDamagers: [], // #16d: who's chipped me this engagement (assist source)
   crouched: false, crouchAmt: 0,
+  prone: false, proneAmt: 0,
   stamina: 1, sprinting: false, winded: false,
   perks: new Set(),
   weapons: [], cur: 0,
@@ -2384,6 +2385,8 @@ function deploy() {
   player.forceCrouch = false;
   player.crouched = false;
   player.crouchAmt = 0;
+  player.prone = false;
+  player.proneAmt = 0;
   player.pos.copy(pickSpawn(player.team));
   player.vel.set(0, 0, 0);
   player.yaw = player.team === 'tf' ? (G.mapId === 'rust' ? Math.PI * 1.25 : Math.PI) : 0;
@@ -2531,23 +2534,24 @@ document.addEventListener('keydown', e => {
   if (e.repeat) return;
   keys[e.code] = true;
   if (G.state !== 'playing') return;
-  if (e.code === 'KeyR') startReload();
-  if (e.code === 'KeyC') toggleCrouch();
-  if (e.code === 'KeyQ') switchWeapon(player.cur === 0 ? 1 : 0);
-  if (e.code === 'Digit1') switchWeapon(0);
-  if (e.code === 'Digit2') switchWeapon(1);
-  if (e.code === 'KeyV') tryMelee();
-  if (e.code === 'KeyF') startCooking('lethal');   // pin out; leaves on release
-  if (e.code === 'KeyT') startCooking('tactical'); // tactical (stun/smoke), same mechanics
-  if (e.code === 'KeyX') player.adsToggle = !player.adsToggle;
-  if (e.code === 'KeyG') deployKillstreak();
-  if (e.code === 'Digit3') cycleKillstreak();
+  if (UI.actionMatches('reload', e.code)) startReload();
+  if (UI.actionMatches('crouch', e.code)) toggleCrouch();
+  if (UI.actionMatches('prone', e.code)) toggleProne();
+  if (UI.actionMatches('swapWeapon', e.code)) switchWeapon(player.cur === 0 ? 1 : 0);
+  if (UI.actionMatches('primaryWeapon', e.code)) switchWeapon(0);
+  if (UI.actionMatches('secondaryWeapon', e.code)) switchWeapon(1);
+  if (UI.actionMatches('melee', e.code)) tryMelee();
+  if (UI.actionMatches('lethal', e.code)) startCooking('lethal');     // pin out; leaves on release
+  if (UI.actionMatches('tactical', e.code)) startCooking('tactical'); // tactical (stun/smoke), same mechanics
+  if (UI.actionMatches('adsToggle', e.code)) player.adsToggle = !player.adsToggle;
+  if (UI.actionMatches('deployStreak', e.code)) deployKillstreak();
+  if (UI.actionMatches('cycleStreak', e.code)) cycleKillstreak();
 });
 document.addEventListener('keyup', e => {
   keys[e.code] = false;
   if (e.code === 'Tab') UI.$('scoreboard').classList.add('hidden');
-  if (e.code === 'KeyF') releaseThrow('lethal');
-  if (e.code === 'KeyT') releaseThrow('tactical');
+  if (UI.actionMatches('lethal', e.code)) releaseThrow('lethal');
+  if (UI.actionMatches('tactical', e.code)) releaseThrow('tactical');
 });
 // Losing window focus never fires keyup/mouseup, so held inputs would stick
 // (e.g. alt-tab while holding W = infinite auto-run). Clear everything on blur.
@@ -2560,14 +2564,30 @@ window.addEventListener('blur', () => {
 });
 
 function toggleCrouch() {
+  // from prone, C rises one stance to crouch (needs crouch-height headroom)
+  if (player.prone) {
+    if (!_fitsAt(player.pos, player.pos.y, 0.38, 1.25, G.colliders)) return;
+    player.prone = false;
+    player.crouched = true;
+    return;
+  }
   if (player.crouched) {
     // need headroom to stand
-    const test = player.pos.clone();
-    const ok = !G.colliders.some(c => c.max.y > 0.02 &&
-      _boxOverlap(c, test, 0.38, 1.75));
-    if (!ok) return;
+    if (!_fitsAt(player.pos, player.pos.y, 0.38, 1.75, G.colliders)) return;
   }
   player.crouched = !player.crouched;
+}
+
+function toggleProne() {
+  if (player.prone) {
+    // stand straight up from prone — needs full standing headroom
+    if (!_fitsAt(player.pos, player.pos.y, 0.38, 1.75, G.colliders)) return;
+    player.prone = false;
+  } else {
+    // drop to the deck; prone supersedes crouch and always fits (lowest profile)
+    player.prone = true;
+    player.crouched = false;
+  }
 }
 
 function switchWeapon(idx) {
@@ -2612,7 +2632,12 @@ function tryMelee() {
 // ============================================================
 // Player update
 // ============================================================
-function eyeHeight() { return THREE.MathUtils.lerp(1.62, 1.12, player.crouchAmt); }
+// eye glides standing → crouch, then further down to a prone deck line (~0.35 m).
+// The two amounts are mutually exclusive targets (going prone drives crouchAmt→0),
+// so the nested lerp reads cleanly through the crouch↔prone transition.
+function eyeHeight() {
+  return THREE.MathUtils.lerp(THREE.MathUtils.lerp(1.62, 1.12, player.crouchAmt), 0.35, player.proneAmt);
+}
 
 // ---- window vaulting: airborne movement into a window opening gets
 // carried through with a short assisted mantle instead of a wall hit.
@@ -2677,6 +2702,9 @@ function updatePlayer(dt) {
     player.forceCrouch = false;
   const lowWant = (player.crouched || player.vault || player.forceCrouch) ? 1 : 0;
   player.crouchAmt += (lowWant - player.crouchAmt) * Math.min(1, dt * (player.vault ? 14 : 10));
+  // prone is a third stance below crouch; slightly slower to drop/rise than crouch
+  const proneWant = player.prone ? 1 : 0;
+  player.proneAmt += (proneWant - player.proneAmt) * Math.min(1, dt * 8);
 
   // ---- sprint & stamina (sprinting breaks an ADS toggle)
   // hysteresis: exhaustion locks sprint until stamina recovers past 0.25,
@@ -2684,7 +2712,8 @@ function updatePlayer(dt) {
   // flickers on/off forever at stamina 0
   if (player.stamina <= 0) player.winded = true;
   else if (player.stamina >= 0.25) player.winded = false;
-  const wantSprint = (keys['ShiftLeft'] || keys['ShiftRight']) && keys['KeyW'] && !player.adsHeld && !firing && !player.crouched;
+  const wantSprint = UI.actionDown('sprint', keys) && UI.actionDown('moveForward', keys) &&
+    !player.adsHeld && !firing && !player.crouched && !player.prone;
   // #18d: sprint can only start/stop on the ground — the state is then frozen
   // through the jump so a sprint-jump stays fast and a walk-jump can't flip
   // into a sprint mid-air (the ×1.42 speed only bakes in at takeoff)
@@ -2720,15 +2749,16 @@ function updatePlayer(dt) {
 
   // ---- movement
   let ix = 0, iz = 0;
-  if (keys['KeyW']) iz -= 1;
-  if (keys['KeyS']) iz += 1;
-  if (keys['KeyA']) ix -= 1;
-  if (keys['KeyD']) ix += 1;
+  if (UI.actionDown('moveForward', keys)) iz -= 1;
+  if (UI.actionDown('moveBack', keys)) iz += 1;
+  if (UI.actionDown('moveLeft', keys)) ix -= 1;
+  if (UI.actionDown('moveRight', keys)) ix += 1;
   const ilen = Math.hypot(ix, iz);
   let speed = 5.2 * def.speed;
   if (player.perks.has('lightweight')) speed *= 1.08;
   if (player.sprinting) speed *= 1.42;
-  if (player.crouchAmt > 0.5) speed *= 0.55;
+  if (player.proneAmt > 0.5) speed *= 0.35;
+  else if (player.crouchAmt > 0.5) speed *= 0.55;
   else if (player.adsAmt > 0.5) speed *= 0.6;
   if (player.stunT > 0) speed *= 0.4; // stunned: legs barely answer
 
@@ -2750,7 +2780,7 @@ function updatePlayer(dt) {
   } else {
     // gravity & jump
     player.vel.y -= 13 * dt;
-    if (keys['Space'] && player.onGround) {
+    if (UI.actionDown('jump', keys) && player.onGround && !player.prone) {
       player.vel.y = 5.5;
       player.onGround = false;
     }
@@ -2778,7 +2808,7 @@ function updatePlayer(dt) {
       mvx = player.airVX; mvz = player.airVZ;
     }
     player.speedNow = Math.hypot(mvx, mvz);
-    const height = THREE.MathUtils.lerp(1.75, 1.25, player.crouchAmt);
+    const height = THREE.MathUtils.lerp(THREE.MathUtils.lerp(1.75, 1.25, player.crouchAmt), 0.6, player.proneAmt);
     // step assist: on the ground it climbs low ledges; mid-jump it vaults crate tops
     const stepUp = player.onGround ? 0.55 : (player.vel.y > -3 ? 0.6 : 0);
     player.onGround = moveEntity(player.pos, 0.38, height, mvx * dt, player.vel.y * dt, mvz * dt, G.colliders, stepUp);
@@ -2879,7 +2909,8 @@ function currentSpread() {
   const w = curW().def;
   let hip = w.spreadHip;
   if (player.perks.has('steadyaim')) hip *= 0.65;
-  if (player.crouchAmt > 0.5) hip *= 0.8;
+  if (player.proneAmt > 0.5) hip *= 0.5;       // deck-steady: tightest hipfire
+  else if (player.crouchAmt > 0.5) hip *= 0.8;
   hip *= 1 + Math.min(1, player.speedNow / 6) * 0.6;
   if (!player.onGround) hip *= 2.2;
   let spread = THREE.MathUtils.lerp(hip, w.spreadAds, player.adsAmt);
@@ -3012,7 +3043,7 @@ function updateCameraAndViewmodel(dt) {
 
   let yaw = player.yaw, pitch = player.pitch;
   // sniper sway when scoped
-  if (player.adsAmt > 0.8 && def.zoom > 3 && !keys['ShiftLeft']) {
+  if (player.adsAmt > 0.8 && def.zoom > 3 && !UI.actionDown('sprint', keys)) {
     yaw += Math.sin(swayT * 1.7) * 0.0025;
     pitch += Math.sin(swayT * 2.3 + 1) * 0.002;
   }
@@ -3047,6 +3078,8 @@ function updateCameraAndViewmodel(dt) {
     }
     vmKick = Math.max(0, vmKick - dt * 7);
     target.z += vmKick * 0.05;
+    // prone: settle the gun lower and pulled in, hugging the deck
+    if (player.proneAmt > 0.001) { target.y -= player.proneAmt * 0.05; target.z += player.proneAmt * 0.03; }
     // grenade: the gun holds dipped down-right while cooking, and the
     // release plays the same dip as a quick lob swing
     cookDip += ((player.cooking !== null ? 1 : 0) - cookDip) * Math.min(1, dt * 10);

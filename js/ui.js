@@ -3,11 +3,73 @@
 // main.js exposes window.MAIN = { startMatch, deploy, resume, quitMatch }.
 // ============================================================
 
+const DEFAULT_KEYBINDS = {
+  moveForward: 'KeyW',
+  moveBack: 'KeyS',
+  moveLeft: 'KeyA',
+  moveRight: 'KeyD',
+  sprint: 'ShiftLeft',
+  jump: 'Space',
+  crouch: 'KeyC',
+  prone: 'KeyZ',
+  reload: 'KeyR',
+  swapWeapon: 'KeyQ',
+  primaryWeapon: 'Digit1',
+  secondaryWeapon: 'Digit2',
+  melee: 'KeyV',
+  lethal: 'KeyF',
+  tactical: 'KeyT',
+  adsToggle: 'KeyX',
+  deployStreak: 'KeyG',
+  cycleStreak: 'Digit3',
+};
+
+const KEYBIND_ACTIONS = [
+  ['moveForward', 'Move Forward'],
+  ['moveBack', 'Move Back'],
+  ['moveLeft', 'Move Left'],
+  ['moveRight', 'Move Right'],
+  ['sprint', 'Sprint / Steady Scope'],
+  ['jump', 'Jump'],
+  ['crouch', 'Crouch'],
+  ['prone', 'Prone'],
+  ['reload', 'Reload'],
+  ['swapWeapon', 'Swap Weapon'],
+  ['primaryWeapon', 'Primary Weapon'],
+  ['secondaryWeapon', 'Secondary Weapon'],
+  ['melee', 'Melee'],
+  ['lethal', 'Lethal Equipment'],
+  ['tactical', 'Tactical Equipment'],
+  ['adsToggle', 'Toggle ADS'],
+  ['deployStreak', 'Deploy Killstreak'],
+  ['cycleStreak', 'Cycle Killstreak'],
+];
+
+const RESERVED_KEY_CODES = new Set(['Tab', 'Escape']);
+const KEY_LABELS = {
+  ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT',
+  ControlLeft: 'CTRL', ControlRight: 'CTRL',
+  AltLeft: 'ALT', AltRight: 'ALT',
+  Space: 'SPACE',
+  Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5',
+  Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9', Digit0: '0',
+};
+
+function keyLabel(code) {
+  if (!code) return '?';
+  if (KEY_LABELS[code]) return KEY_LABELS[code];
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad')) return 'NUM ' + code.slice(6);
+  return code.replace(/([a-z])([A-Z])/g, '$1 $2').toUpperCase();
+}
+
 const UI = {
   settings: { sens: 1.0, fov: 80, volume: 0.7, difficulty: 'regular', teamSize: 6, scoreLimit: 75, timeLimit: 600 },
   classes: [],
   editIdx: 0,        // class being edited
   selectedClass: 0,  // class chosen on spawn screen
+  capturingBind: null,
 
   $(id) { return document.getElementById(id); },
 
@@ -16,6 +78,7 @@ const UI = {
     this.loadClasses();
     this.bindMenus();
     this.renderClassEditor();
+    this.renderControlHints();
     AudioSys.setVolume(this.settings.volume);
     // cache crosshair line elements so crosshairSpread() avoids per-frame querySelector calls
     this._chT = document.querySelector('.ch-t');
@@ -30,8 +93,18 @@ const UI = {
       const s = JSON.parse(localStorage.getItem('tf_settings'));
       if (s) Object.assign(this.settings, s);
     } catch (e) {}
+    this.normalizeKeybinds();
   },
   saveSettings() { localStorage.setItem('tf_settings', JSON.stringify(this.settings)); },
+  normalizeKeybinds() {
+    const src = this.settings.keybinds && typeof this.settings.keybinds === 'object'
+      ? this.settings.keybinds : {};
+    this.settings.keybinds = { ...DEFAULT_KEYBINDS };
+    for (const action in DEFAULT_KEYBINDS) {
+      if (typeof src[action] === 'string' && !RESERVED_KEY_CODES.has(src[action]))
+        this.settings.keybinds[action] = src[action];
+    }
+  },
   loadClasses() {
     try {
       const c = JSON.parse(localStorage.getItem('tf_classes'));
@@ -60,7 +133,7 @@ const UI = {
     this.$('btnClasses').onclick = () => { AudioSys.uiClick(); this.renderClassEditor(); this.show('classScreen'); };
     this.$('btnSettings').onclick = () => { AudioSys.uiClick(); this.renderSettings(); this.show('settingsScreen'); };
     this.$('btnClassBack').onclick = () => { AudioSys.uiClick(); this.saveClasses(); this.show(MAIN.inMatch() ? 'spawnScreen' : 'menu'); if (MAIN.inMatch()) this.renderSpawnScreen(); };
-    this.$('btnSettingsBack').onclick = () => { AudioSys.uiClick(); this.show('menu'); };
+    this.$('btnSettingsBack').onclick = () => { AudioSys.uiClick(); this.capturingBind = null; this.show('menu'); };
     this.$('btnDeploy').onclick = () => { AudioSys.uiClick(); MAIN.deploy(); };
     this.$('btnResume').onclick = () => MAIN.resume();
     this.$('btnChangeClass').onclick = () => { AudioSys.uiClick(); this.renderClassEditor(); this.show('classScreen'); };
@@ -91,6 +164,8 @@ const UI = {
     this.$('setScoreLimit').addEventListener('change', e => { this.settings.scoreLimit = parseInt(e.target.value); this.saveSettings(); });
     this.$('setTimeLimit').addEventListener('change', e => { this.settings.timeLimit = parseInt(e.target.value); this.saveSettings(); });
 
+    document.addEventListener('keydown', e => this.captureKeybind(e), true);
+
     this.$('className').addEventListener('input', e => {
       this.classes[this.editIdx].name = e.target.value.toUpperCase() || 'CUSTOM ' + (this.editIdx + 1);
       this.renderClassSlots();
@@ -107,6 +182,8 @@ const UI = {
     this.$('setTeamSize').value = String(s.teamSize);
     this.$('setScoreLimit').value = String(s.scoreLimit);
     this.$('setTimeLimit').value = String(s.timeLimit);
+    this.renderKeybinds();
+    this.renderControlHints();
   },
 
   renderPauseSettings() {
@@ -114,6 +191,84 @@ const UI = {
     this.$('pauseSens').value = s.sens; this.$('pauseSensVal').textContent = s.sens.toFixed(1);
     this.$('pauseFov').value = s.fov; this.$('pauseFovVal').textContent = s.fov.toFixed(0);
     this.$('pauseVol').value = s.volume; this.$('pauseVolVal').textContent = Math.round(s.volume * 100) + '%';
+  },
+
+  codeFor(action) { return this.settings.keybinds[action] || DEFAULT_KEYBINDS[action]; },
+  bindLabel(action) { return keyLabel(this.codeFor(action)); },
+  actionMatches(action, code) { return this.codeFor(action) === code; },
+  actionDown(action, keyState) { return !!keyState[this.codeFor(action)]; },
+
+  setKeybind(action, code) {
+    if (!DEFAULT_KEYBINDS[action] || RESERVED_KEY_CODES.has(code)) return false;
+    const oldCode = this.codeFor(action);
+    const other = Object.keys(DEFAULT_KEYBINDS).find(a => a !== action && this.codeFor(a) === code);
+    if (other) this.settings.keybinds[other] = oldCode;
+    this.settings.keybinds[action] = code;
+    this.saveSettings();
+    this.renderKeybinds();
+    this.renderControlHints();
+    this._hudCache.lethalKey = this._hudCache.tacKey = null;
+    return true;
+  },
+
+  captureKeybind(e) {
+    if (!this.capturingBind) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    const status = this.$('keybindStatus');
+    if (e.code === 'Escape') {
+      this.capturingBind = null;
+      if (status) status.textContent = 'Rebind canceled.';
+      this.renderKeybinds();
+      return;
+    }
+    if (RESERVED_KEY_CODES.has(e.code)) {
+      if (status) status.textContent = keyLabel(e.code) + ' is reserved.';
+      return;
+    }
+    this.setKeybind(this.capturingBind, e.code);
+    this.capturingBind = null;
+    if (status) status.textContent = 'Saved.';
+  },
+
+  renderKeybinds() {
+    const wrap = this.$('keybindList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    for (const [action, label] of KEYBIND_ACTIONS) {
+      const row = document.createElement('div');
+      row.className = 'keybind-row';
+      const waiting = this.capturingBind === action;
+      row.innerHTML = `<span>${label}</span><button class="keybind-btn${waiting ? ' listening' : ''}">${waiting ? 'PRESS KEY' : this.bindLabel(action)}</button>`;
+      row.querySelector('button').onclick = () => {
+        AudioSys.uiClick();
+        this.capturingBind = action;
+        const status = this.$('keybindStatus');
+        if (status) status.textContent = 'Press a key for ' + label + '. Esc cancels.';
+        this.renderKeybinds();
+      };
+      wrap.appendChild(row);
+    }
+  },
+
+  renderControlHints() {
+    const menu = this.$('menuControlHint');
+    if (menu) menu.textContent = 'Click a map to deploy | ' +
+      `${this.bindLabel('moveForward')}${this.bindLabel('moveLeft')}${this.bindLabel('moveBack')}${this.bindLabel('moveRight')} move | ` +
+      'Mouse aim | LMB fire | ' + this.bindLabel('adsToggle') + ' toggles aim down sights';
+    const spawn = this.$('spawnControlHint');
+    if (spawn) spawn.textContent =
+      `${this.bindLabel('moveForward')}${this.bindLabel('moveLeft')}${this.bindLabel('moveBack')}${this.bindLabel('moveRight')} move | ` +
+      `${this.bindLabel('adsToggle')} aim down sights | ${this.bindLabel('sprint')} sprint | ` +
+      `${this.bindLabel('jump')} jump | ${this.bindLabel('crouch')} crouch | ${this.bindLabel('prone')} prone | ${this.bindLabel('reload')} reload | ` +
+      `${this.bindLabel('primaryWeapon')}/${this.bindLabel('secondaryWeapon')} or ${this.bindLabel('swapWeapon')} swap weapon | ` +
+      `${this.bindLabel('melee')} melee | ${this.bindLabel('lethal')} lethal | ${this.bindLabel('tactical')} tactical | ` +
+      `${this.bindLabel('deployStreak')} deploy killstreak | ${this.bindLabel('cycleStreak')} cycle killstreaks | TAB scoreboard | ESC pause`;
+    const lethal = this.$('lethalLabel');
+    if (lethal) lethal.textContent = 'LETHAL [' + this.bindLabel('lethal') + ']';
+    const tactical = this.$('tacticalLabel');
+    if (tactical) tactical.textContent = 'TACTICAL [' + this.bindLabel('tactical') + ']';
   },
 
   // ---------- create-a-class ----------
@@ -132,6 +287,7 @@ const UI = {
 
   renderClassEditor() {
     const c = this.classes[this.editIdx];
+    this.renderControlHints();
     this.renderClassSlots();
     this.$('className').value = c.name;
 
@@ -285,6 +441,7 @@ const UI = {
 
   // ---------- spawn screen ----------
   renderSpawnScreen(deathInfo) {
+    this.renderControlHints();
     const wrap = this.$('spawnClasses');
     wrap.innerHTML = '';
     this.classes.forEach((c, i) => {
@@ -349,25 +506,25 @@ const UI = {
     if (c.mode !== mode) { c.mode = mode; this.$('fireMode').textContent = mode; }
     const low = state.mag <= Math.max(3, weapon.mag * 0.2);
     if (c.low !== low) { c.low = low; this.$('ammoCount').classList.toggle('low', low); }
-    // #16a: two equipment counters — lethal [F], tactical [T]. An unequipped
+    // #16a: two equipment counters — lethal + tactical. An unequipped
     // (null) slot hides entirely; the kind is part of the cache key so a
     // class change relabels it (frag→none, stun→smoke, etc.)
-    const lethalKey = (p.equip || 'none') + ':' + p.equipLeft;
+    const lethalKey = (p.equip || 'none') + ':' + p.equipLeft + ':' + this.codeFor('lethal');
     if (c.lethalKey !== lethalKey) {
       c.lethalKey = lethalKey;
       const el = this.$('grenadeCount');
       if (p.equip) {
-        el.textContent = THROWABLES[p.equip].name + ' ×' + p.equipLeft + '  [F]';
+        el.textContent = THROWABLES[p.equip].name + ' ×' + p.equipLeft + '  [' + this.bindLabel('lethal') + ']';
         el.classList.toggle('none', p.equipLeft <= 0);
         el.classList.remove('hidden');
       } else el.classList.add('hidden');
     }
-    const tacKey = (p.equipTac || 'none') + ':' + p.equipTacLeft;
+    const tacKey = (p.equipTac || 'none') + ':' + p.equipTacLeft + ':' + this.codeFor('tactical');
     if (c.tacKey !== tacKey) {
       c.tacKey = tacKey;
       const el = this.$('tacCount');
       if (p.equipTac) {
-        el.textContent = THROWABLES[p.equipTac].name + ' ×' + p.equipTacLeft + '  [T]';
+        el.textContent = THROWABLES[p.equipTac].name + ' ×' + p.equipTacLeft + '  [' + this.bindLabel('tactical') + ']';
         el.classList.toggle('none', p.equipTacLeft <= 0);
         el.classList.remove('hidden');
       } else el.classList.add('hidden');
