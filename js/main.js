@@ -1735,7 +1735,7 @@ function startCooking(slot = 'lethal') {
   const kind = player[fields.kind];
   const def = THROWABLES[kind];
   if (!def || player[fields.left] <= 0 || player.cooking !== null) return;
-  if (player.throwT > 0 || player.switchT > 0 || player.meleeT > 0.5) return;
+  if (player.throwT > 0 || player.switchT > 0 || player.meleeT > 0.33) return;
   player[fields.left]--;
   player.cooking = def.fuse;
   player.cookKind = kind;
@@ -2611,7 +2611,7 @@ function startReload() {
 
 function tryMelee() {
   if (player.meleeT > 0) return;
-  player.meleeT = 0.9;
+  player.meleeT = 0.6;
   const range = player.perks.has('commando') ? 3.2 : 1.9;
   const fwd = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
   for (const b of G.bots) {
@@ -2865,7 +2865,7 @@ function updatePlayer(dt) {
 
   // ---- firing
   if (firing && player.sprinting) player.sprinting = false;
-  const canFire = player.reloadT <= 0 && player.switchT <= 0 && player.meleeT <= 0.5 &&
+  const canFire = player.reloadT <= 0 && player.switchT <= 0 && player.meleeT <= 0.33 &&
     player.cooking === null; // the trigger hand is holding a live grenade
   if (canFire && player.fireCooldown <= 0 && def.throwWeapon) {
     // #16c: a throw weapon lobs on the trigger edge instead of shooting;
@@ -3052,16 +3052,17 @@ function updateCameraAndViewmodel(dt) {
 
   // melee: quick-swap to the knife and slash across the screen — pure lerp
   // keyframes off meleeT; the knife hides exactly when canFire's melee gate
-  // (meleeT <= 0.5) reopens, so the gun is never hidden while fireable
-  const melee = player.meleeT > 0.5;
+  // (meleeT <= 0.33) reopens, so the gun is never hidden while fireable.
+  // The whole 0.6 s swing is these same thresholds scaled from the old 0.9 s.
+  const melee = player.meleeT > 0.33;
   vmKnife.visible = melee;
   if (melee) {
     const t = player.meleeT;
-    if (t > 0.8) poseKnife(KNIFE_POSES.start, KNIFE_POSES.windup, (0.9 - t) / 0.1);
-    else if (t > 0.62) {
-      const u = (0.8 - t) / 0.18;
+    if (t > 0.53) poseKnife(KNIFE_POSES.start, KNIFE_POSES.windup, (0.6 - t) / 0.07);
+    else if (t > 0.41) {
+      const u = (0.53 - t) / 0.12;
       poseKnife(KNIFE_POSES.windup, KNIFE_POSES.end, u * u * (3 - 2 * u));
-    } else poseKnife(KNIFE_POSES.end, KNIFE_POSES.exit, (0.62 - t) / 0.12);
+    } else poseKnife(KNIFE_POSES.end, KNIFE_POSES.exit, (0.41 - t) / 0.08);
   }
 
   // viewmodel position: hip <-> ads, bob, kick
