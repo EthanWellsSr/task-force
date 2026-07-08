@@ -2515,6 +2515,8 @@ const _shotOrigin = new THREE.Vector3();
 const _shotEnd = new THREE.Vector3();
 const _bodyBox = new THREE.Box3();
 const _headBox = new THREE.Box3();
+const _sparkPt = new THREE.Vector3();
+const _collatHits = []; // #18f: per-pellet list of enemies the shot passes through
 
 function firePlayerShot(w) {
   const def = w.def;
@@ -2549,7 +2551,10 @@ function firePlayerShot(w) {
 
   const spread = currentSpread();
   const pellets = def.pellets || 1;
-  let anyHit = false, anyKill = false;
+  let anyHit = false, anyKill = false, killCount = 0;
+  // #18f: snipers punch through unlimited stacked bodies at full damage
+  // (classic COD collateral); every other gun stops at the first body
+  const penetrates = def.zoom > 3 || def.cat === 'Sniper Rifle';
   _shotOrigin.copy(G.camera.position);
 
   for (let p = 0; p < pellets; p++) {
@@ -2562,9 +2567,11 @@ function firePlayerShot(w) {
     _shotDir.addScaledVector(_right, s1).addScaledVector(_realUp, s2).normalize();
 
     const wall = rayWorld(_shotOrigin, _shotDir, 150, G.colliders);
-    let bestT = wall ? wall.dist : 150;
-    let hitBot = null, hitHead = false;
+    const wallDist = wall ? wall.dist : 150;
 
+    // #18f: gather EVERY enemy nearer than the wall, keeping the closer of
+    // each bot's head/body box (with its headshot flag), then sort front-to-back
+    _collatHits.length = 0;
     for (const b of G.bots) {
       if (!b.alive || b.team === player.team) continue;
       _bodyBox.min.set(b.pos.x - 0.36, b.pos.y, b.pos.z - 0.36);
@@ -2572,40 +2579,44 @@ function firePlayerShot(w) {
       _headBox.min.set(b.pos.x - 0.2, b.pos.y + 1.44, b.pos.z - 0.2);
       _headBox.max.set(b.pos.x + 0.2, b.pos.y + 1.85, b.pos.z + 0.2);
       _ray.origin.copy(_shotOrigin); _ray.direction.copy(_shotDir);
+      let d = Infinity, head = false;
       const hHit = _ray.intersectBox(_headBox, _hitVec);
-      if (hHit) {
-        const d = hHit.distanceTo(_shotOrigin);
-        if (d < bestT) { bestT = d; hitBot = b; hitHead = true; continue; }
-      }
+      if (hHit) { d = hHit.distanceTo(_shotOrigin); head = true; }
       const bHit = _ray.intersectBox(_bodyBox, _hitVec);
-      if (bHit) {
-        const d = bHit.distanceTo(_shotOrigin);
-        if (d < bestT) { bestT = d; hitBot = b; hitHead = false; }
-      }
+      if (bHit) { const bd = bHit.distanceTo(_shotOrigin); if (bd < d) { d = bd; head = false; } }
+      if (d < wallDist) _collatHits.push({ bot: b, dist: d, head });
     }
+    _collatHits.sort((a, b) => a.dist - b.dist);
+    const victims = penetrates ? _collatHits : _collatHits.slice(0, 1);
 
-    const end = _shotEnd.copy(_shotOrigin).addScaledVector(_shotDir, bestT);
+    // tracer runs to the true stop point: the wall for a through-and-through
+    // sniper shot, otherwise the first body (or the wall if the pellet whiffs)
+    const stopDist = (penetrates || _collatHits.length === 0) ? wallDist : _collatHits[0].dist;
+    const end = _shotEnd.copy(_shotOrigin).addScaledVector(_shotDir, stopDist);
     if (pellets === 1 || p % 2 === 0) fxTracer(_muzzleWorld, end);
 
-    if (hitBot) {
-      const fall = THREE.MathUtils.clamp((bestT - def.range[0]) / (def.range[1] - def.range[0]), 0, 1);
+    for (const v of victims) {
+      const fall = THREE.MathUtils.clamp((v.dist - def.range[0]) / (def.range[1] - def.range[0]), 0, 1);
       let dmg = THREE.MathUtils.lerp(def.dmg, def.minDmg, fall);
-      if (hitHead) dmg *= def.head;
+      if (v.head) dmg *= def.head;
       if (player.perks.has('stopping')) dmg *= 1.25;
-      const wasAlive = hitBot.alive;
-      hitBot.hurt(Math.round(dmg), player, def.name, hitHead);
-      fxSpark(end, true);
+      const wasAlive = v.bot.alive;
+      v.bot.hurt(Math.round(dmg), player, def.name, v.head);
+      _sparkPt.copy(_shotOrigin).addScaledVector(_shotDir, v.dist);
+      fxSpark(_sparkPt, true);
       anyHit = true;
-      if (wasAlive && !hitBot.alive) anyKill = true;
-    } else if (wall) {
-      fxSpark(end, false);
+      if (wasAlive && !v.bot.alive) { anyKill = true; killCount++; }
     }
+    if (victims.length === 0 && wall) fxSpark(end, false);
   }
 
   if (anyHit) {
     UI.showHitmarker(anyKill);
     if (!anyKill) AudioSys.hit(false);
   }
+  // #18f: a single penetrating shot that drops two or more enemies is a
+  // collateral — a cheap flourish over the normal killfeed/streak callouts
+  if (penetrates && killCount >= 2) UI.showKillMsg('COLLATERAL!', true);
 }
 
 // ============================================================
