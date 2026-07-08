@@ -936,7 +936,114 @@ function buildRust(scene, colliders) {
   };
 }
 
-const MAPS = { nuketown: buildNuketown, rust: buildRust };
+// ============================================================
+// SHIPMENT — CoD4 container yard, per docs/shipment-reference.md (#21).
+// Compass: +x = north, +z = east (top-down +x up). A tiny 24×20 m walled
+// yard, the smallest map here: a double-stacked shipping-container
+// perimeter with no exits, a solid central container block (the map's
+// contested high ground, climbed via a crate step-chain off each end
+// face), z-long flank containers that dogleg each long lane, and corner
+// container cover. tf spawns hug the south (−x) end, sp the north (+x)
+// end. Built with 180° point symmetry so both halves are identical.
+// Brutal CQB — the container walls kill every long sightline.
+// ============================================================
+function buildShipment(scene, colliders) {
+  const k = new MapKit(scene, colliders);
+  const W = 12, D = 10;    // 24 × 20 m playable
+  const H = 2.6, CL = 6;   // container height (tops walkable) + long-axis length
+  const BLUE = 0x3f6f96, GREEN = 0x4f7a45, YELL = 0xb59a3a,
+        RUST = 0x9a5a3a, GREY = 0x6a6a64, CRATE = 0x7a6a4a;
+
+  scene.background = new THREE.Color(0x9fb2c4);
+  scene.fog = new THREE.Fog(0x9fb2c4, 60, 130);
+
+  // ground: gravel yard slab over a wider dirt plain
+  k.box(0, -0.55, 0, 120, 1, 120, 0x7a7266, { solid: false, shadow: false });
+  k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, 0x8a8378);
+
+  // one 6 m shipping container, long axis 'x' or 'z'
+  function container(cx, cy, cz, axis, color) {
+    if (axis === 'x') k.box(cx, cy, cz, CL, H, 2.6, color);
+    else k.box(cx, cy, cz, 2.6, H, CL, color);
+  }
+
+  // ---- perimeter: double-stacked container wall (no exits). N/S walls
+  // run along z at x = ±W (three 6 m units), E/W walls run along x at
+  // z = ±D (four units). Invisible blockers seal + cap the box so a player
+  // on an inner container can't peek or slip out.
+  const wallCols = [BLUE, RUST, GREEN, YELL, GREY];
+  for (const s of [-1, 1]) {
+    let ci = 0;
+    for (const z of [-6, 0, 6])
+      for (let lvl = 0; lvl < 2; lvl++)
+        container(s * W, 1.3 + lvl * H, z, 'z', wallCols[(ci++ + (s > 0 ? 2 : 0)) % wallCols.length]);
+    for (const x of [-9, -3, 3, 9])
+      for (let lvl = 0; lvl < 2; lvl++)
+        container(x, 1.3 + lvl * H, s * D, 'x', wallCols[(ci++ + (s > 0 ? 1 : 3)) % wallCols.length]);
+    k.blocker(s * (W + 0.6), 5, 0, 1, 14, D * 2 + 4);   // N/S containment cap
+    k.blocker(0, 5, s * (D + 0.6), W * 2 + 4, 14, 1);   // E/W containment cap
+  }
+
+  // ---- center block: two x-long containers straddling the origin read as
+  // one solid 6×5.2×2.6 mass — the contested high ground. ~9 m lanes N/S,
+  // ~7 m side lanes E/W around it.
+  k.box(0, 1.3, -1.5, CL, H, 2.6, BLUE);
+  k.box(0, 1.3, 1.5, CL, H, 2.6, GREEN);
+  // climb onto the center top: a 5-crate step chain off each end face on
+  // the z = 0 line (tops 0.5→2.5, each rise ≤0.55 so bots step-up too, last
+  // 0.1 onto the 2.6 container). z = 0 is a self-symmetric line, so placing
+  // the chain at +x and −x mirrors it onto both the north and south faces.
+  const stepXs = [5.5, 4.9, 4.3, 3.7, 3.1];
+  for (const sx of [-1, 1])
+    for (let i = 0; i < stepXs.length; i++) {
+      const top = 0.5 * (i + 1);
+      k.box(sx * stepXs[i], top / 2, 0, 0.9, top, 1.4, CRATE);
+    }
+
+  // ---- flank containers: z-long, one per long lane, offset to a side so
+  // each lane doglegs instead of being a straight spawn-to-spawn shot.
+  k.box(6, 1.3, -3.5, 2.6, H, CL, YELL);   // north lane, pushed west
+  k.box(-6, 1.3, 3.5, 2.6, H, CL, YELL);   // mirror: south lane, pushed east
+
+  // ---- corner cover: a z-long container tucked into each of the four
+  // corners (two symmetric pairs), between the end wall and the side wall.
+  for (const [cx, cz] of [[9, 7], [-9, -7], [9, -7], [-9, 7]])
+    k.box(cx, 1.3, cz, 2.6, H, 4.0, GREY);
+
+  // ---- scatter garnish, clear of spawns / center / waypoint seeds
+  k.crate(0, -7.2, 1.1); k.crate(0, 7.2, 1.1);       // lane-mouth crates
+  k.crate(3.4, 5.6, 1.0); k.crate(-3.4, -5.6, 1.0);  // side-lane cover
+  k.barrel(-4.6, -1.2); k.barrel(4.6, 1.2);          // near the center block
+
+  // ---- waypoints: ground grid over the open floor (seeds inside geometry
+  // are filtered by buildNavGraph), lane seeds, plus y-aware seeds up the
+  // north crate chain onto the center top and its south mirror.
+  const grid = [];
+  for (const x of [-10, -6.5, -3.5, 0, 3.5, 6.5, 10])
+    for (const z of [-7.5, -3.8, 0, 3.8, 7.5])
+      grid.push([x, z]);
+  const half = [];
+  // one climb chain (north face); mirrored to the south by the seed loop
+  for (let i = 0; i < stepXs.length; i++) half.push([stepXs[i], 0, 0.5 * (i + 1)]);
+  half.push([2.4, -1.4, 2.6], [2.4, 1.4, 2.6]); // center top, north corners
+  const extra = [[0, 0, 2.6]];                  // center-top middle (self-symmetric)
+  for (const [x, z, y] of half) extra.push([x, z, y], [-x, -z, y]);
+
+  return {
+    name: 'SHIPMENT',
+    bounds: { x: W, z: D },
+    sun: { color: 0xf2f4f8, intensity: 1.0, pos: [18, 40, -22] },
+    hemi: { sky: 0xbcccdc, ground: 0x6a6258, intensity: 0.8 },
+    spawns: {
+      tf: [[-10.2, -4.5], [-10.2, -2.25], [-10.2, 0], [-10.2, 2.25], [-10.2, 4.5]],
+      sp: [[10.2, 4.5], [10.2, 2.25], [10.2, 0], [10.2, -2.25], [10.2, -4.5]],
+    },
+    waypointSeeds: grid.concat(extra),
+    windows: k.windows,
+  };
+}
+
+const MAPS = { nuketown: buildNuketown, rust: buildRust, shipment: buildShipment };
 
 // ============================================================
 // Waypoint graph — filter seeds that land inside geometry, then
