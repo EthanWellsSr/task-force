@@ -1600,6 +1600,34 @@ function spawnThrowable(def, fuse, speed, up) {
     spin: 5 + Math.random() * 3, sinceBounce: 0 });
 }
 
+// #16b: a bot lobs a throwable at aimPos. Bots don't cook (instant throw),
+// so it spawns with the full fuse. A ballistic solve picks the launch
+// velocity that lands the grenade near aimPos over a distance-scaled flight
+// time; skill-scaled scatter keeps low tiers from being pinpoint mortars.
+// owner=bot on the throwable routes credit/damage through fragDetonate.
+function spawnBotThrowable(bot, kind, aimPos) {
+  const def = THROWABLES[kind];
+  if (!def) return;
+  const from = new THREE.Vector3(bot.pos.x, bot.pos.y + 1.45, bot.pos.z);
+  // scatter grows as accuracy drops (recruits ~±2 m, veterans ~±0.5 m)
+  const spread = (1.0 - Math.min(0.9, bot.skill.acc || 0.15)) * 2.2;
+  const ax = aimPos.x + (Math.random() - 0.5) * spread;
+  const az = aimPos.z + (Math.random() - 0.5) * spread;
+  const dx = ax - from.x, dz = az - from.z;
+  const D = Math.hypot(dx, dz) || 0.001;
+  const T = THREE.MathUtils.clamp(D / 13 + 0.4, 0.55, 1.7); // longer throws hang longer
+  const g = 13; // matches updateThrowables gravity
+  const vh = D / T;                                   // horizontal speed
+  const vy = ((aimPos.y - from.y) + 0.5 * g * T * T) / T; // vertical lob
+  const vel = new THREE.Vector3(dx / D * vh, vy, dz / D * vh);
+  const mesh = buildGrenadeMesh(def);
+  mesh.position.copy(from);
+  G.scene.add(mesh);
+  _throwables.push({ def, mesh, pos: from.clone(), vel, fuse: def.fuse,
+    spin: 5 + Math.random() * 3, sinceBounce: 0, owner: bot });
+  AudioSys.throwWhoosh();
+}
+
 // COD-style cooking: key down pulls the pin (committed — the grenade is
 // spent and its fuse burns in hand), key up throws with the remaining
 // fuse. Cook too long and it detonates in hand; dying mid-cook drops it.
@@ -1723,8 +1751,12 @@ function blastDamage(def, at, victimPos) {
   return f < 0 ? 0 : Math.round(THREE.MathUtils.lerp(def.dmg, def.minDmg, f));
 }
 
+// #16b: a throwable carries its `owner` (the thrower) so a bot's frag
+// credits the bot and can hurt the player. Player throws leave owner unset,
+// so it defaults to the player — the original behaviour.
 function fragDetonate(t) {
   const def = t.def, p = t.pos;
+  const owner = t.owner || player;
   _blastAt.set(p.x, p.y + 0.4, p.z);
   fxFire(_blastAt, 0.3, 4);
   for (let i = 0; i < 4; i++) {
@@ -1734,17 +1766,25 @@ function fragDetonate(t) {
   }
   AudioSys.explosion(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(_blastAt));
   for (const b of G.bots) {
-    if (!b.alive || b.team === player.team) continue; // teammates are safe
+    if (!b.alive) continue;
+    // teammates are safe, but the frag still hurts the thrower themselves
+    if (b.team === owner.team && b !== owner) continue;
     const dmg = blastDamage(def, p, b.pos);
-    if (dmg > 0) b.hurt(dmg, player, def.name, false);
+    // a self-blast credits no one (same rule as the player's own frag)
+    if (dmg > 0) b.hurt(dmg, b === owner ? null : owner, def.name, false);
   }
-  // the thrower's own grenade hurts them (null attacker: a self-kill
-  // credits no one, same rule as the nuke's owner death)
-  const selfDmg = blastDamage(def, p, player.pos);
-  if (selfDmg > 0) damagePlayer(selfDmg, null, def.name, false);
+  // the player: their own frag hurts them uncredited; an enemy bot's frag
+  // hurts and credits the bot through the normal damage path
+  if (owner === player) {
+    const selfDmg = blastDamage(def, p, player.pos);
+    if (selfDmg > 0) damagePlayer(selfDmg, null, def.name, false);
+  } else if (owner.team !== player.team) {
+    const dmg = blastDamage(def, p, player.pos);
+    if (dmg > 0) damagePlayer(dmg, owner, def.name, false);
+  }
   // the blast is loud — enemies within earshot investigate the spot
   _blastAt.set(p.x, p.y + 0.4, p.z); // blastDamage reuses the scratch
-  for (const b of G.bots) b.hearShot({ pos: _blastAt, team: player.team }, 30);
+  for (const b of G.bots) b.hearShot({ pos: _blastAt, team: owner.team }, 30);
 }
 
 // stun (#6): no damage — anyone caught in the radius with a clear line
@@ -1962,6 +2002,8 @@ function startMatch(mapId) {
       difficulty: UI.settings.difficulty,
       pickSpawn, getEnemies, registerKill, noteShot, audioPan, smokeBlocked,
       tracer: fxTracer,
+      throwGrenade: spawnBotThrowable, // #16b: bot lobs a frag
+
       playerPos: () => player.pos,
       playerTeam: player.team,
       playerDamage: damagePlayer,
@@ -2912,6 +2954,7 @@ window.MAIN = {
 window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
   nukeT: v => v === undefined ? _nukeT : (_nukeT = v),
   throwables: () => _throwables, throwEquipment, startCooking, releaseThrow,
+  spawnBotThrowable, // #16b
   smokeClouds: () => _smokeClouds, smokeBlocked };
 
 UI.init();

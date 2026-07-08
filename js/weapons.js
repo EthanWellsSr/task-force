@@ -294,24 +294,26 @@ const DEFAULT_CLASSES = [
   { name:'DUSTKNIFE',   primary:'ump45',        secondary:'spas12', perks:['marathon','lightweight','commando'],lethal:'frag', tactical:'stun',  attachments:{ primary:[], secondary:[] } },
 ];
 
-// Loadout pool bots draw from
+// Loadout pool bots draw from. #16b: each carries a `lethal` throwable pick
+// (mirroring the class `lethal` field) so bots can arc a frag — one per life,
+// see Bot.grenLeft. null = no grenade (snipers stay ranged, not chuckers).
 const BOT_LOADOUTS = [
-  { primary:'m4a1',   secondary:'usp' },
-  { primary:'scar',   secondary:'deagle' },
-  { primary:'acr',    secondary:'usp' },
-  { primary:'tar21',  secondary:'g18' },
-  { primary:'famas',  secondary:'usp' },
-  { primary:'fal',    secondary:'deagle' },
-  { primary:'mp5k',   secondary:'usp' },
-  { primary:'ump45',  secondary:'spas12' },
-  { primary:'vector', secondary:'g18' },
-  { primary:'p90',    secondary:'usp' },
-  { primary:'rpd',    secondary:'deagle' },
-  { primary:'m240',   secondary:'usp' },
-  { primary:'mg4',    secondary:'deagle' },
-  { primary:'r870',   secondary:'usp' },
-  { primary:'aa12',   secondary:'g18' },
-  { primary:'intervention', secondary:'usp' },
+  { primary:'m4a1',   secondary:'usp',    lethal:'frag' },
+  { primary:'scar',   secondary:'deagle', lethal:'frag' },
+  { primary:'acr',    secondary:'usp',    lethal:'frag' },
+  { primary:'tar21',  secondary:'g18',    lethal:'frag' },
+  { primary:'famas',  secondary:'usp',    lethal:'frag' },
+  { primary:'fal',    secondary:'deagle', lethal:'frag' },
+  { primary:'mp5k',   secondary:'usp',    lethal:'frag' },
+  { primary:'ump45',  secondary:'spas12', lethal:'frag' },
+  { primary:'vector', secondary:'g18',    lethal:'frag' },
+  { primary:'p90',    secondary:'usp',    lethal:'frag' },
+  { primary:'rpd',    secondary:'deagle', lethal:'frag' },
+  { primary:'m240',   secondary:'usp',    lethal:'frag' },
+  { primary:'mg4',    secondary:'deagle', lethal:'frag' },
+  { primary:'r870',   secondary:'usp',    lethal:'frag' },
+  { primary:'aa12',   secondary:'g18',    lethal:'frag' },
+  { primary:'intervention', secondary:'usp', lethal:null },
 ];
 
 // Normalized 0..1 stats for the class editor bars

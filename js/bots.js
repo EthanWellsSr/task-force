@@ -114,6 +114,9 @@ class Bot {
     this.weapon = WEAPONS[lo.primary];
     this.magLeft = this.weapon.mag;
     this.reloadT = 0;
+    this.lethal = lo.lethal || null; // #16b: throwable pick (frag or none)
+    this.grenLeft = 0;   // grenades left this life (reset in spawn)
+    this.grenCdT = 0;    // throw cooldown / initial arm delay
 
     const s = BOT_SKILL[world.api.difficulty] || BOT_SKILL.regular;
     const v = 0.8 + Math.random() * 0.4;
@@ -168,6 +171,10 @@ class Bot {
     this.stuckT = 0;
     this.stunT = 0; this.dazeT = 0; // death clears the stars
     this.spawnProtectT = 3; // #18a: 3 s spawn invuln, cancelled by firing
+    // #16b: one frag per life, with a short arm delay so a bot doesn't lob
+    // off the spawn instantly
+    this.grenLeft = this.lethal ? 1 : 0;
+    this.grenCdT = 3 + Math.random() * 3;
   }
 
   // A shot rang out: enemies within earshot learn the shooter's position
@@ -406,6 +413,7 @@ class Bot {
 
     if (this.reactT > 0) this.reactT -= dt;
     if (this.reloadT > 0) this.reloadT -= dt;
+    if (this.grenCdT > 0) this.grenCdT -= dt; // #16b throw cooldown
     if (this.flashT > 0) { this.flashT -= dt; ud.flash.visible = this.flashT > 0; ud.flash.rotation.z = Math.random() * Math.PI * 2; }
 
     const w = this.weapon;
@@ -416,6 +424,22 @@ class Bot {
       const dx = this.target.pos.x - this.pos.x, dz = this.target.pos.z - this.pos.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
       wantYaw = Math.atan2(dx, dz);
+      // ---- grenade throw (#16b): lob a frag to flush a target holding
+      // cover (out of sight but still engaged) or to dislodge a camper at
+      // range — never point-blank (self-blast) or across the whole map, and
+      // on a long cooldown so it's a threat, not a mortar barrage
+      if (this.grenLeft > 0 && this.grenCdT <= 0) {
+        const aim = this.canSee ? this.target.pos : this.lastKnown;
+        if (aim) {
+          const gd = Math.hypot(aim.x - this.pos.x, aim.z - this.pos.z);
+          if (gd > 8 && gd < 26 && (!this.canSee || this.target.speedNow < 2)) {
+            this.world.api.throwGrenade(this, this.lethal, aim);
+            this.spawnProtectT = 0; // throwing ends spawn invuln (like firing)
+            this.grenLeft--;
+            this.grenCdT = 7 + Math.random() * 4;
+          }
+        }
+      }
       // strafe unless sniping
       this.strafeT -= dt;
       if (this.strafeT <= 0) { this.strafeT = 0.7 + Math.random() * 0.9; this.strafeDir = Math.random() < 0.5 ? -1 : 1; }
