@@ -300,6 +300,25 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
   position:absolute; left:50%; top:58%; transform:translateX(-50%);
   font-size:13px; letter-spacing:3px; color:#e8a33d; text-shadow:0 1px 3px #000;
 }
+#fragDanger {
+  position:absolute; left:50%; top:61%; transform:translate(-50%, -50%);
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  color:#ff4a3a; text-shadow:0 0 12px rgba(255,74,58,.72), 0 1px 3px #000;
+  z-index:20;
+}
+#fragDanger .frag-arrow {
+  width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+  font-size:25px; line-height:1; transform:rotate(var(--frag-angle, 0rad));
+  transform-origin:center;
+}
+#fragDanger .frag-label {
+  padding:3px 7px; border:1px solid rgba(255,74,58,.48);
+  background:rgba(20,8,6,.58); font-size:10px; font-weight:800; letter-spacing:2px;
+}
+#fragDanger.urgent {
+  animation:fragDangerPulse .28s steps(2, end) infinite;
+}
+@keyframes fragDangerPulse { 50% { opacity:.35; } }
 #killMsg {
   position:absolute; left:50%; top:64%; transform:translateX(-50%);
   font-size:14px; font-weight:700; letter-spacing:2px; color:#e8a33d; text-shadow:0 1px 3px #000;

@@ -559,6 +559,27 @@ const UI = {
     }
   },
 
+  updateFragDanger(info) {
+    const c = this._hudCache;
+    const el = this.$('fragDanger');
+    if (!info) {
+      if (c.fragDanger !== 'hidden') {
+        c.fragDanger = 'hidden';
+        el.classList.add('hidden');
+        el.classList.remove('urgent');
+      }
+      return;
+    }
+    const dist = Math.max(0, Math.round(info.distance));
+    const key = dist + ':' + info.angle.toFixed(2) + ':' + (info.urgent ? 1 : 0);
+    if (c.fragDanger === key) return;
+    c.fragDanger = key;
+    el.style.setProperty('--frag-angle', info.angle.toFixed(3) + 'rad');
+    el.querySelector('.frag-label').textContent = 'FRAG ' + dist + 'm';
+    el.classList.toggle('urgent', info.urgent);
+    el.classList.remove('hidden');
+  },
+
   updateModeLabels(mode, scoreLimit) {
     if (!mode) return;
     if (mode.structure === 'ffa') {
@@ -568,10 +589,10 @@ const UI = {
       if (spName) spName.textContent = 'LEADER';
       const wrap = this.$('scoreboard').querySelector('.sb-wrap');
       if (wrap) wrap.innerHTML = `
-        <div class="sb-team ffa"><div class="sb-head ffa">FREE-FOR-ALL</div>
-          <table id="sbTableFFA"><thead><tr><th>RANK</th><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody></tbody></table></div>`;
+        <div class="sb-team ffa"><div class="sb-head ffa">${mode.name}</div>
+          <table id="sbTableFFA"><thead><tr><th>RANK</th><th>NAME</th><th>SCORE</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody></tbody></table></div>`;
       const obj = this.$('objText');
-      if (obj) obj.textContent = `${mode.name} — ${mode.hudGoal || 'FIRST TO'} ${scoreLimit}`;
+      if (obj) obj.textContent = mode.goalText || `${mode.name} — ${mode.hudGoal || 'FIRST TO'} ${scoreLimit}`;
       return;
     }
     const teams = mode.teams || [];
@@ -594,7 +615,7 @@ const UI = {
         <table id="sbTableSP"><thead><tr><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody></tbody></table>
       </div>`;
     const obj = this.$('objText');
-    if (obj) obj.textContent = `${mode.name} — ${mode.hudGoal || 'FIRST TO'} ${scoreLimit}`;
+    if (obj) obj.textContent = mode.goalText || `${mode.name} — ${mode.hudGoal || 'FIRST TO'} ${scoreLimit}`;
   },
 
   updateScores(mode, scores, timeLeft, combatants) {
@@ -602,6 +623,7 @@ const UI = {
     let tf, sp;
     if (mode && mode.structure === 'ffa') {
       const ranked = (combatants || []).slice().sort((a, b) =>
+        ((scores[b.team] || 0) - (scores[a.team] || 0)) ||
         (b.kills - a.kills) || ((a.deaths || 0) - (b.deaths || 0)) || a.name.localeCompare(b.name));
       const me = (combatants || []).find(x => x.isPlayer);
       tf = me ? scores[me.team] || me.kills || 0 : 0;
@@ -712,10 +734,13 @@ const UI = {
   buildScoreboard(mode, combatants, scores) {
     if (mode && mode.structure === 'ffa') {
       const table = this.$('sbTableFFA');
+      const scoreHead = mode.scoreSource === 'gunLadder' ? 'TIER' : 'K';
+      table.querySelector('thead tr').innerHTML = `<th>RANK</th><th>NAME</th><th>${scoreHead}</th><th>A</th><th>D</th><th>K/D</th>`;
       const tbody = table.querySelector('tbody');
       tbody.innerHTML = '';
       combatants.slice()
-        .sort((a, b) => (b.kills - a.kills) || ((a.deaths || 0) - (b.deaths || 0)) || a.name.localeCompare(b.name))
+        .sort((a, b) => ((scores[b.team] || 0) - (scores[a.team] || 0)) ||
+          (b.kills - a.kills) || ((a.deaths || 0) - (b.deaths || 0)) || a.name.localeCompare(b.name))
         .forEach((c, i) => {
           const kd = c.deaths > 0 ? (c.kills / c.deaths).toFixed(2) : c.kills.toFixed(2);
           const tr = document.createElement('tr');
@@ -751,14 +776,19 @@ const UI = {
       res.textContent = win === null ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT';
       res.className = win === null ? 'draw' : win ? 'win' : 'lose';
       const ranked = combatants.slice()
-        .sort((a, b) => (b.kills - a.kills) || ((a.deaths || 0) - (b.deaths || 0)) || a.name.localeCompare(b.name));
+        .sort((a, b) => ((scores[b.team] || 0) - (scores[a.team] || 0)) ||
+          (b.kills - a.kills) || ((a.deaths || 0) - (b.deaths || 0)) || a.name.localeCompare(b.name));
       const meRank = ranked.findIndex(c => c.isPlayer) + 1;
       const leader = ranked[0];
-      this.$('endScore').textContent = leader ? `#${meRank}  YOU ${scores[combatants.find(c => c.isPlayer).team] || 0}  —  LEADER ${leader.kills}` : '';
+      const me = combatants.find(c => c.isPlayer);
+      this.$('endScore').textContent = leader && me
+        ? `#${meRank}  YOU ${scores[me.team] || 0}  —  LEADER ${scores[leader.team] || leader.kills}`
+        : '';
       const boards = this.$('endBoards');
+      const scoreHead = mode.scoreSource === 'gunLadder' ? 'TIER' : 'K';
       boards.innerHTML = `
-        <div class="sb-team ffa"><div class="sb-head ffa">FREE-FOR-ALL</div>
-          <table><thead><tr><th>RANK</th><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody id="endFFA"></tbody></table></div>`;
+        <div class="sb-team ffa"><div class="sb-head ffa">${mode.name}</div>
+          <table><thead><tr><th>RANK</th><th>NAME</th><th>${scoreHead}</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody id="endFFA"></tbody></table></div>`;
       const tbody = this.$('endFFA');
       ranked.forEach((c, i) => {
         const kd = c.deaths > 0 ? (c.kills / c.deaths).toFixed(2) : c.kills.toFixed(2);

@@ -101,10 +101,27 @@ const MODES = {
     hudGoal: 'FIRST TO',
     teamLabels: {},
   },
+  gungame: {
+    id: 'gungame',
+    name: 'GUN GAME',
+    structure: 'ffa',
+    teams: [],
+    scoreSource: 'gunLadder',
+    respawn: true,
+    roundBased: false,
+    goalText: 'GUN GAME — FINISH THE LADDER',
+    teamLabels: {},
+  },
 };
+
+const GUN_LADDER = ['usp', 'g18', 'mp5k', 'ump45', 'm4a1', 'famas', 'rpd', 'intervention', 'r870', 'tomahawk'];
 
 function modeById(id) {
   return MODES[id] || MODES.tdm;
+}
+
+function isGunGameMode(mode = G.mode) {
+  return mode && mode.scoreSource === 'gunLadder';
 }
 
 function makeModeScores(mode) {
@@ -125,24 +142,82 @@ function shuffledFfaNames() {
 function syncFfaScores() {
   if (!G.mode || G.mode.structure !== 'ffa') return;
   for (const c of G.combatants) {
-    if (G.scores[c.team] === undefined) G.scores[c.team] = c.kills || 0;
+    if (isGunGameMode()) G.scores[c.team] = Math.min((c.tier || 0) + 1, GUN_LADDER.length);
+    else if (G.scores[c.team] === undefined) G.scores[c.team] = c.kills || 0;
   }
 }
 
 function rankedCombatants(combatants) {
   return combatants.slice().sort((a, b) =>
+    ((G.scores[b.team] || 0) - (G.scores[a.team] || 0)) ||
     (b.kills - a.kills) || ((a.deaths || 0) - (b.deaths || 0)) || a.name.localeCompare(b.name));
 }
 
-function addModeKillScore(killer, victim) {
+function weaponStateForKey(key) {
+  const w = WEAPONS[key];
+  return { def: w, mag: w.mag, reserve: w.reserve };
+}
+
+function gunGameWeaponKey(c) {
+  return GUN_LADDER[Math.min(c.tier || 0, GUN_LADDER.length - 1)];
+}
+
+function setPlayerGunGameWeapon() {
+  player.weapons = [weaponStateForKey(gunGameWeaponKey(player))];
+  player.cur = 0;
+  player.reloadT = 0; player.switchT = 0; player.burstQueue = 0; player.fireCooldown = 0;
+  player.adsToggle = false;
+  if (player.alive) buildViewModel(curW().def);
+}
+
+function setBotGunGameWeapon(bot) {
+  bot.weapon = WEAPONS[gunGameWeaponKey(bot)];
+  bot.magLeft = bot.weapon.mag;
+  bot.reloadT = 0;
+  bot.burstLeft = 0;
+  bot.shotT = 0;
+  bot.lethal = null;
+  bot.grenLeft = 0;
+}
+
+function prepareGunGameCombatant(c) {
+  c.tier = 0;
+  c._gunGameComplete = false;
+  G.scores[c.team] = 1;
+  if (!c.isPlayer) setBotGunGameWeapon(c);
+}
+
+function advanceGunGame(killer, victim, weaponName) {
+  if (weaponName === 'KNIFE' || weaponName === 'TOMAHAWK') {
+    victim.tier = Math.max(0, (victim.tier || 0) - 1);
+    victim._gunGameComplete = false;
+    G.scores[victim.team] = Math.min((victim.tier || 0) + 1, GUN_LADDER.length);
+    if (!victim.isPlayer) setBotGunGameWeapon(victim);
+  }
+  if ((killer.tier || 0) >= GUN_LADDER.length - 1) {
+    killer._gunGameComplete = true;
+    G.scores[killer.team] = GUN_LADDER.length;
+    return;
+  }
+  killer.tier = (killer.tier || 0) + 1;
+  G.scores[killer.team] = Math.min(killer.tier + 1, GUN_LADDER.length);
+  if (killer.isPlayer) setPlayerGunGameWeapon();
+  else setBotGunGameWeapon(killer);
+}
+
+function addModeKillScore(killer, victim, weaponName) {
   const mode = G.mode || MODES.tdm;
   if (!killer || killer.team === victim.team) return;
-  if (mode.scoreSource === 'teamKills' || mode.scoreSource === 'playerKills')
+  if (mode.scoreSource === 'gunLadder') {
+    advanceGunGame(killer, victim, weaponName || '');
+  } else if (mode.scoreSource === 'teamKills' || mode.scoreSource === 'playerKills') {
     G.scores[killer.team] = (G.scores[killer.team] || 0) + 1;
+  }
 }
 
 function modeScoreLimitReached() {
   const mode = G.mode || MODES.tdm;
+  if (isGunGameMode(mode)) return G.combatants.some(c => c._gunGameComplete);
   const keys = mode.structure === 'ffa' ? Object.keys(G.scores) : mode.teams;
   return keys.some(team => (G.scores[team] || 0) >= UI.settings.scoreLimit);
 }
@@ -158,6 +233,10 @@ function modeWinResult(forcedWin) {
     return (G.scores[player.team] || 0) > (G.scores[player.team === teams[0] ? teams[1] : teams[0]] || 0);
   }
   if (mode.structure === 'ffa') {
+    if (isGunGameMode(mode)) {
+      const winner = G.combatants.find(c => c._gunGameComplete);
+      return winner ? winner === player : null;
+    }
     const ranked = rankedCombatants(G.combatants);
     if (!ranked.length) return null;
     const top = ranked[0].kills;
@@ -1714,6 +1793,9 @@ const GREN_THROW_FORWARD = 0.28, GREN_THROW_RIGHT = 0.34;
 const _throwables = [];
 const _blastAt = new THREE.Vector3();
 const _victimAt = new THREE.Vector3();
+const _fragDangerForward = new THREE.Vector3();
+const _fragDangerRight = new THREE.Vector3();
+const _fragDangerDelta = new THREE.Vector3();
 let _grenadePreview = null;
 const _grenPreviewPos = new THREE.Vector3();
 const _grenPreviewVel = new THREE.Vector3();
@@ -1998,6 +2080,43 @@ function updateThrowables(dt) {
       t.mesh.rotation.z += t.spin * 0.6 * dt;
     }
   }
+}
+
+function fragDangerInfo() {
+  if (G.state !== 'playing' || !player.alive) return null;
+  let best = null;
+  for (const t of _throwables) {
+    if (t.def !== THROWABLES.frag) continue;
+    const owner = t.owner || player;
+    if (owner === player || owner.team === player.team) continue;
+    const f = blastFactor(t.def, t.pos, player.pos);
+    if (f < 0) continue;
+    const dist = Math.hypot(t.pos.x - player.pos.x, t.pos.z - player.pos.z);
+    const fuseUrgency = 1 - THREE.MathUtils.clamp(t.fuse / t.def.fuse, 0, 1);
+    const risk = (1 - f) * 0.7 + fuseUrgency * 0.3;
+    if (!best || risk > best.risk) best = { throwable: t, distance: dist, fuse: t.fuse, risk };
+  }
+  if (!best) return null;
+
+  G.camera.getWorldDirection(_fragDangerForward);
+  _fragDangerForward.y = 0;
+  if (_fragDangerForward.lengthSq() < 1e-5) _fragDangerForward.set(0, 0, -1);
+  else _fragDangerForward.normalize();
+  _fragDangerRight.crossVectors(_fragDangerForward, _grenWorldUp).normalize();
+  _fragDangerDelta.set(
+    best.throwable.pos.x - player.pos.x,
+    0,
+    best.throwable.pos.z - player.pos.z
+  );
+  if (_fragDangerDelta.lengthSq() < 1e-5) _fragDangerDelta.copy(_fragDangerForward);
+  else _fragDangerDelta.normalize();
+  const side = _fragDangerDelta.dot(_fragDangerRight);
+  const ahead = _fragDangerDelta.dot(_fragDangerForward);
+  return {
+    angle: Math.atan2(side, ahead),
+    distance: best.distance,
+    urgent: best.fuse <= 1.1,
+  };
 }
 
 // ============================================================
@@ -2346,7 +2465,7 @@ function registerKill(killer, victim, weaponName, headshot) {
       }
       victim.recentDamagers.length = 0; // engagement's over
     }
-    addModeKillScore(killer, victim);
+    addModeKillScore(killer, victim, weaponName);
     UI.killfeed(killer.name, killer.team, victim.name, victim.team, weaponName, headshot);
     if (killer.isPlayer) {
       AudioSys.hit(true);
@@ -2444,6 +2563,7 @@ function startMatch(mapId, modeId = 'tdm') {
       playerDamage: damagePlayer,
       matchLive: () => G.state === 'playing' || G.state === 'dead',
       canRespawn: () => !!(G.mode || MODES.tdm).respawn,
+      prepareBotSpawn: bot => { if (isGunGameMode()) setBotGunGameWeapon(bot); },
     },
   };
   const n = UI.settings.teamSize;
@@ -2459,6 +2579,9 @@ function startMatch(mapId, modeId = 'tdm') {
     }
   }
   G.combatants = [player, ...G.bots];
+  if (isGunGameMode()) {
+    for (const c of G.combatants) prepareGunGameCombatant(c);
+  }
   syncFfaScores();
 
   UI.updateModeLabels(G.mode, UI.settings.scoreLimit);
@@ -2486,13 +2609,17 @@ function deploy() {
     // corpses in updateScavenger(); everyone spawns with normal reserve
     return { def: w, mag: w.mag, reserve: w.reserve };
   };
-  player.weapons = [mkState('primary'), mkState('secondary')];
-  player.cur = 0;
+  if (isGunGameMode()) {
+    setPlayerGunGameWeapon();
+  } else {
+    player.weapons = [mkState('primary'), mkState('secondary')];
+    player.cur = 0;
+  }
   player.reloadT = 0; player.switchT = 0; player.burstQueue = 0; player.meleeT = 0;
   // #16a: equipment is a per-class pick now — an unequipped slot ('none') is
   // null with a 0 count, so its key no-ops and its HUD counter hides
-  player.equip = (cls.lethal && cls.lethal !== 'none') ? cls.lethal : null;
-  player.equipTac = (cls.tactical && cls.tactical !== 'none') ? cls.tactical : null;
+  player.equip = (!isGunGameMode() && cls.lethal && cls.lethal !== 'none') ? cls.lethal : null;
+  player.equipTac = (!isGunGameMode() && cls.tactical && cls.tactical !== 'none') ? cls.tactical : null;
   player.equipLeft = player.equip ? THROWABLES[player.equip].count : 0;
   player.equipTacLeft = player.equipTac ? THROWABLES[player.equipTac].count : 0;
   player.throwT = 0; player.cooking = null; player.cookKind = null; player.cookSlot = null;
@@ -2715,6 +2842,7 @@ function toggleProne() {
 }
 
 function switchWeapon(idx) {
+  if (isGunGameMode() || idx < 0 || idx >= player.weapons.length) return;
   if (idx === player.cur || player.switchT > 0) return;
   player.cur = idx;
   player.switchT = 0.4;
@@ -3424,6 +3552,7 @@ function loop() {
 
     fxUpdate(dt);
     updateThrowables(dt);
+    UI.updateFragDanger(fragDangerInfo());
     updateGrenadePreview();
     updateTomahawks(dt); // #16c
     updateSmokeClouds(dt);
