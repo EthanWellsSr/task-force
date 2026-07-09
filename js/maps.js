@@ -937,19 +937,23 @@ function buildRust(scene, colliders) {
 }
 
 // ============================================================
-// SHIPMENT — CoD4 container yard, per docs/shipment-reference.md (#21).
-// Compass: +x = north, +z = east (top-down +x up). A tiny 24×20 m walled
-// yard, the smallest map here: a double-stacked shipping-container
-// perimeter with no exits, a solid central container block (the map's
-// contested high ground, climbed via a crate step-chain off each end
-// face), z-long flank containers that dogleg each long lane, and corner
-// container cover. tf spawns hug the south (−x) end, sp the north (+x)
-// end. Built with 180° point symmetry so both halves are identical.
-// Brutal CQB — the container walls kill every long sightline.
+// SHIPMENT — CoD4 container yard, per docs/shipment-reference.md (#21) as
+// corrected by docs/shipment-overhaul.md (#21b). Compass: +x = north,
+// +z = east (top-down +x up). A tiny 26×24 m walled yard, the smallest map
+// here. The identity is a central CROSSROADS formed by a 2×2 of shipping
+// containers (two hollow walk-throughs on the NW+SE diagonal, two solid
+// climb-on-top perches on the NE+SW diagonal). Hollow walk-through
+// containers sit off the N/S end walls, leaned (yawed) container pairs lean
+// against the E/W side walls, and the corners hold debris (junk cars,
+// barrels, crates) — NOT container stacks. Double-stacked container
+// perimeter, no exits. tf spawns hug the south (−x) end, sp the north (+x)
+// end. 180° point symmetry so both halves are identical. Brutal CQB.
+// The engine is AABB-only, so leaned containers rotate the visible mesh but
+// collide via a stepped axis-aligned hull; see leanedContainer/steppedHull.
 // ============================================================
 function buildShipment(scene, colliders) {
   const k = new MapKit(scene, colliders);
-  const W = 12, D = 10;    // 24 × 20 m playable
+  const W = 13, D = 12;    // 26 × 24 m playable (square-ish, real Shipment)
   const H = 2.6, CL = 6;   // container height (tops walkable) + long-axis length
   // weathered container palette (desaturated, oxidised — not primaries)
   const BLUE = 0x3a5670, GREEN = 0x4a6540, YELL = 0x9c8636, RUST = 0x8a4b34,
@@ -972,45 +976,49 @@ function buildShipment(scene, colliders) {
     const b = Math.min(255, (hex & 255) * f) | 0;
     return (r << 16) | (g << 8) | b;
   };
-  // A detailed shipping container: solid body (the only collider) dressed
-  // with corrugated ribs, a corner-post + rail steel frame, and cargo doors
-  // with locking rods on one end. Everything but the body is decorative
-  // (solid:false), so collision/nav are unchanged from a plain box.
-  function container(cx, cy, cz, axis, color, len = CL) {
-    const ax = axis === 'x';
-    const sx = ax ? len : 2.6, sz = ax ? 2.6 : len;    // footprint
-    k.box(cx, cy, cz, sx, H, sz, color);               // body + collider
-    const dk = shade(color, 0.7), lo = cy - H / 2, hi = cy + H / 2;
-    const hl = len / 2, hw = 1.3;                       // half-length / half-width
-
-    // corrugation: vertical ribs proud of both long faces (one InstancedMesh)
+  // Vertical corrugation ribs proud of both long faces of a container, as a
+  // single InstancedMesh. `ofs` pushes the ribs out to the visible face for
+  // hollow containers whose face sits at a wall, not at ±1.3.
+  function ribs(cx, cy, cz, ax, len, color, ofs = 1.3) {
     const nR = Math.max(3, Math.round((len - 0.3) / 0.32));
-    const ribH = H - 0.34, pr = 0.05;
+    const ribH = H - 0.34, pr = 0.05, hl = len / 2;
     const geo = new THREE.BoxGeometry(ax ? 0.075 : pr, ribH, ax ? pr : 0.075);
-    const im = new THREE.InstancedMesh(geo, k.mat(dk), nR * 2);
+    const im = new THREE.InstancedMesh(geo, k.mat(shade(color, 0.7)), nR * 2);
     const m4 = new THREE.Matrix4(); let n = 0;
     for (const side of [-1, 1])
       for (let i = 0; i < nR; i++) {
-        const u = -hl + (i + 0.5) * (len / nR), c = (hw + pr / 2) * side;
+        const u = -hl + (i + 0.5) * (len / nR), c = (ofs + pr / 2) * side;
         m4.setPosition(ax ? cx + u : cx + c, cy, ax ? cz + c : cz + u);
         im.setMatrixAt(n++, m4);
       }
     im.instanceMatrix.needsUpdate = true;
     im.castShadow = true; im.receiveShadow = true;
     scene.add(im);
-
-    // steel frame: 4 corner posts + top & bottom perimeter rails
-    const P = 0.12, dec = { solid: false };
-    const halfX = ax ? hl : hw, halfZ = ax ? hw : hl;
+  }
+  // Steel frame (decorative, no collision): 4 corner posts + top & bottom
+  // perimeter rails, sized to a footprint half-extents (hx, hz).
+  function frame(cx, cy, cz, hx, hz) {
+    const P = 0.12, dec = { solid: false }, lo = cy - H / 2, hi = cy + H / 2;
     for (const su of [-1, 1]) for (const sv of [-1, 1])
-      k.box(cx + su * halfX, cy, cz + sv * halfZ, P, H, P, FRAME, dec);
+      k.box(cx + su * hx, cy, cz + sv * hz, P, H, P, FRAME, dec);
     for (const y of [lo + P / 2, hi - P / 2]) {
-      k.box(cx, y, cz + halfZ, 2 * halfX, P, P, FRAME, dec);   // rails along x
-      k.box(cx, y, cz - halfZ, 2 * halfX, P, P, FRAME, dec);
-      k.box(cx + halfX, y, cz, P, P, 2 * halfZ, FRAME, dec);   // rails along z
-      k.box(cx - halfX, y, cz, P, P, 2 * halfZ, FRAME, dec);
+      k.box(cx, y, cz + hz, 2 * hx, P, P, FRAME, dec);
+      k.box(cx, y, cz - hz, 2 * hx, P, P, FRAME, dec);
+      k.box(cx + hx, y, cz, P, P, 2 * hz, FRAME, dec);
+      k.box(cx - hx, y, cz, P, P, 2 * hz, FRAME, dec);
     }
+  }
+  // A detailed SOLID shipping container: solid body (the only collider)
+  // dressed with corrugated ribs, a corner-post + rail steel frame, and
+  // cargo doors with locking rods on one end. Everything but the body is
+  // decorative, so collision/nav are unchanged from a plain box.
+  function container(cx, cy, cz, axis, color, len = CL) {
+    const ax = axis === 'x';
+    k.box(cx, cy, cz, ax ? len : 2.6, H, ax ? 2.6 : len, color);   // body + collider
+    ribs(cx, cy, cz, ax, len, color);
+    frame(cx, cy, cz, ax ? len / 2 : 1.3, ax ? 1.3 : len / 2);
     // end doors (one end): centre seam + 4 vertical locking rods + 2 handles
+    const hl = len / 2, dec = { solid: false };
     const ex = ax ? cx + hl + 0.03 : cx, ez = ax ? cz : cz + hl + 0.03;
     k.box(ex, cy, ez, ax ? 0.04 : 0.1, H - 0.3, ax ? 0.1 : 0.04, shade(color, 0.55), dec);
     for (const o of [-0.85, -0.32, 0.32, 0.85]) {
@@ -1019,14 +1027,91 @@ function buildShipment(scene, colliders) {
     }
   }
 
-  // ---- perimeter: double-stacked container wall (no exits). N/S walls
-  // run along z at x = ±W (three 6 m units), E/W walls run along x at
-  // z = ±D (four units). Invisible blockers seal + cap the box so a player
-  // on an inner container can't peek or slip out.
+  // A HOLLOW, walk-through container (S1): two long thin side walls plus a
+  // walkable roof slab are the ONLY colliders — the ends are OPEN (decorative
+  // frame/lintel only, no body/end collider) so a player or bot walks
+  // straight through along the long axis. Nav seeds thread the open axis.
+  function hollowContainer(cx, cy, cz, axis, color) {
+    const len = CL, ax = axis === 'x', hl = len / 2, hw = 1.3;
+    const lo = cy - H / 2, hi = cy + H / 2, WT = 0.14;
+    // two long side walls (colliders), thin across the short axis, full height
+    for (const sv of [-1, 1]) {
+      const wx = ax ? cx : cx + sv * hw, wz = ax ? cz + sv * hw : cz;
+      k.box(wx, cy, wz, ax ? len : WT, H, ax ? WT : len, color);
+    }
+    ribs(cx, cy, cz, ax, len, color, hw + WT / 2);
+    // walkable roof slab (collider), interior floor tint (decorative)
+    k.box(cx, hi - WT / 2, cz, ax ? len : 2.6, WT, ax ? 2.6 : len, shade(color, 0.86));
+    k.box(cx, lo + 0.03, cz, ax ? len : 2.6, 0.05, ax ? 2.6 : len, shade(color, 0.5), { solid: false });
+    frame(cx, cy, cz, ax ? hl : hw, ax ? hw : hl);
+    // open-end header lintels (decorative — sit above head height, no block)
+    const dk = shade(color, 0.72), dec = { solid: false };
+    for (const su of [-1, 1]) {
+      const ex = ax ? cx + su * hl : cx, ez = ax ? cz : cz + su * hl;
+      k.box(ex, hi - 0.18, ez, ax ? 0.1 : 2.6, 0.28, ax ? 2.6 : 0.1, dk, dec);
+    }
+  }
+
+  // A LEANED (yawed) container (S2/D1): the visible mesh rotates about y, but
+  // the engine is AABB-only, so collision is a stepped hull of small
+  // axis-aligned blocker boxes marched along the yawed centerline
+  // (steppedHull). Visible mesh and hull disagree only by small slivers at
+  // the ends / mid-flanks — an intentional, sub-tuning-tolerance deviation,
+  // because true OBB colliders would touch movement, throwables, LOS,
+  // minimap and nav (all axis-aligned) — out of scope for a map.
+  function leanedContainer(cx, cz, yaw, color) {
+    const len = CL, hl = len / 2, hw = 1.3, cy = 1.3, P = 0.12;
+    const g = new THREE.Group();
+    g.position.set(cx, cy, cz);
+    g.rotation.y = yaw;
+    const add = (geo, col, x, y, z) => {
+      const m = new THREE.Mesh(geo, k.mat(col));
+      m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
+      g.add(m); return m;
+    };
+    add(new THREE.BoxGeometry(len, H, 2.6), color, 0, 0, 0);   // body (mesh only)
+    // corrugation ribs on both long faces (local space)
+    const nR = Math.max(3, Math.round((len - 0.3) / 0.32)), ribH = H - 0.34, pr = 0.05;
+    const im = new THREE.InstancedMesh(new THREE.BoxGeometry(0.075, ribH, pr), k.mat(shade(color, 0.7)), nR * 2);
+    const m4 = new THREE.Matrix4(); let n = 0;
+    for (const side of [-1, 1])
+      for (let i = 0; i < nR; i++) {
+        m4.setPosition(-hl + (i + 0.5) * (len / nR), 0, (hw + pr / 2) * side);
+        im.setMatrixAt(n++, m4);
+      }
+    im.instanceMatrix.needsUpdate = true; im.castShadow = true; im.receiveShadow = true;
+    g.add(im);
+    // steel frame: 4 corner posts + top/bottom rails (local space)
+    for (const su of [-1, 1]) for (const sv of [-1, 1])
+      add(new THREE.BoxGeometry(P, H, P), FRAME, su * hl, 0, sv * hw);
+    for (const y of [-H / 2 + P / 2, H / 2 - P / 2]) for (const sv of [-1, 1])
+      add(new THREE.BoxGeometry(len, P, P), FRAME, 0, y, sv * hw);
+    // cargo doors on one end
+    add(new THREE.BoxGeometry(0.06, H - 0.3, 2.4), shade(color, 0.55), hl + 0.02, 0, 0);
+    scene.add(g);
+    steppedHull(cx, cz, yaw, len);
+  }
+  // Stepped AABB hull for a leaned container: 3 axis-aligned blocker boxes
+  // marched along the yawed centerline, each tightly bounding a ~len/3 slice
+  // of the yawed footprint. Tops sit at H (walkable if a climb reaches them;
+  // here they are cover only). Overlapping so the roof reads continuous.
+  function steppedHull(cx, cz, yaw, len) {
+    const cs = Math.cos(yaw), sn = Math.sin(yaw), seg = len / 3, WD = 2.6;
+    const bw = Math.abs(seg * cs) + Math.abs(WD * sn) + 0.04;
+    const bd = Math.abs(seg * sn) + Math.abs(WD * cs) + 0.04;
+    for (const u of [-seg, 0, seg])
+      k.blocker(cx + u * cs, 1.3, cz + u * sn, bw, H, bd);
+  }
+
+  // ---- perimeter (S3): double-stacked container wall, no exits. N/S walls
+  // run along z at x = ±W (4 units, cover z −12..12), E/W walls along x at
+  // z = ±D (4 units at x = ±9, ±3, cover x −12..12; the ±12..13 ends are
+  // wrapped by the N/S walls). Invisible blockers seal + cap the box so a
+  // player on an inner container can't peek or slip out.
   const wallCols = [BLUE, RUST, GREEN, YELL, GREY, TEAL, MAROON];
   for (const s of [-1, 1]) {
     let ci = 0;
-    for (const z of [-6, 0, 6])
+    for (const z of [-9, -3, 3, 9])
       for (let lvl = 0; lvl < 2; lvl++)
         container(s * W, 1.3 + lvl * H, z, 'z', wallCols[(ci++ + (s > 0 ? 2 : 0)) % wallCols.length]);
     for (const x of [-9, -3, 3, 9])
@@ -1036,62 +1121,94 @@ function buildShipment(scene, colliders) {
     k.blocker(0, 5, s * (D + 0.6), W * 2 + 4, 14, 1);   // E/W containment cap
   }
 
-  // ---- center block: two x-long containers straddling the origin read as
-  // one solid 6×5.2×2.6 mass — the contested high ground. ~9 m lanes N/S,
-  // ~7 m side lanes E/W around it.
-  container(0, 1.3, -1.5, 'x', RUST);
-  container(0, 1.3, 1.5, 'x', BLUE);
-  // climb onto the center top: a 5-crate step chain off each end face on
-  // the z = 0 line (tops 0.5→2.5, each rise ≤0.55 so bots step-up too, last
-  // 0.1 onto the 2.6 container). z = 0 is a self-symmetric line, so placing
-  // the chain at +x and −x mirrors it onto both the north and south faces.
-  const stepXs = [5.5, 4.9, 4.3, 3.7, 3.1];
-  for (const sx of [-1, 1])
-    for (let i = 0; i < stepXs.length; i++) {
-      const top = 0.5 * (i + 1);
-      k.box(sx * stepXs[i], top / 2, 0, 0.9, top, 1.4, CRATE);
-    }
+  // ---- A. Center 2×2 — the crossroads (S4, the identity). Four x-long
+  // containers with a 2.2 m N–S lane (|z|≲1.1) and a 2.6 m E–W lane (|x|≲1.3)
+  // meeting at the origin. NW + SE are HOLLOW walk-throughs (open along x);
+  // NE + SW are SOLID climb-on-top perches. Point-symmetric.
+  container(4.3, 1.3, 2.4, 'x', RUST);        // NE solid
+  container(-4.3, 1.3, -2.4, 'x', BLUE);      // SW solid (mirror)
+  hollowContainer(4.3, 1.3, -2.4, 'x', GREEN);  // NW hollow
+  hollowContainer(-4.3, 1.3, 2.4, 'x', YELL);   // SE hollow (mirror)
 
-  // ---- flank containers: z-long, one per long lane, offset to a side so
-  // each lane doglegs instead of being a straight spawn-to-spawn shot.
-  container(6, 1.3, -3.5, 'z', YELL);    // north lane, pushed west
-  container(-6, 1.3, 3.5, 'z', TEAL);    // mirror: south lane, pushed east
+  // ---- B. N/S end containers (S4): z-long HOLLOW walk-throughs ~1 m off each
+  // end wall, open along z (E/W ends). Team spawns tuck behind/beside them.
+  hollowContainer(10.5, 1.3, 0, 'z', TEAL);    // N end hollow
+  hollowContainer(-10.5, 1.3, 0, 'z', MAROON); // S end hollow (mirror)
 
-  // ---- corner cover: a z-long container tucked into each of the four
-  // corners (two symmetric pairs), between the end wall and the side wall.
-  const cornerCols = [GREEN, GREEN, MAROON, MAROON];
-  [[9, 7], [-9, -7], [9, -7], [-9, 7]].forEach(([cx, cz], i) =>
-    container(cx, 1.3, cz, 'z', cornerCols[i], 4.0));
+  // ---- C. E/W leaned pairs (S4/D1): two yawed containers each against the
+  // side walls, forming a shallow V with a narrow gap on the x = 0 lane.
+  for (const s of [-1, 1]) {
+    leanedContainer(s * 3.4, s * -9.7, s * -0.28, GREY);   // outer of the V
+    leanedContainer(s * -3.4, s * -9.7, s * 0.28, GREEN);  // inner of the V
+  }
 
-  // ---- scatter garnish, clear of spawns / center / waypoint seeds
-  k.crate(0, -7.2, 1.1); k.crate(0, 7.2, 1.1);       // lane-mouth crates
-  k.crate(3.4, 5.6, 1.0); k.crate(-3.4, -5.6, 1.0);  // side-lane cover
-  k.barrel(-4.6, -1.2); k.barrel(4.6, 1.2);          // near the center block
+  // ---- D. Corners (S4): debris only — junk cars on the NE/SW diagonal,
+  // barrel + crate clusters on the NW/SE diagonal. Cover height, nothing
+  // tall enough to perch on or peek the world.
+  function cornerDebris(sx, sz, withCar) {
+    if (withCar) k.car(sx * 9.6, sz * 10.2, 0x6a6660);
+    else k.crate(sx * 9.4, sz * 10.4, 1.1, 0x6a5a3c);
+    k.barrel(sx * 10.8, sz * 10.6); k.barrel(sx * 8.4, sz * 11.0);
+    k.crate(sx * 11.0, sz * 11.2, 1.0);
+  }
+  cornerDebris(1, 1, true); cornerDebris(-1, -1, true);    // NE, SW: cars
+  cornerDebris(1, -1, false); cornerDebris(-1, 1, false);  // NW, SE: clusters
 
-  // ---- waypoints: ground grid over the open floor (seeds inside geometry
-  // are filtered by buildNavGraph), lane seeds, plus y-aware seeds up the
-  // north crate chain onto the center top and its south mirror.
-  const grid = [];
-  for (const x of [-10, -6.5, -3.5, 0, 3.5, 6.5, 10])
-    for (const z of [-7.5, -3.8, 0, 3.8, 7.5])
-      grid.push([x, z]);
-  const half = [];
-  // one climb chain (north face); mirrored to the south by the seed loop
-  for (let i = 0; i < stepXs.length; i++) half.push([stepXs[i], 0, 0.5 * (i + 1)]);
-  half.push([2.4, -1.4, 2.6], [2.4, 1.4, 2.6]); // center top, north corners
-  const extra = [[0, 0, 2.6]];                  // center-top middle (self-symmetric)
-  for (const [x, z, y] of half) extra.push([x, z, y], [-x, -z, y]);
+  // ---- D-climb. Verticality (S5): a 5-crate step chain onto each SOLID
+  // center perch (NE + SW), off its outer (±z) face. Crate tops rise 0.5 →
+  // 2.5 then a 0.1 step onto the 2.6 container — every rise well under the
+  // 0.55 step-up so both players and bots follow (a rise of exactly 0.55
+  // fails a float compare, so the last crate is 2.5, not 2.05). The hollow
+  // center/end roofs are left as player-only parkour (no bot seeds) to avoid
+  // cross-gap roof edges in the AABB/LOS nav graph.
+  const climbZs = [6.1, 5.6, 5.1, 4.6, 4.1], climbTops = [0.5, 1.0, 1.5, 2.0, 2.5];
+  for (const s of [-1, 1])
+    for (let i = 0; i < climbZs.length; i++)
+      k.box(s * 4.3, climbTops[i] / 2, s * climbZs[i], 0.9, climbTops[i], 0.6, CRATE);
+
+  // ---- scatter garnish in the four quadrant open areas, deliberately OFF the
+  // four lanes and the crossroads (those must stay open) and clear of spawns,
+  // waypoint seeds and the leaned/corner masses.
+  k.barrel(5.8, 5.8); k.barrel(-5.8, -5.8);          // NE / SW quadrant
+  k.crate(5.8, -5.8, 1.0); k.crate(-5.8, 5.8, 1.0);  // NW / SE quadrant
+
+  // ---- spawns (S6): tf south (−x), sp north (+x). Five points per team
+  // across the end, tucked to the flanks (the end hollow blocks z≈0) plus
+  // one forward lane point. Verified clear of all geometry + leaned hulls.
+  const spN = [[11.2, -7.2], [11.2, -3.8], [11.2, 3.8], [11.2, 7.2], [7.6, 0]];
+  const spawns = { sp: spN, tf: spN.map(([x, z]) => [-x, -z]) };
+
+  // ---- waypoints (S7): crossroads hub + four lanes + perimeter ring, seeds
+  // threaded through both hollow center containers and both N/S hollows, plus
+  // y-aware seeds up each solid perch's crate chain onto its roof. Point-
+  // symmetric: push2/push3 add a seed and its 180° mirror. buildNavGraph
+  // filters any seed that lands inside geometry.
+  const seeds = [[0, 0]];               // crossroads hub (self-symmetric)
+  const push2 = (x, z) => { seeds.push([x, z], [-x, -z]); };
+  const push3 = (x, z, y) => { seeds.push([x, z, y], [-x, -z, y]); };
+  push2(3.5, 0); push2(7.6, 0);                       // N–S lane
+  push2(0, 3.5); push2(0, 7.6);                       // E–W lane
+  push2(4.3, 7.2); push2(8.4, 7.2); push2(8.8, 3.6);  // NE-side pockets
+  push2(4.3, -7.2); push2(8.4, -7.2); push2(8.8, -3.6); // NW-side pockets
+  push2(11.0, 7.4); push2(11.0, -7.4);                // near-spawn ring
+  push2(11.0, 3.8); push2(11.0, -3.8);
+  // NW center hollow walk-through (open along x): interior + both entries
+  push2(4.3, -2.4); push2(2.4, -2.4); push2(6.2, -2.4);
+  push2(0.7, -2.4); push2(8.4, -2.4);
+  // N end hollow walk-through (open along z): interior + both end entries
+  push2(10.5, 0); push2(10.5, 1.9); push2(10.5, -1.9);
+  push2(10.5, 3.9); push2(10.5, -3.9);
+  // NE solid perch: crate chain treads + roof top (mirrored → SW perch)
+  for (let i = 0; i < climbZs.length; i++) push3(4.3, climbZs[i], climbTops[i]);
+  push3(4.3, 3.0, 2.6); push3(4.3, 2.0, 2.6);
 
   return {
     name: 'SHIPMENT',
     bounds: { x: W, z: D },
     sun: { color: 0xf2f4f8, intensity: 1.0, pos: [18, 40, -22] },
     hemi: { sky: 0xbcccdc, ground: 0x6a6258, intensity: 0.8 },
-    spawns: {
-      tf: [[-10.2, -4.5], [-10.2, -2.25], [-10.2, 0], [-10.2, 2.25], [-10.2, 4.5]],
-      sp: [[10.2, 4.5], [10.2, 2.25], [10.2, 0], [10.2, -2.25], [10.2, -4.5]],
-    },
-    waypointSeeds: grid.concat(extra),
+    spawns,
+    waypointSeeds: seeds,
     windows: k.windows,
   };
 }
