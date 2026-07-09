@@ -951,27 +951,79 @@ function buildShipment(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 12, D = 10;    // 24 × 20 m playable
   const H = 2.6, CL = 6;   // container height (tops walkable) + long-axis length
-  const BLUE = 0x3f6f96, GREEN = 0x4f7a45, YELL = 0xb59a3a,
-        RUST = 0x9a5a3a, GREY = 0x6a6a64, CRATE = 0x7a6a4a;
+  // weathered container palette (desaturated, oxidised — not primaries)
+  const BLUE = 0x3a5670, GREEN = 0x4a6540, YELL = 0x9c8636, RUST = 0x8a4b34,
+        GREY = 0x565a5c, TEAL = 0x3d6b64, MAROON = 0x6e3d38, CRATE = 0x6f5f3f,
+        FRAME = 0x2b2f31;   // dark corten steel frame/corrugation shadow
 
-  scene.background = new THREE.Color(0x9fb2c4);
-  scene.fog = new THREE.Fog(0x9fb2c4, 60, 130);
+  scene.background = new THREE.Color(0x8f9aa6);
+  scene.fog = new THREE.Fog(0x8f9aa6, 55, 120);
 
   // ground: gravel yard slab over a wider dirt plain
-  k.box(0, -0.55, 0, 120, 1, 120, 0x7a7266, { solid: false, shadow: false });
-  k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, 0x8a8378);
+  k.box(0, -0.55, 0, 120, 1, 120, 0x6f6a60, { solid: false, shadow: false });
+  k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, 0x7c766a);
+  // faded painted deck lines + oil stains for texture
+  for (const sx of [-1, 1]) k.box(sx * 5.5, 0.02, 0, 0.18, 0.02, D * 2 - 2, 0x8a8474, { solid: false, shadow: false });
+  k.box(0, 0.02, 0, 3.2, 0.02, 2.0, 0x5f5a52, { solid: false, shadow: false });
 
-  // one 6 m shipping container, long axis 'x' or 'z'
-  function container(cx, cy, cz, axis, color) {
-    if (axis === 'x') k.box(cx, cy, cz, CL, H, 2.6, color);
-    else k.box(cx, cy, cz, 2.6, H, CL, color);
+  const shade = (hex, f) => {
+    const r = Math.min(255, ((hex >> 16) & 255) * f) | 0;
+    const g = Math.min(255, ((hex >> 8) & 255) * f) | 0;
+    const b = Math.min(255, (hex & 255) * f) | 0;
+    return (r << 16) | (g << 8) | b;
+  };
+  // A detailed shipping container: solid body (the only collider) dressed
+  // with corrugated ribs, a corner-post + rail steel frame, and cargo doors
+  // with locking rods on one end. Everything but the body is decorative
+  // (solid:false), so collision/nav are unchanged from a plain box.
+  function container(cx, cy, cz, axis, color, len = CL) {
+    const ax = axis === 'x';
+    const sx = ax ? len : 2.6, sz = ax ? 2.6 : len;    // footprint
+    k.box(cx, cy, cz, sx, H, sz, color);               // body + collider
+    const dk = shade(color, 0.7), lo = cy - H / 2, hi = cy + H / 2;
+    const hl = len / 2, hw = 1.3;                       // half-length / half-width
+
+    // corrugation: vertical ribs proud of both long faces (one InstancedMesh)
+    const nR = Math.max(3, Math.round((len - 0.3) / 0.32));
+    const ribH = H - 0.34, pr = 0.05;
+    const geo = new THREE.BoxGeometry(ax ? 0.075 : pr, ribH, ax ? pr : 0.075);
+    const im = new THREE.InstancedMesh(geo, k.mat(dk), nR * 2);
+    const m4 = new THREE.Matrix4(); let n = 0;
+    for (const side of [-1, 1])
+      for (let i = 0; i < nR; i++) {
+        const u = -hl + (i + 0.5) * (len / nR), c = (hw + pr / 2) * side;
+        m4.setPosition(ax ? cx + u : cx + c, cy, ax ? cz + c : cz + u);
+        im.setMatrixAt(n++, m4);
+      }
+    im.instanceMatrix.needsUpdate = true;
+    im.castShadow = true; im.receiveShadow = true;
+    scene.add(im);
+
+    // steel frame: 4 corner posts + top & bottom perimeter rails
+    const P = 0.12, dec = { solid: false };
+    const halfX = ax ? hl : hw, halfZ = ax ? hw : hl;
+    for (const su of [-1, 1]) for (const sv of [-1, 1])
+      k.box(cx + su * halfX, cy, cz + sv * halfZ, P, H, P, FRAME, dec);
+    for (const y of [lo + P / 2, hi - P / 2]) {
+      k.box(cx, y, cz + halfZ, 2 * halfX, P, P, FRAME, dec);   // rails along x
+      k.box(cx, y, cz - halfZ, 2 * halfX, P, P, FRAME, dec);
+      k.box(cx + halfX, y, cz, P, P, 2 * halfZ, FRAME, dec);   // rails along z
+      k.box(cx - halfX, y, cz, P, P, 2 * halfZ, FRAME, dec);
+    }
+    // end doors (one end): centre seam + 4 vertical locking rods + 2 handles
+    const ex = ax ? cx + hl + 0.03 : cx, ez = ax ? cz : cz + hl + 0.03;
+    k.box(ex, cy, ez, ax ? 0.04 : 0.1, H - 0.3, ax ? 0.1 : 0.04, shade(color, 0.55), dec);
+    for (const o of [-0.85, -0.32, 0.32, 0.85]) {
+      k.box(ax ? ex : cx + o, cy, ax ? cz + o : ez, ax ? 0.05 : 0.07, H - 0.5, ax ? 0.07 : 0.05, FRAME, dec);
+      k.box(ax ? ex + 0.02 : cx + o, cy - 0.15, ax ? cz + o : ez + 0.02, ax ? 0.06 : 0.16, 0.1, ax ? 0.16 : 0.06, FRAME, dec);
+    }
   }
 
   // ---- perimeter: double-stacked container wall (no exits). N/S walls
   // run along z at x = ±W (three 6 m units), E/W walls run along x at
   // z = ±D (four units). Invisible blockers seal + cap the box so a player
   // on an inner container can't peek or slip out.
-  const wallCols = [BLUE, RUST, GREEN, YELL, GREY];
+  const wallCols = [BLUE, RUST, GREEN, YELL, GREY, TEAL, MAROON];
   for (const s of [-1, 1]) {
     let ci = 0;
     for (const z of [-6, 0, 6])
@@ -987,8 +1039,8 @@ function buildShipment(scene, colliders) {
   // ---- center block: two x-long containers straddling the origin read as
   // one solid 6×5.2×2.6 mass — the contested high ground. ~9 m lanes N/S,
   // ~7 m side lanes E/W around it.
-  k.box(0, 1.3, -1.5, CL, H, 2.6, BLUE);
-  k.box(0, 1.3, 1.5, CL, H, 2.6, GREEN);
+  container(0, 1.3, -1.5, 'x', RUST);
+  container(0, 1.3, 1.5, 'x', BLUE);
   // climb onto the center top: a 5-crate step chain off each end face on
   // the z = 0 line (tops 0.5→2.5, each rise ≤0.55 so bots step-up too, last
   // 0.1 onto the 2.6 container). z = 0 is a self-symmetric line, so placing
@@ -1002,13 +1054,14 @@ function buildShipment(scene, colliders) {
 
   // ---- flank containers: z-long, one per long lane, offset to a side so
   // each lane doglegs instead of being a straight spawn-to-spawn shot.
-  k.box(6, 1.3, -3.5, 2.6, H, CL, YELL);   // north lane, pushed west
-  k.box(-6, 1.3, 3.5, 2.6, H, CL, YELL);   // mirror: south lane, pushed east
+  container(6, 1.3, -3.5, 'z', YELL);    // north lane, pushed west
+  container(-6, 1.3, 3.5, 'z', TEAL);    // mirror: south lane, pushed east
 
   // ---- corner cover: a z-long container tucked into each of the four
   // corners (two symmetric pairs), between the end wall and the side wall.
-  for (const [cx, cz] of [[9, 7], [-9, -7], [9, -7], [-9, 7]])
-    k.box(cx, 1.3, cz, 2.6, H, 4.0, GREY);
+  const cornerCols = [GREEN, GREEN, MAROON, MAROON];
+  [[9, 7], [-9, -7], [9, -7], [-9, 7]].forEach(([cx, cz], i) =>
+    container(cx, 1.3, cz, 'z', cornerCols[i], 4.0));
 
   // ---- scatter garnish, clear of spawns / center / waypoint seeds
   k.crate(0, -7.2, 1.1); k.crate(0, 7.2, 1.1);       // lane-mouth crates
