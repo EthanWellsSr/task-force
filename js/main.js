@@ -68,6 +68,7 @@ function moveEntity(pos, halfW, height, dx, dy, dz, colliders, stepUp = 0) {
 const G = {
   state: 'menu',   // menu | spawn | playing | dead | paused | end
   mapId: null, map: null,
+  modeId: 'tdm', mode: null,
   scene: null, camera: null, renderer: null,
   colliders: [], graph: null,
   bots: [], combatants: [],
@@ -76,6 +77,98 @@ const G = {
   uavUntil: 0,
   pointerLocked: false,
 };
+
+const MODES = {
+  tdm: {
+    id: 'tdm',
+    name: 'TEAM DEATHMATCH',
+    structure: 'teams',
+    teams: ['tf', 'sp'],
+    scoreSource: 'teamKills',
+    respawn: true,
+    roundBased: false,
+    hudGoal: 'FIRST TO',
+    teamLabels: { tf: 'TASK FORCE', sp: 'SPETSNAZ' },
+  },
+  ffa: {
+    id: 'ffa',
+    name: 'FREE-FOR-ALL',
+    structure: 'ffa',
+    teams: [],
+    scoreSource: 'playerKills',
+    respawn: true,
+    roundBased: false,
+    hudGoal: 'FIRST TO',
+    teamLabels: {},
+  },
+};
+
+function modeById(id) {
+  return MODES[id] || MODES.tdm;
+}
+
+function makeModeScores(mode) {
+  const scores = {};
+  for (const team of mode.teams) scores[team] = 0;
+  return scores;
+}
+
+function shuffledBotNames(team) {
+  const names = BOT_NAMES[team] || BOT_NAMES.sp;
+  return names.slice().sort(() => Math.random() - 0.5);
+}
+
+function shuffledFfaNames() {
+  return [...BOT_NAMES.tf, ...BOT_NAMES.sp].sort(() => Math.random() - 0.5);
+}
+
+function syncFfaScores() {
+  if (!G.mode || G.mode.structure !== 'ffa') return;
+  for (const c of G.combatants) {
+    if (G.scores[c.team] === undefined) G.scores[c.team] = c.kills || 0;
+  }
+}
+
+function rankedCombatants(combatants) {
+  return combatants.slice().sort((a, b) =>
+    (b.kills - a.kills) || ((a.deaths || 0) - (b.deaths || 0)) || a.name.localeCompare(b.name));
+}
+
+function addModeKillScore(killer, victim) {
+  const mode = G.mode || MODES.tdm;
+  if (!killer || killer.team === victim.team) return;
+  if (mode.scoreSource === 'teamKills' || mode.scoreSource === 'playerKills')
+    G.scores[killer.team] = (G.scores[killer.team] || 0) + 1;
+}
+
+function modeScoreLimitReached() {
+  const mode = G.mode || MODES.tdm;
+  const keys = mode.structure === 'ffa' ? Object.keys(G.scores) : mode.teams;
+  return keys.some(team => (G.scores[team] || 0) >= UI.settings.scoreLimit);
+}
+
+function modeWinResult(forcedWin) {
+  if (forcedWin !== undefined) return forcedWin;
+  const mode = G.mode || MODES.tdm;
+  const teams = mode.teams;
+  if (mode.structure === 'teams' && teams.length === 2) {
+    const a = G.scores[teams[0]] || 0;
+    const b = G.scores[teams[1]] || 0;
+    if (a === b) return null;
+    return (G.scores[player.team] || 0) > (G.scores[player.team === teams[0] ? teams[1] : teams[0]] || 0);
+  }
+  if (mode.structure === 'ffa') {
+    const ranked = rankedCombatants(G.combatants);
+    if (!ranked.length) return null;
+    const top = ranked[0].kills;
+    const tiedTop = ranked.filter(c => c.kills === top);
+    if (tiedTop.length > 1 && tiedTop.includes(player)) return null;
+    return ranked[0] === player;
+  }
+  return null;
+}
+
+G.mode = MODES.tdm;
 
 const player = {
   isPlayer: true, name: 'YOU', team: 'tf',
@@ -154,6 +247,13 @@ const VM_POS = {
 
 // Muzzle-flash quad size per weapon class (#15b tuning)
 const VM_FLASH = { ar: 0.12, smg: 0.1, lmg: 0.15, sniper: 0.13, shotgun: 0.14, pistol: 0.08 };
+
+const VM_RETICLE = {
+  reddot: 0.005,
+  holoDot: 0.004,
+  holoRingInner: 0.0085,
+  holoRingOuter: 0.011,
+};
 
 // Red dot mount points (#9c): rail-top y + mount z per weapon key
 // (model-type keys cover the generic fallback bodies). The dot centers
@@ -689,7 +789,7 @@ function buildViewModel(w) {
       part(0.007, 0.05, 0.026, black, -0.0215, retY, mnt.z);          // tube walls
       part(0.007, 0.05, 0.026, black, 0.0215, retY, mnt.z);
       part(0.05, 0.007, 0.026, black, 0, mnt.y + 0.0675, mnt.z);      // tube top
-      const dot = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.008, 0.004), glow());
+      const dot = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.reddot, VM_RETICLE.reddot, 0.004), glow());
       dot.position.set(0, retY, mnt.z);
       g.add(dot);
     } else {
@@ -699,10 +799,10 @@ function buildViewModel(w) {
       part(0.008, 0.056, 0.03, black, 0.034, retY, mnt.z);
       part(0.076, 0.008, 0.03, black, 0, retY + 0.032, mnt.z);        // frame top
       part(0.076, 0.012, 0.04, black, 0, retY - 0.034, mnt.z);        // emitter shelf
-      const ring = new THREE.Mesh(new THREE.RingGeometry(0.011, 0.0145, 20), glow());
+      const ring = new THREE.Mesh(new THREE.RingGeometry(VM_RETICLE.holoRingInner, VM_RETICLE.holoRingOuter, 20), glow());
       ring.position.set(0, retY, mnt.z);
       g.add(ring);
-      const dot = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.006, 0.003), glow());
+      const dot = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.holoDot, VM_RETICLE.holoDot, 0.003), glow());
       dot.position.set(0, retY, mnt.z);
       g.add(dot);
     }
@@ -1125,8 +1225,17 @@ function drawMinimap() {
 // ============================================================
 // Match lifecycle
 // ============================================================
+function spawnPointsForTeam(team) {
+  if (G.mode && G.mode.structure === 'ffa') {
+    const pts = [];
+    for (const k in G.map.spawns) pts.push(...G.map.spawns[k]);
+    return pts;
+  }
+  return G.map.spawns[team] || G.map.spawns.tf || [];
+}
+
 function pickSpawn(team) {
-  const pts = G.map.spawns[team];
+  const pts = spawnPointsForTeam(team);
   const enemies = G.combatants.filter(c => c.team !== team && c.alive);
   const mates = G.combatants.filter(c => c.team === team && c.alive);
   let best = null, bestScore = -1e9;
@@ -2237,7 +2346,7 @@ function registerKill(killer, victim, weaponName, headshot) {
       }
       victim.recentDamagers.length = 0; // engagement's over
     }
-    G.scores[killer.team]++;
+    addModeKillScore(killer, victim);
     UI.killfeed(killer.name, killer.team, victim.name, victim.team, weaponName, headshot);
     if (killer.isPlayer) {
       AudioSys.hit(true);
@@ -2265,14 +2374,16 @@ function registerKill(killer, victim, weaponName, headshot) {
       }
     }
   }
-  UI.updateScores(G.scores.tf, G.scores.sp, G.timeLeft);
+  UI.updateScores(G.mode, G.scores, G.timeLeft, G.combatants);
   // (endMatch is a no-op during the nuke cinematic, so the killstreak
   // nuke's mass kill can't trip the score limit mid-scene)
-  if (G.scores.tf >= UI.settings.scoreLimit || G.scores.sp >= UI.settings.scoreLimit) endMatch();
+  if (modeScoreLimitReached()) endMatch();
 }
 
-function startMatch(mapId) {
+function startMatch(mapId, modeId = 'tdm') {
   G.mapId = mapId;
+  G.modeId = modeById(modeId).id;
+  G.mode = modeById(G.modeId);
   G.colliders = [];
   G.scene = new THREE.Scene();
   G.scene.add(G.camera);
@@ -2295,7 +2406,7 @@ function startMatch(mapId) {
   buildMinimapBg();
 
   // combatants
-  G.scores = { tf: 0, sp: 0 };
+  G.scores = makeModeScores(G.mode);
   G.timeLeft = UI.settings.timeLimit > 0 ? UI.settings.timeLimit : Infinity;
   G.time = 0;
   player.kills = 0; player.deaths = 0; player.assists = 0;
@@ -2317,6 +2428,7 @@ function startMatch(mapId) {
   UI.clearNukeFlash();
   player.alive = false;
   G.bots = [];
+  player.team = G.mode.structure === 'ffa' ? 'ffa0' : G.mode.teams[0] || 'tf';
 
   const world = {
     scene: G.scene, colliders: G.colliders, graph: G.graph,
@@ -2331,17 +2443,26 @@ function startMatch(mapId) {
       playerTeam: player.team,
       playerDamage: damagePlayer,
       matchLive: () => G.state === 'playing' || G.state === 'dead',
+      canRespawn: () => !!(G.mode || MODES.tdm).respawn,
     },
   };
   const n = UI.settings.teamSize;
-  const namesTf = BOT_NAMES.tf.slice().sort(() => Math.random() - 0.5);
-  const namesSp = BOT_NAMES.sp.slice().sort(() => Math.random() - 0.5);
-  for (let i = 0; i < n - 1; i++) G.bots.push(new Bot(namesTf[i], 'tf', world));
-  for (let i = 0; i < n; i++) G.bots.push(new Bot(namesSp[i], 'sp', world));
+  if (G.mode.structure === 'ffa') {
+    const names = shuffledFfaNames();
+    const count = Math.max(1, n * 2 - 1);
+    for (let i = 0; i < count; i++) G.bots.push(new Bot(names[i % names.length], 'ffa' + (i + 1), world));
+  } else {
+    for (const team of G.mode.teams) {
+      const names = shuffledBotNames(team);
+      const count = team === player.team ? n - 1 : n;
+      for (let i = 0; i < count; i++) G.bots.push(new Bot(names[i % names.length], team, world));
+    }
+  }
   G.combatants = [player, ...G.bots];
+  syncFfaScores();
 
-  document.getElementById('scoreLimitLabel').textContent = UI.settings.scoreLimit;
-  UI.updateScores(0, 0, G.timeLeft);
+  UI.updateModeLabels(G.mode, UI.settings.scoreLimit);
+  UI.updateScores(G.mode, G.scores, G.timeLeft, G.combatants);
   document.getElementById('killfeed').innerHTML = '';
 
   G.state = 'spawn';
@@ -2391,7 +2512,9 @@ function deploy() {
   player.proneAmt = 0;
   player.pos.copy(pickSpawn(player.team));
   player.vel.set(0, 0, 0);
-  player.yaw = player.team === 'tf' ? (G.mapId === 'rust' ? Math.PI * 1.25 : Math.PI) : 0;
+  player.yaw = G.mode && G.mode.structure === 'ffa'
+    ? Math.random() * Math.PI * 2
+    : player.team === 'tf' ? (G.mapId === 'rust' ? Math.PI * 1.25 : Math.PI) : 0;
   player.pitch = 0;
   player.alive = true;
   buildViewModel(curW().def);
@@ -2432,7 +2555,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect) {
     // end-of-match nuke) — don't clobber the state with 'dead'
     if (G.state === 'end' || G.state === 'nukecine') return;
     G.state = 'dead';
-    player.respawnT = 3.5;
+    player.respawnT = (G.mode || MODES.tdm).respawn ? 3.5 : Infinity;
     document.exitPointerLock && document.exitPointerLock();
     UI.renderSpawnScreen(`KILLED BY ${attacker ? attacker.name : '?'}  [${weaponName}]`);
     UI.show('spawnScreen');
@@ -2448,8 +2571,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect) {
 // otherwise trip the score limit mid-scene).
 function endMatch(forcedWin) {
   if (G.state === 'end' || G.state === 'nukecine') return;
-  const win = forcedWin !== undefined ? forcedWin
-    : G.scores.tf === G.scores.sp ? null : G.scores.tf > G.scores.sp;
+  const win = modeWinResult(forcedWin);
   if (G.mapId === 'nuketown') { startNukeCinematic(win); return; }
   finishMatch(win);
 }
@@ -2460,7 +2582,7 @@ function finishMatch(win) {
   G.state = 'end';
   document.exitPointerLock && document.exitPointerLock();
   AudioSys.matchEnd(win !== false);
-  UI.showEnd(win, G.scores.tf, G.scores.sp, G.combatants);
+  UI.showEnd(G.mode, win, G.scores, G.combatants);
 }
 
 function quitMatch() {
@@ -2469,7 +2591,7 @@ function quitMatch() {
   UI.show('menu');
 }
 
-function rematch() { startMatch(G.mapId); }
+function rematch() { startMatch(G.mapId, G.modeId); }
 
 // ============================================================
 // Input
@@ -2530,7 +2652,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Tab' && (G.state === 'playing' || G.state === 'dead')) {
     e.preventDefault();
     if (e.repeat) return;
-    UI.buildScoreboard(G.combatants, G.scores.tf, G.scores.sp);
+    UI.buildScoreboard(G.mode, G.combatants, G.scores);
     UI.$('scoreboard').classList.remove('hidden');
   }
   if (e.repeat) return;
@@ -3106,8 +3228,11 @@ function updateCameraAndViewmodel(dt) {
     }
     vmKick = Math.max(0, vmKick - dt * 7);
     target.z += vmKick * 0.05;
-    // prone: settle the gun lower and pulled in, hugging the deck
-    if (player.proneAmt > 0.001) { target.y -= player.proneAmt * 0.05; target.z += player.proneAmt * 0.03; }
+    // Prone hip fire settles the gun lower/pulled in, but ADS must fade that
+    // offset out. The ADS anchor is calibrated so optic reticles sit at camera
+    // center; keeping a full prone offset made shots miss the visible dot.
+    const proneHipAmt = player.proneAmt * (1 - player.adsAmt);
+    if (proneHipAmt > 0.001) { target.y -= proneHipAmt * 0.05; target.z += proneHipAmt * 0.03; }
     // grenade: the gun holds dipped down-right while cooking, and the
     // release plays the same dip as a quick lob swing
     cookDip += ((player.cooking !== null ? 1 : 0) - cookDip) * Math.min(1, dt * 10);
@@ -3308,7 +3433,7 @@ function loop() {
     // HUD
     if (player.alive) {
       UI.updateHud(player, curW().def, curW());
-      UI.updateScores(G.scores.tf, G.scores.sp, G.timeLeft);
+      UI.updateScores(G.mode, G.scores, G.timeLeft, G.combatants);
       const spreadPx = Math.tan(currentSpread() + 0.004) /
         Math.tan(THREE.MathUtils.degToRad(G.camera.fov / 2)) * (window.innerHeight / 2);
       UI.crosshairSpread(6 + spreadPx, player.adsAmt < 0.5 && !player.sprinting);

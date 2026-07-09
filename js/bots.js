@@ -9,6 +9,22 @@ const TEAM_COLORS = {
   sp: { uniform: 0x6a564a, vest: 0x453832, helmet: 0x5a3a32, band: 0xd05040, skin: 0xd0aa88 },
 };
 
+const FFA_PALETTE = [
+  { uniform: 0x5c6b58, vest: 0x394235, helmet: 0x4b5748, band: 0xe8a33d, skin: 0xc8a080 },
+  { uniform: 0x4f5e72, vest: 0x303845, helmet: 0x3c4656, band: 0x8ec4f0, skin: 0xd0aa88 },
+  { uniform: 0x6f5a52, vest: 0x473936, helmet: 0x5a4944, band: 0xf09a8e, skin: 0xc89270 },
+  { uniform: 0x59605f, vest: 0x383d3d, helmet: 0x454c4c, band: 0x9ad08e, skin: 0xd3a57f },
+  { uniform: 0x655b75, vest: 0x40384b, helmet: 0x51465f, band: 0xcaa0ff, skin: 0xc8a080 },
+  { uniform: 0x706348, vest: 0x473e2f, helmet: 0x5a503b, band: 0xf0d06a, skin: 0xd0aa88 },
+];
+
+function teamColors(team) {
+  if (TEAM_COLORS[team]) return TEAM_COLORS[team];
+  let h = 0;
+  for (let i = 0; i < team.length; i++) h = (h * 31 + team.charCodeAt(i)) >>> 0;
+  return FFA_PALETTE[h % FFA_PALETTE.length];
+}
+
 function makeNameSprite(name, color) {
   const cv = document.createElement('canvas');
   cv.width = 256; cv.height = 48;
@@ -29,7 +45,7 @@ function makeNameSprite(name, color) {
 
 // Blocky soldier, origin at feet, facing +Z
 function buildSoldierMesh(team, name, showTag) {
-  const c = TEAM_COLORS[team];
+  const c = teamColors(team);
   const g = new THREE.Group();
   const mat = col => new THREE.MeshLambertMaterial({ color: col });
   const part = (w, h, d, col, x, y, z) => {
@@ -82,11 +98,12 @@ function buildSoldierMesh(team, name, showTag) {
 //   scatter — miss-tracer jitter scale; small = misses read as grazes
 //   pause   — burst pause [min,max] seconds (uptime between bursts)
 //   lost    — seconds a lost target stays engaged before dropping to patrol
+//   tactics — opportunistic cover/flank pathing while in combat
 const BOT_SKILL = {
   recruit:  { acc: 0.10, react: 850, burst: [2, 5],  view: 38, head: 0.05, dmg: 0.8, movePen: 0.65, fall: 40, scatter: 1.4, pause: [0.60, 1.40], lost: 2.0 },
   regular:  { acc: 0.17, react: 550, burst: [3, 6],  view: 45, head: 0.10, dmg: 0.8, movePen: 0.72, fall: 45, scatter: 1.0, pause: [0.45, 1.05], lost: 2.5 },
   hardened: { acc: 0.30, react: 300, burst: [5, 9],  view: 55, head: 0.18, dmg: 0.9, movePen: 0.82, fall: 55, scatter: 0.6, pause: [0.30, 0.70], lost: 3.5 },
-  veteran:  { acc: 0.60, react: 150, burst: [8, 14], view: 70, head: 0.30, dmg: 1.0, movePen: 0.92, fall: 70, scatter: 0.3, pause: [0.15, 0.40], lost: 5.0 },
+  veteran:  { acc: 0.60, react: 150, burst: [8, 14], view: 70, head: 0.30, dmg: 1.0, movePen: 0.92, fall: 70, scatter: 0.3, pause: [0.15, 0.40], lost: 5.0, tactics: true },
 };
 
 let _botCounter = 0;
@@ -137,6 +154,8 @@ class Bot {
     this.strafeDir = 1; this.strafeT = 0;
     this.lastKnown = null; this.lostT = 0;
     this.canSee = false;
+    this.combatPath = null; this.combatPathIdx = 0;
+    this.tacticT = 0; this.tacticKind = null;
     this.scanT = Math.random() * 0.15;
     this.stuckT = 0; this.lastPos = new THREE.Vector3();
     this.lastUnstickWp = -1; this.unstickN = 0;
@@ -165,7 +184,7 @@ class Bot {
     this.reloadT = 0;
     this.target = null; this.lastKnown = null;
     this.lastShotTime = -99; // don't let a pre-death shot flash our new spot on the minimap
-    this.path = null;
+    this.path = null; this.combatPath = null; this.tacticKind = null;
     this.mesh.visible = true;
     this.mesh.rotation.set(0, this.yaw, 0);
     this.mesh.position.copy(this.pos);
@@ -242,6 +261,78 @@ class Bot {
     // walk to the entry waypoint first unless already standing on it —
     // heading straight for the second node can cut through geometry
     this.pathIdx = (path && path.length > 1 && this.pos.distanceTo(g.points[from]) < 1.1) ? 1 : 0;
+  }
+
+  _setCombatPath(to, kind) {
+    const g = this.world.graph;
+    const from = nearestWaypoint(g, this.pos, this.world.colliders);
+    const path = navPath(g, from, to);
+    if (!path || path.length < 2) return false;
+    this.combatPath = path;
+    this.combatPathIdx = this.pos.distanceTo(g.points[from]) < 1.1 ? 1 : 0;
+    this.tacticKind = kind;
+    return true;
+  }
+
+  _pickVeteranTactic(kind) {
+    const g = this.world.graph;
+    const targetPos = this.target && this.target.alive ? this.target.pos : this.lastKnown;
+    if (!this.skill.tactics || !targetPos || !g.points.length) return false;
+
+    const from = nearestWaypoint(g, this.pos, this.world.colliders);
+    const targetChest = new THREE.Vector3(targetPos.x, targetPos.y + 1.2, targetPos.z);
+    const botFromTarget = new THREE.Vector2(this.pos.x - targetPos.x, this.pos.z - targetPos.z);
+    if (botFromTarget.lengthSq() < 0.001) botFromTarget.set(0, 1);
+    botFromTarget.normalize();
+
+    let best = -1, bestScore = -Infinity;
+    for (let i = 0; i < g.points.length; i++) {
+      if (i === from) continue;
+      const p = g.points[i];
+      if (p.y > 0.75) continue; // keep combat tactics grounded and predictable
+      const selfD = this.pos.distanceTo(p);
+      if (selfD < 2.5 || selfD > 18) continue;
+      const targetD = targetChest.distanceTo(new THREE.Vector3(p.x, p.y + 1.2, p.z));
+      if (targetD < 4 || targetD > this.skill.view) continue;
+
+      const eye = new THREE.Vector3(p.x, p.y + 1.6, p.z);
+      const targetSees = losClear(targetChest, eye, this.world.colliders) &&
+        !this.world.api.smokeBlocked(targetChest, eye);
+      const seesTarget = losClear(eye, targetChest, this.world.colliders) &&
+        !this.world.api.smokeBlocked(eye, targetChest);
+
+      const rel = new THREE.Vector2(p.x - targetPos.x, p.z - targetPos.z).normalize();
+      const lateral = Math.abs(botFromTarget.x * rel.y - botFromTarget.y * rel.x);
+      const path = navPath(g, from, i);
+      if (!path || path.length < 2 || path.length > 8) continue;
+
+      let score = -Infinity;
+      if (kind === 'cover') {
+        if (!targetSees) score = 9 - selfD * 0.25 + Math.min(targetD, 18) * 0.08 + Math.random();
+      } else {
+        if (seesTarget && lateral > 0.42) score = lateral * 8 - selfD * 0.22 - path.length * 0.2 + Math.random();
+      }
+      if (score > bestScore) { bestScore = score; best = i; }
+    }
+    return best >= 0 && this._setCombatPath(best, kind);
+  }
+
+  _updateVeteranTactic(dt, dist) {
+    if (!this.skill.tactics || !this.target || !this.target.alive) return;
+    if (this.combatPath && this.combatPathIdx < this.combatPath.length) return;
+    this.combatPath = null; this.tacticKind = null;
+    this.tacticT -= dt;
+    if (this.tacticT > 0) return;
+
+    const needsCover = this.reloadT > 0.35 || this.hp < 45 || (!this.canSee && this.lastKnown);
+    const shouldFlank = this.canSee && dist > 7 && dist < 42 && Math.random() < 0.65;
+    if (needsCover && this._pickVeteranTactic('cover')) {
+      this.tacticT = 1.0 + Math.random() * 0.6;
+    } else if (shouldFlank && this._pickVeteranTactic('flank')) {
+      this.tacticT = 2.0 + Math.random() * 1.4;
+    } else {
+      this.tacticT = 0.7 + Math.random() * 0.8;
+    }
   }
 
   // Stuck against geometry: pull back onto the graph by walking straight
@@ -387,7 +478,8 @@ class Bot {
         if (this.deathAnimT <= 0) this.mesh.visible = false;
       }
       this.respawnT -= dt;
-      if (this.respawnT <= 0 && this.world.api.matchLive()) this.spawn();
+      if (this.respawnT <= 0 && this.world.api.matchLive() &&
+          (!this.world.api.canRespawn || this.world.api.canRespawn())) this.spawn();
       return;
     }
 
@@ -429,6 +521,7 @@ class Bot {
       const dx = this.target.pos.x - this.pos.x, dz = this.target.pos.z - this.pos.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
       wantYaw = Math.atan2(dx, dz);
+      this._updateVeteranTactic(dt, dist);
       // ---- grenade throw (#16b): lob a frag to flush a target holding
       // cover (out of sight but still engaged) or to dislodge a camper at
       // range — never point-blank (self-blast) or across the whole map, and
@@ -445,10 +538,24 @@ class Bot {
           }
         }
       }
-      // strafe unless sniping
+      // Veteran tactical movement can temporarily replace the simple strafe:
+      // move through a graph path toward cover or a flank, while still facing
+      // and firing at the target whenever line of fire is clear.
+      if (this.combatPath && this.combatPathIdx < this.combatPath.length) {
+        const wp = this.world.graph.points[this.combatPath[this.combatPathIdx]];
+        const tx = wp.x - this.pos.x, tz = wp.z - this.pos.z;
+        const td = Math.sqrt(tx * tx + tz * tz);
+        if (td < 0.9 && Math.abs(wp.y - this.pos.y) < 0.5) this.combatPathIdx++;
+        else { moveX = tx / td; moveZ = tz / td; }
+      } else {
+        this.combatPath = null; this.tacticKind = null;
+      }
+      // strafe unless sniping or following a veteran tactic path
       this.strafeT -= dt;
-      if (this.strafeT <= 0) { this.strafeT = 0.7 + Math.random() * 0.9; this.strafeDir = Math.random() < 0.5 ? -1 : 1; }
-      if (w.model !== 'sniper' && dist > 4) {
+      if (!this.combatPath) {
+        if (this.strafeT <= 0) { this.strafeT = 0.7 + Math.random() * 0.9; this.strafeDir = Math.random() < 0.5 ? -1 : 1; }
+      }
+      if (!this.combatPath && w.model !== 'sniper' && dist > 4) {
         const px = Math.cos(wantYaw), pz = -Math.sin(wantYaw);
         moveX = px * this.strafeDir * 0.55;
         moveZ = pz * this.strafeDir * 0.55;

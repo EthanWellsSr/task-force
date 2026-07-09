@@ -69,6 +69,7 @@ const UI = {
   classes: [],
   editIdx: 0,        // class being edited
   selectedClass: 0,  // class chosen on spawn screen
+  selectedMode: 'tdm',
   capturingBind: null,
 
   $(id) { return document.getElementById(id); },
@@ -127,9 +128,17 @@ const UI = {
     document.querySelectorAll('.map-card').forEach(card => {
       card.addEventListener('click', () => {
         AudioSys.uiClick();
-        MAIN.startMatch(card.dataset.map);
+        MAIN.startMatch(card.dataset.map, this.selectedMode);
       });
     });
+    const modeSelect = this.$('modeSelect');
+    if (modeSelect) {
+      this.selectedMode = modeSelect.value || 'tdm';
+      modeSelect.addEventListener('change', e => {
+        AudioSys.uiClick();
+        this.selectedMode = e.target.value || 'tdm';
+      });
+    }
     this.$('btnClasses').onclick = () => { AudioSys.uiClick(); this.renderClassEditor(); this.show('classScreen'); };
     this.$('btnSettings').onclick = () => { AudioSys.uiClick(); this.renderSettings(); this.show('settingsScreen'); };
     this.$('btnClassBack').onclick = () => { AudioSys.uiClick(); this.saveClasses(); this.show(MAIN.inMatch() ? 'spawnScreen' : 'menu'); if (MAIN.inMatch()) this.renderSpawnScreen(); };
@@ -473,7 +482,7 @@ const UI = {
     const el = this.$('respawnCountdown');
     const btn = this.$('btnDeploy');
     if (t > 0) {
-      el.textContent = 'RESPAWN IN ' + Math.ceil(t);
+      el.textContent = isFinite(t) ? 'RESPAWN IN ' + Math.ceil(t) : 'WAITING FOR ROUND END';
       btn.disabled = true;
     } else {
       el.textContent = '';
@@ -482,13 +491,17 @@ const UI = {
   },
 
   // ---------- HUD ----------
+  teamClass(team) {
+    return team === 'tf' || team === 'sp' ? team : 'ffa';
+  },
+
   killfeed(killerName, killerTeam, victimName, victimTeam, weaponName, headshot) {
     const feed = this.$('killfeed');
     const div = document.createElement('div');
     div.className = 'kf-entry';
-    div.innerHTML = `<span class="kf-${killerTeam}">${killerName}</span>
+    div.innerHTML = `<span class="kf-${this.teamClass(killerTeam)}">${killerName}</span>
       <span class="kf-weap"> [${weaponName}${headshot ? ' <span class="kf-hs">&#9678;</span>' : ''}] </span>
-      <span class="kf-${victimTeam}">${victimName}</span>`;
+      <span class="kf-${this.teamClass(victimTeam)}">${victimName}</span>`;
     feed.prepend(div);
     while (feed.children.length > 5) feed.removeChild(feed.lastChild);
     setTimeout(() => { div.style.opacity = '0'; }, 4200);
@@ -546,8 +559,58 @@ const UI = {
     }
   },
 
-  updateScores(tf, sp, timeLeft) {
+  updateModeLabels(mode, scoreLimit) {
+    if (!mode) return;
+    if (mode.structure === 'ffa') {
+      const tfName = document.querySelector('#scorebar .team-score.tf .tname');
+      const spName = document.querySelector('#scorebar .team-score.sp .tname');
+      if (tfName) tfName.textContent = 'YOU';
+      if (spName) spName.textContent = 'LEADER';
+      const wrap = this.$('scoreboard').querySelector('.sb-wrap');
+      if (wrap) wrap.innerHTML = `
+        <div class="sb-team ffa"><div class="sb-head ffa">FREE-FOR-ALL</div>
+          <table id="sbTableFFA"><thead><tr><th>RANK</th><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody></tbody></table></div>`;
+      const obj = this.$('objText');
+      if (obj) obj.textContent = `${mode.name} — ${mode.hudGoal || 'FIRST TO'} ${scoreLimit}`;
+      return;
+    }
+    const teams = mode.teams || [];
+    const left = teams[0] || 'tf', right = teams[1] || 'sp';
+    const labels = mode.teamLabels || {};
+    const leftName = labels[left] || left.toUpperCase();
+    const rightName = labels[right] || right.toUpperCase();
+    const tfName = document.querySelector('#scorebar .team-score.tf .tname');
+    const spName = document.querySelector('#scorebar .team-score.sp .tname');
+    if (tfName) tfName.textContent = leftName;
+    if (spName) spName.textContent = rightName;
+    const wrap = this.$('scoreboard').querySelector('.sb-wrap');
+    if (wrap) wrap.innerHTML = `
+      <div class="sb-team">
+        <div class="sb-head tf">${leftName} &mdash; <span id="sbScoreTF"></span></div>
+        <table id="sbTableTF"><thead><tr><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="sb-team">
+        <div class="sb-head sp">${rightName} &mdash; <span id="sbScoreSP"></span></div>
+        <table id="sbTableSP"><thead><tr><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody></tbody></table>
+      </div>`;
+    const obj = this.$('objText');
+    if (obj) obj.textContent = `${mode.name} — ${mode.hudGoal || 'FIRST TO'} ${scoreLimit}`;
+  },
+
+  updateScores(mode, scores, timeLeft, combatants) {
     const c = this._hudCache;
+    let tf, sp;
+    if (mode && mode.structure === 'ffa') {
+      const ranked = (combatants || []).slice().sort((a, b) =>
+        (b.kills - a.kills) || ((a.deaths || 0) - (b.deaths || 0)) || a.name.localeCompare(b.name));
+      const me = (combatants || []).find(x => x.isPlayer);
+      tf = me ? scores[me.team] || me.kills || 0 : 0;
+      sp = ranked.length ? scores[ranked[0].team] || ranked[0].kills || 0 : 0;
+    } else {
+      const teams = (mode && mode.teams) || ['tf', 'sp'];
+      tf = scores[teams[0]] || 0;
+      sp = scores[teams[1]] || 0;
+    }
     if (c.tf !== tf) { c.tf = tf; this.$('scoreTF').textContent = tf; }
     if (c.sp !== sp) { c.sp = sp; this.$('scoreSP').textContent = sp; }
     let timer;
@@ -646,10 +709,26 @@ const UI = {
     this.$('crosshair').style.opacity = visible ? 1 : 0;
   },
 
-  buildScoreboard(combatants, tf, sp) {
-    this.$('sbScoreTF').textContent = tf;
-    this.$('sbScoreSP').textContent = sp;
-    for (const team of ['tf', 'sp']) {
+  buildScoreboard(mode, combatants, scores) {
+    if (mode && mode.structure === 'ffa') {
+      const table = this.$('sbTableFFA');
+      const tbody = table.querySelector('tbody');
+      tbody.innerHTML = '';
+      combatants.slice()
+        .sort((a, b) => (b.kills - a.kills) || ((a.deaths || 0) - (b.deaths || 0)) || a.name.localeCompare(b.name))
+        .forEach((c, i) => {
+          const kd = c.deaths > 0 ? (c.kills / c.deaths).toFixed(2) : c.kills.toFixed(2);
+          const tr = document.createElement('tr');
+          if (c.isPlayer) tr.className = 'me';
+          tr.innerHTML = `<td>${i + 1}</td><td>${c.name}</td><td>${scores[c.team] || c.kills}</td><td>${c.assists || 0}</td><td>${c.deaths}</td><td>${kd}</td>`;
+          tbody.appendChild(tr);
+        });
+      return;
+    }
+    const teams = (mode && mode.teams) || ['tf', 'sp'];
+    this.$('sbScoreTF').textContent = scores[teams[0]] || 0;
+    this.$('sbScoreSP').textContent = scores[teams[1]] || 0;
+    for (const team of teams) {
       const table = this.$(team === 'tf' ? 'sbTableTF' : 'sbTableSP');
       table.querySelector('thead tr').innerHTML = '<th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th>';
       const tbody = table.querySelector('tbody');
@@ -666,19 +745,50 @@ const UI = {
     }
   },
 
-  showEnd(win, tf, sp, combatants) {
+  showEnd(mode, win, scores, combatants) {
+    if (mode && mode.structure === 'ffa') {
+      const res = this.$('endResult');
+      res.textContent = win === null ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT';
+      res.className = win === null ? 'draw' : win ? 'win' : 'lose';
+      const ranked = combatants.slice()
+        .sort((a, b) => (b.kills - a.kills) || ((a.deaths || 0) - (b.deaths || 0)) || a.name.localeCompare(b.name));
+      const meRank = ranked.findIndex(c => c.isPlayer) + 1;
+      const leader = ranked[0];
+      this.$('endScore').textContent = leader ? `#${meRank}  YOU ${scores[combatants.find(c => c.isPlayer).team] || 0}  —  LEADER ${leader.kills}` : '';
+      const boards = this.$('endBoards');
+      boards.innerHTML = `
+        <div class="sb-team ffa"><div class="sb-head ffa">FREE-FOR-ALL</div>
+          <table><thead><tr><th>RANK</th><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody id="endFFA"></tbody></table></div>`;
+      const tbody = this.$('endFFA');
+      ranked.forEach((c, i) => {
+        const kd = c.deaths > 0 ? (c.kills / c.deaths).toFixed(2) : c.kills.toFixed(2);
+        const tr = document.createElement('tr');
+        if (c.isPlayer) tr.className = 'me';
+        tr.innerHTML = `<td>${i + 1}</td><td>${c.name}</td><td>${scores[c.team] || c.kills}</td><td>${c.assists || 0}</td><td>${c.deaths}</td><td>${kd}</td>`;
+        tbody.appendChild(tr);
+      });
+      this.show('endScreen');
+      return;
+    }
+    const teams = (mode && mode.teams) || ['tf', 'sp'];
+    const labels = (mode && mode.teamLabels) || {};
+    const left = teams[0], right = teams[1];
+    const leftName = labels[left] || left.toUpperCase();
+    const rightName = labels[right] || right.toUpperCase();
+    const leftScore = scores[left] || 0;
+    const rightScore = scores[right] || 0;
     const res = this.$('endResult');
     res.textContent = win === null ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT';
     res.className = win === null ? 'draw' : win ? 'win' : 'lose';
-    this.$('endScore').textContent = `TASK FORCE  ${tf}  —  ${sp}  SPETSNAZ`;
+    this.$('endScore').textContent = `${leftName}  ${leftScore}  —  ${rightScore}  ${rightName}`;
     // reuse scoreboard tables inside end screen
     const boards = this.$('endBoards');
     boards.innerHTML = `
-      <div class="sb-team"><div class="sb-head tf">TASK FORCE</div>
+      <div class="sb-team"><div class="sb-head tf">${leftName}</div>
         <table><thead><tr><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody id="endTF"></tbody></table></div>
-      <div class="sb-team"><div class="sb-head sp">SPETSNAZ</div>
+      <div class="sb-team"><div class="sb-head sp">${rightName}</div>
         <table><thead><tr><th>NAME</th><th>K</th><th>A</th><th>D</th><th>K/D</th></tr></thead><tbody id="endSP"></tbody></table></div>`;
-    for (const team of ['tf', 'sp']) {
+    for (const team of teams) {
       const tbody = this.$(team === 'tf' ? 'endTF' : 'endSP');
       combatants.filter(c => c.team === team)
         .sort((a, b) => b.kills - a.kills)

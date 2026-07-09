@@ -79,13 +79,14 @@ intersection.
   spawn-to-spawn shot. Team spawns tuck to the flanks around them.
 
 ### C. E/W leaned pairs (yawed cover against the side walls)
-- Two `leanedContainer`s each near the side walls: `(±3.4, −9.7)` (yaw ∓0.28
-  rad ≈ ∓16°) and mirror on `+z`, forming a shallow **V** with a narrow gap on
-  the x = 0 lane. They cap the E–W lane before the wall. The visible mesh is
-  rotated about y; collision is a **3-box stepped AABB hull** marched along the
-  yawed centerline. Mesh and hull disagree only by ~0.3 m at the mid-flanks and
-  small end slivers — an intentional, sub-tuning-tolerance deviation, because
-  true OBB colliders would touch movement, throwables, LOS, minimap and nav.
+- Two `leanedContainer`s each near the side walls: `(3.4, −10.25)` /
+  `(-3.4, -10.25)` (yaw ∓0.28 rad ≈ ∓16°) and true 180° mirrors on `+z`,
+  forming a shallow **V** with a narrow gap on the x = 0 lane. They cap the E–W
+  lane before the wall. The visible mesh is rotated about y; collision is a
+  **5-box stepped AABB hull** marched along the yawed centerline with slight
+  padding so the visible solid containers remain impenetrable. This
+  intentionally over-covers the rotated mesh a little, because true OBB
+  colliders would touch movement, throwables, LOS, minimap and nav.
 
 ### D. Corners — debris, not containers
 - Junk cars on the NE/SW diagonal, barrel + crate clusters on the NW/SE
@@ -140,7 +141,7 @@ hulls) and ≳3 m apart.
 ## Nav (`waypointSeeds`)
 
 - Crossroads hub + seeds down all four lanes + a perimeter ring; the graph
-  filters any seed that lands inside geometry.
+  rejects any seed that lands inside geometry.
 - **Walk-through seeds** threaded straight through both hollow center
   containers (open along x) and both N/S end hollows (open along z) so bots use
   the walk-throughs.
@@ -170,7 +171,7 @@ hulls) and ≳3 m apart.
      below 0.55. ✓
    - Containment: pushes into all four boundaries stop inside the walls (N wall
      at x 11.32; E/W capped by the leaned V + full-height blocker caps). ✓
-   - `G.graph`: **one** connected component (62 nodes), all 14 elevated nodes
+   - `G.graph`: **one** connected component (63 nodes), all 14 elevated nodes
      reachable; all 10 spawns clear. No console errors; nuketown/rust
      unaffected.
    - Widened ~1 m per side (2026-07-08): bounds 24×22 → 26×24; walls, N/S end

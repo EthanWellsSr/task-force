@@ -35,7 +35,7 @@ h1,h2 { font-weight:800; letter-spacing:2px; }
 .game-title span { color:#e8a33d; }
 .game-sub { letter-spacing:6px; font-size:13px; color:#9aa08a; margin:4px 0 34px; }
 
-.map-cards { display:flex; gap:22px; justify-content:center; margin-bottom:30px; }
+.map-cards { display:flex; gap:22px; justify-content:center; margin-bottom:22px; }
 .map-card {
   width:260px; border:1px solid #3a4030; background:rgba(20,24,16,.85);
   cursor:pointer; transition:all .15s; text-align:left;
@@ -61,6 +61,16 @@ h1,h2 { font-weight:800; letter-spacing:2px; }
 }
 .map-name { font-size:20px; font-weight:800; letter-spacing:3px; padding:10px 14px 2px; color:#e8a33d; }
 .map-desc { font-size:12px; color:#9aa08a; padding:0 14px 12px; }
+
+.mode-picker {
+  display:flex; align-items:center; justify-content:center; gap:12px;
+  margin-bottom:24px;
+}
+.mode-picker label { width:auto; margin:0; color:#8a9078; }
+.mode-picker select {
+  background:#0d0f0a; color:#e8e6de; border:1px solid #3a4030;
+  padding:8px 12px; font-size:12px; letter-spacing:2px;
+}
 
 .menu-buttons { display:flex; gap:14px; justify-content:center; }
 .menu-btn {
@@ -231,6 +241,7 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
 }
 .kf-entry .kf-tf { color:#5aa0e0; font-weight:700; }
 .kf-entry .kf-sp { color:#e05a4a; font-weight:700; }
+.kf-entry .kf-ffa { color:#e8a33d; font-weight:700; }
 .kf-entry .kf-weap { color:#c8c5b8; font-size:10px; }
 .kf-entry .kf-hs { color:#e8a33d; }
 #minimap {
@@ -311,9 +322,11 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
 #scoreboard { display:flex; align-items:center; justify-content:center; background:rgba(5,7,4,.82); }
 .sb-wrap { display:flex; gap:26px; }
 .sb-team { min-width:300px; }
+.sb-team.ffa { min-width:520px; }
 .sb-head { font-size:14px; font-weight:800; letter-spacing:2px; padding:8px 12px; margin-bottom:2px; }
 .sb-head.tf { background:rgba(60,110,170,.35); color:#8ec4f0; }
 .sb-head.sp { background:rgba(170,60,45,.35); color:#f09a8e; }
+.sb-head.ffa { background:rgba(170,120,45,.35); color:#f0c06a; }
 #scoreboard table, #endScreen table { width:100%; border-collapse:collapse; font-size:12px; }
 #scoreboard th, #endScreen th { text-align:left; font-size:9px; letter-spacing:2px; color:#6a7060; padding:5px 12px; }
 #scoreboard td, #endScreen td { padding:5px 12px; background:rgba(15,18,11,.8); border-bottom:1px solid rgba(0,0,0,.4); }

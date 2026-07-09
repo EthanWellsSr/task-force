@@ -1055,8 +1055,8 @@ function buildShipment(scene, colliders) {
   // A LEANED (yawed) container (S2/D1): the visible mesh rotates about y, but
   // the engine is AABB-only, so collision is a stepped hull of small
   // axis-aligned blocker boxes marched along the yawed centerline
-  // (steppedHull). Visible mesh and hull disagree only by small slivers at
-  // the ends / mid-flanks — an intentional, sub-tuning-tolerance deviation,
+  // (steppedHull). The hull slightly over-covers the visible body so the
+  // container reads as a truly solid wall to movement/pathing,
   // because true OBB colliders would touch movement, throwables, LOS,
   // minimap and nav (all axis-aligned) — out of scope for a map.
   function leanedContainer(cx, cz, yaw, color) {
@@ -1091,16 +1091,19 @@ function buildShipment(scene, colliders) {
     scene.add(g);
     steppedHull(cx, cz, yaw, len);
   }
-  // Stepped AABB hull for a leaned container: 3 axis-aligned blocker boxes
-  // marched along the yawed centerline, each tightly bounding a ~len/3 slice
-  // of the yawed footprint. Tops sit at H (walkable if a climb reaches them;
-  // here they are cover only). Overlapping so the roof reads continuous.
+  // Stepped AABB hull for a leaned container: 5 axis-aligned blocker boxes
+  // marched along the yawed centerline, each bounding a short slice of the
+  // yawed footprint. Tops sit at H (walkable if a climb reaches them; here
+  // they are cover only). The small padding prevents players from slipping
+  // into the visible mesh where AABB slices meet a rotated container face.
   function steppedHull(cx, cz, yaw, len) {
-    const cs = Math.cos(yaw), sn = Math.sin(yaw), seg = len / 3, WD = 2.6;
-    const bw = Math.abs(seg * cs) + Math.abs(WD * sn) + 0.04;
-    const bd = Math.abs(seg * sn) + Math.abs(WD * cs) + 0.04;
-    for (const u of [-seg, 0, seg])
+    const cs = Math.cos(yaw), sn = Math.sin(yaw), pieces = 5, seg = len / pieces, WD = 2.6, PAD = 0.12;
+    const bw = Math.abs(seg * cs) + Math.abs(WD * sn) + PAD;
+    const bd = Math.abs(seg * sn) + Math.abs(WD * cs) + PAD;
+    for (let i = 0; i < pieces; i++) {
+      const u = -len / 2 + seg / 2 + i * seg;
       k.blocker(cx + u * cs, 1.3, cz + u * sn, bw, H, bd);
+    }
   }
 
   // ---- perimeter (S3): double-stacked container wall, no exits. N/S walls
@@ -1137,10 +1140,12 @@ function buildShipment(scene, colliders) {
 
   // ---- C. E/W leaned pairs (S4/D1): two yawed containers each against the
   // side walls, forming a shallow V with a narrow gap on the x = 0 lane.
-  for (const s of [-1, 1]) {
-    leanedContainer(s * 3.4, s * -9.7, s * -0.28, GREY);   // outer of the V
-    leanedContainer(s * -3.4, s * -9.7, s * 0.28, GREEN);  // inner of the V
-  }
+  // Explicit placements keep the side-wall pairs true 180° point mirrors.
+  const leanZ = 10.25;
+  leanedContainer(3.4, -leanZ, -0.28, GREY);
+  leanedContainer(-3.4, -leanZ, 0.28, GREEN);
+  leanedContainer(-3.4, leanZ, -0.28, GREY);
+  leanedContainer(3.4, leanZ, 0.28, GREEN);
 
   // ---- D. Corners (S4): debris only — junk cars on the NE/SW diagonal,
   // barrel + crate clusters on the NW/SE diagonal. Cover height, nothing
