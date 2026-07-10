@@ -71,8 +71,7 @@ Use these as the initial reference set. Each map still needs its own
   playable path and not create misleading cover.
 - Current modes to regression-test on every finished map: TDM, FFA, Gun Game,
   frag danger indicator, bot spawns/pathing, scoreboard/HUD, killstreaks, and
-  throwables. Search & Destroy site anchors should be planned even before S&D
-  is fully implemented.
+  throwables.
 
 ## Global build slices for every map
 
@@ -81,8 +80,8 @@ These slices should be repeated for Killhouse, Vacant, and Crash.
 1. Reference doc first
    - Create `docs/<map>-reference.md`.
    - Record sources, map identity, landmarks, intended scale, compass, rough
-     ASCII schematic, team spawn axis, FFA spawn pockets, S&D site candidates,
-     nav plan, collision risks, and intentional approximations.
+     ASCII schematic, team spawn axis, FFA spawn pockets, nav plan, collision
+     risks, and intentional approximations.
    - The reference doc is the yardstick for the implementation. Do not start
      `js/maps.js` work until this exists.
 
@@ -123,7 +122,7 @@ These slices should be repeated for Killhouse, Vacant, and Crash.
 
 7. Bot navigation pass
    - Add primary route seeds, flank seeds, room-center seeds, doorway seeds,
-     vertical seeds, cover/perch seeds, and S&D site approach seeds.
+     vertical seeds, and cover/perch seeds.
    - Run nav graph audit: no orphan seed islands, spawns connected, roofs
      reachable only when intentionally reachable.
 
@@ -222,17 +221,11 @@ Reference details to preserve:
 - Bot paths need explicit room-doorway-center-room threading; a flat grid will
   over-connect through walls.
 
-### S&D future anchors
-
-- Site A: target-practice room or adjacent side room.
-- Site B: central/tower-side training floor.
-- Attack/defense flow must avoid both sites being visible from one spawn.
-
 ### Killhouse implementation todo
 
 - [ ] K1. Create `docs/killhouse-reference.md` with sources, schematic,
-      bounds, spawn axis, lane names, target room, tower, and red-circle
-      landing landmark.
+      bounds, spawn axis, lane names, target room, tower, FFA pockets, and
+      red-circle landing landmark.
 - [ ] K2. Register map shell/card and load blank warehouse floor in Chrome.
 - [ ] K3. Block perimeter warehouse, spawn pockets, central floor, side rooms,
       target room, and tower placeholder.
@@ -317,19 +310,11 @@ Reference details to preserve:
 - Exterior open area needs sightline blockers so it does not become a sniper
   lane across the whole map.
 
-### S&D future anchors
-
-- Site A: interior office/cubicle room, forcing attackers inside.
-- Site B: exterior/loading/parking side near truck cover, forcing a different
-  route.
-- Defenders should be able to rotate through interior hallways; attackers can
-  split exterior and interior.
-
 ### Vacant implementation todo
 
 - [ ] V1. Create `docs/vacant-reference.md` with source notes, overhead
-      interpretation, office/parking topology, room list, spawn axis, S&D site
-      candidates, and collision risks.
+      interpretation, office/parking topology, room list, spawn axis, FFA
+      pockets, and collision risks.
 - [ ] V2. Register map shell/card and load floor/perimeter in Chrome.
 - [ ] V3. Block office building footprint, hallway spine, side offices,
       cubicle/storage rooms, loading route, and parking lot.
@@ -423,18 +408,11 @@ Reference details to preserve:
   simplified hulls.
 - Bot LOS and grenade LOS need walls thick enough to behave consistently.
 
-### S&D future anchors
-
-- Site A: crash courtyard/near wreck, iconic and exposed.
-- Site B: shop/rooftop or backyard-side building, more interior/defensible.
-- Attackers should have a risky center push and two flanks; defenders should
-  rotate through buildings, not across the whole open courtyard.
-
 ### Crash implementation todo
 
 - [ ] C1. Create `docs/crash-reference.md` with source notes, labeled overhead
-      callouts, scale plan, building list, rooftop plan, spawn axis, and S&D
-      site candidates.
+      callouts, scale plan, building list, rooftop plan, spawn axis, and FFA
+      pockets.
 - [ ] C2. Register map shell/card and load desert-town floor/perimeter in
       Chrome.
 - [ ] C3. Block out central crash courtyard, helicopter placeholder, main

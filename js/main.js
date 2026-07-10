@@ -480,13 +480,14 @@ function camoShade(orig, shades) {
 // part()/cyl() primitives and returns the muzzle distance (len). Sight line
 // stays at local y ~0.06 so the shared VM_POS.ads still centers the irons
 // (a mounted optic re-centers via userData.adsPos instead). Iron-sight
-// parts go through `s` (not `p`) so an optic can hide them; a built-in
-// vertical foregrip goes through `u` so the foregrip attachment replaces
-// it instead of doubling up (only the MP5K has one); mag parts go through
-// `m` so the reload anim (#10b) can pull them — guns whose mag isn't a
-// separate visible part (pistol-grip mags, SPAS tube, Vector mag-in-grip)
-// skip it and only play the tilt + hand motion; pump sleeves / bolt
-// handles go through `k` so the cycle anim (#10c) can slide them.
+// parts go through `s` (not `p`) so an optic can hide them; centerline
+// carry-handle / rail parts that would occlude an optic go through `o`;
+// a built-in vertical foregrip goes through `u` so the foregrip attachment
+// replaces it instead of doubling up (only the MP5K has one); mag parts go
+// through `m` so the reload anim (#10b) can pull them — guns whose mag isn't
+// a separate visible part (pistol-grip mags, SPAS tube, Vector mag-in-grip)
+// skip it and only play the tilt + hand motion; pump sleeves / bolt handles
+// go through `k` so the cycle anim (#10c) can slide them.
 // Weapons without a recipe fall back to the generic per-class body below.
 const VM_RECIPES = {
   m4a1({ p, s, m, dark, mid, black }) {
@@ -633,14 +634,14 @@ const VM_RECIPES = {
   },
   // M240 — the heavy: all-steel black, long barrel, boxy hanging ammo box
   // (not the RPD's round drum), folding carry handle on a top rail.
-  m240({ p, s, m, dark, mid }) {
+  m240({ p, s, o, m, dark, mid }) {
     p(0.066, 0.1, 0.56, dark, 0, 0, -0.26);          // heavy receiver
     p(0.034, 0.034, 0.5, mid, 0, 0.006, -0.76);      // long heavy barrel
     p(0.03, 0.05, 0.14, dark, 0, 0.022, -0.56);      // gas tube / bipod collar
     m(0.1, 0.13, 0.15, dark, 0, -0.115, -0.15);      // rectangular ammo box
     p(0.055, 0.02, 0.05, mid, 0, -0.045, -0.15);     // belt feed lip
-    p(0.022, 0.05, 0.3, dark, 0, 0.056, -0.28);      // top carry-handle rail
-    p(0.03, 0.05, 0.055, dark, 0, 0.084, -0.4);      // folding carry handle
+    o(0.022, 0.05, 0.3, dark, 0, 0.056, -0.28);      // top carry-handle rail
+    o(0.03, 0.05, 0.055, dark, 0, 0.084, -0.4);      // folding carry handle
     p(0.05, 0.085, 0.16, dark, 0, -0.005, 0.08);     // solid stock
     p(0.04, 0.06, 0.03, dark, 0, -0.005, 0.18);      // butt pad
     p(0.03, 0.065, 0.04, dark, 0, -0.072, -0.05);    // grip
@@ -795,6 +796,8 @@ function buildViewModel(w) {
   };
   const irons = [];
   const sight = (...a) => { const m = part(...a); irons.push(m); return m; };
+  const opticObstructions = [];
+  const opticClearance = (...a) => { const m = part(...a); opticObstructions.push(m); return m; };
   const builtinGrips = [];
   const ugrip = (...a) => { const m = part(...a); builtinGrips.push(m); return m; };
   const magParts = [];
@@ -807,7 +810,7 @@ function buildViewModel(w) {
   let len = 0.62;
   const recipe = VM_RECIPES[w.key];
   if (recipe) {
-    len = recipe({ p: part, s: sight, u: ugrip, m: magp, k: cyclep, cyl, dark, mid, wood, black });
+    len = recipe({ p: part, s: sight, o: opticClearance, u: ugrip, m: magp, k: cyclep, cyl, dark, mid, wood, black });
   } else if (type === 'ar') {
     part(0.055, 0.085, 0.62, dark, 0, 0, -0.31);
     part(0.03, 0.03, 0.3, mid, 0, 0.005, -0.68);         // barrel
@@ -859,6 +862,7 @@ function buildViewModel(w) {
     : w.attachments.includes('holo') ? 'holo' : null);
   if (opticId) {
     for (const m of irons) m.visible = false;
+    for (const m of opticObstructions) m.visible = false;
     const mnt = VM_OPTIC[w.key] || VM_OPTIC[type] || { y: 0.045, z: -0.12 };
     const glow = () => new THREE.MeshBasicMaterial({ color: w.reticleColor || 0xff2020, side: THREE.DoubleSide });
     part(0.04, 0.014, 0.08, black, 0, mnt.y + 0.007, mnt.z);          // rail base
