@@ -1,11 +1,13 @@
 // ============================================================
 // Player profile — persistent XP / level / lifetime stats under
-// localStorage key `tf_profile` (P1), plus the pure Level 1-20
-// curve and rank-name helpers (P2). No UI or gameplay wiring
-// lives here; main/ui call into Profile.
+// localStorage key `tf_profile` (P1), the pure Level 1-20 curve
+// and rank-name helpers (P2), the match-local XP accumulator
+// (P3), and immediate lifetime-stat mutators + match-stat deltas
+// (P5). No UI or gameplay wiring lives here; main/ui call in.
 // Curve: L1->2 = 500 XP, +250 per level after, capped at L20.
-// The profile never stores derived values (rank name, xp-to-next)
-// — always compute them from the helpers below.
+// profile.xp is TOTAL career XP — levelFromTotalXp/progressToNext
+// are the canonical readers; nothing stores derived values
+// (rank name, xp-to-next, into-level remainders).
 // ============================================================
 
 // Flip to true to run the console self-test block at load.
@@ -149,6 +151,121 @@ const Profile = {
     return this.RANK_NAMES[level - 1];
   },
 
+  // ---------- P3: match-local XP accumulator ----------
+
+  // First-pass earn table (progression plan, "XP earn table").
+  // matchComplete/matchWin are committed by P6 at normal match end.
+  XP_EARN: {
+    directKill: 100, assist: 25, headshotBonus: 25, meleeBonus: 50,
+    killstreakKill: 50, nukeBonus: 1000, matchComplete: 100, matchWin: 250,
+  },
+
+  // Match-scoped XP by earn category (values are XP, not counts —
+  // this is the end-screen breakdown). Resets at match start /
+  // rematch / map change via reset()/Profile.resetMatch(). Nothing
+  // here touches the persistent profile; commit is P6's job.
+  // Nuke kills award no per-kill XP: never call onDirectKill or
+  // onKillstreakKill for them — only onNukeCalled once per nuke.
+  MatchXP: {
+    directKills: 0, killstreakKills: 0, assists: 0, headshots: 0,
+    meleeKills: 0, nukeBonus: 0, matchComplete: 0, matchWin: 0,
+    total: 0,
+
+    reset() {
+      this.directKills = 0; this.killstreakKills = 0; this.assists = 0;
+      this.headshots = 0; this.meleeKills = 0; this.nukeBonus = 0;
+      this.matchComplete = 0; this.matchWin = 0; this.total = 0;
+    },
+
+    _add(field, xp) { this[field] += xp; this.total += xp; },
+
+    onDirectKill()     { this._add('directKills',     Profile.XP_EARN.directKill); },
+    // Killstreak kills are their own breakdown line — never directKills.
+    onKillstreakKill() { this._add('killstreakKills', Profile.XP_EARN.killstreakKill); },
+    onAssist()         { this._add('assists',         Profile.XP_EARN.assist); },
+    // Bonuses stack on top of onDirectKill for the same kill.
+    onHeadshot()       { this._add('headshots',       Profile.XP_EARN.headshotBonus); },
+    onMeleeKill()      { this._add('meleeKills',      Profile.XP_EARN.meleeBonus); },
+    onNukeCalled()     { this._add('nukeBonus',       Profile.XP_EARN.nukeBonus); },
+    // Once per match (P6 calls these at normal match end; idempotent).
+    onMatchComplete()  { if (!this.matchComplete) this._add('matchComplete', Profile.XP_EARN.matchComplete); },
+    onMatchWin()       { if (!this.matchWin)      this._add('matchWin',      Profile.XP_EARN.matchWin); },
+
+    snapshot() {
+      return {
+        directKills: this.directKills, killstreakKills: this.killstreakKills,
+        assists: this.assists, headshots: this.headshots,
+        meleeKills: this.meleeKills, nukeBonus: this.nukeBonus,
+        matchComplete: this.matchComplete, matchWin: this.matchWin,
+        total: this.total,
+      };
+    },
+  },
+
+  // ---------- P5: match deltas + immediate lifetime stats ----------
+
+  // Match-local stat deltas for the end-screen recap (these are
+  // counts; lifetime stats persist immediately and separately).
+  // result stays null until onMatchResult; quits leave it null.
+  MatchStats: {
+    kills: 0, deaths: 0, assists: 0, headshots: 0, meleeKills: 0,
+    killstreakKills: 0, nukesCalled: 0, result: null,
+
+    reset() {
+      this.kills = 0; this.deaths = 0; this.assists = 0; this.headshots = 0;
+      this.meleeKills = 0; this.killstreakKills = 0; this.nukesCalled = 0;
+      this.result = null;
+    },
+
+    snapshot() {
+      return {
+        kills: this.kills, deaths: this.deaths, assists: this.assists,
+        headshots: this.headshots, meleeKills: this.meleeKills,
+        killstreakKills: this.killstreakKills, nukesCalled: this.nukesCalled,
+        result: this.result,
+      };
+    },
+  },
+
+  resetMatch() { this.MatchXP.reset(); this.MatchStats.reset(); },
+
+  // Generic immediate lifetime bump: load -> add -> save, one
+  // localStorage write per event (fine at this scale). Unknown stat
+  // names are ignored. Returns the saved profile.
+  bumpStat(name, n = 1) {
+    const p = this.load();
+    if (name in p.stats) {
+      p.stats[name] += this._int(n, 1, 0);
+      this.save(p);
+    }
+    return p;
+  },
+
+  // Per-event helpers: bump the lifetime stat immediately AND the
+  // match delta. XP is separate — pair with the MatchXP call at the
+  // same call site (see the wiring map in the P3/P5 handoff notes).
+  onMatchStart() { this.resetMatch(); return this.bumpStat('matchesPlayed'); },
+  // Direct player kills only (guns/melee/direct equipment) — never
+  // killstreak or nuke kills.
+  onKill()           { this.MatchStats.kills++;           return this.bumpStat('kills'); },
+  onDeath()          { this.MatchStats.deaths++;          return this.bumpStat('deaths'); },
+  onAssist()         { this.MatchStats.assists++;         return this.bumpStat('assists'); },
+  onHeadshot()       { this.MatchStats.headshots++;       return this.bumpStat('headshots'); },
+  onMeleeKill()      { this.MatchStats.meleeKills++;      return this.bumpStat('meleeKills'); },
+  onKillstreakKill() { this.MatchStats.killstreakKills++; return this.bumpStat('killstreakKills'); },
+  onNukeCalled()     { this.MatchStats.nukesCalled++;     return this.bumpStat('nukesCalled'); },
+
+  // Match-end helpers — caller (P6/P10 wiring) decides the moment.
+  // 'win'|'loss' bump lifetime; 'draw' only records the delta result.
+  onMatchResult(result) {
+    this.MatchStats.result = result;
+    if (result === 'win') return this.bumpStat('wins');
+    if (result === 'loss') return this.bumpStat('losses');
+    return this.load();
+  },
+  // Mid-match exit: records the quit, never touches result/XP.
+  onQuit() { return this.bumpStat('quits'); },
+
   // ---------- self-test (PROFILE_DEBUG only) ----------
 
   _selfTest() {
@@ -190,6 +307,63 @@ const Profile = {
     const n = this.normalize({ level: 99, xp: -5, prestige: 'x', stats: { kills: '7', wins: 3.9 }, junk: 1 });
     ok(n.level === 20 && n.xp === 0 && n.prestige === 0, 'clamps/coerces bad fields');
     ok(n.stats.kills === 0 && n.stats.wins === 3 && !('junk' in n), 'stat coercion, junk dropped');
+
+    // P3: match XP accumulator (earn table + category isolation)
+    const mx = this.MatchXP;
+    mx.reset();
+    ok(mx.total === 0 && mx.directKills === 0, 'MatchXP reset zeroed');
+    mx.onDirectKill(); mx.onHeadshot();              // headshot kill = 100 + 25
+    mx.onDirectKill(); mx.onMeleeKill();             // melee kill = 100 + 50
+    mx.onAssist();                                   // + 25
+    mx.onKillstreakKill();                           // + 50, NOT a direct kill
+    mx.onNukeCalled();                               // + 1000, no per-kill XP
+    ok(mx.directKills === 200, 'direct kills = 200 XP');
+    ok(mx.headshots === 25 && mx.meleeKills === 50, 'bonus lines');
+    ok(mx.assists === 25, 'assist = 25 XP');
+    ok(mx.killstreakKills === 50 && mx.directKills === 200, 'killstreak kill not a direct kill');
+    ok(mx.nukeBonus === 1000, 'nuke = flat 1000');
+    ok(mx.total === 1350, 'total = sum of categories');
+    mx.onMatchComplete(); mx.onMatchComplete();      // idempotent
+    mx.onMatchWin(); mx.onMatchWin();
+    ok(mx.matchComplete === 100 && mx.matchWin === 250 && mx.total === 1700, 'match end lines once');
+    ok(mx.snapshot().total === 1700, 'MatchXP snapshot');
+    mx.reset();
+    ok(mx.total === 0 && mx.nukeBonus === 0 && mx.matchWin === 0, 'reset re-zeroes');
+
+    // P5: lifetime bumps + match deltas (restore the real save after)
+    let savedRaw = null;
+    try { savedRaw = localStorage.getItem(this.KEY); } catch (e) {}
+    this.reset();
+    this.onMatchStart();
+    ok(this.load().stats.matchesPlayed === 1, 'matchesPlayed persisted at match start');
+    ok(this.MatchStats.kills === 0 && this.MatchStats.result === null, 'deltas reset at match start');
+    this.onKill(); this.onKill(); this.onDeath(); this.onHeadshot();
+    this.onMeleeKill(); this.onKillstreakKill(); this.onAssist(); this.onNukeCalled();
+    let lp = this.load();
+    ok(lp.stats.kills === 2 && lp.stats.deaths === 1, 'kills/deaths persist immediately');
+    ok(lp.stats.headshots === 1 && lp.stats.meleeKills === 1 && lp.stats.killstreakKills === 1
+      && lp.stats.assists === 1 && lp.stats.nukesCalled === 1, 'other stats persist immediately');
+    const ds = this.MatchStats.snapshot();
+    ok(ds.kills === 2 && ds.deaths === 1 && ds.nukesCalled === 1, 'match deltas track counts');
+    this.onMatchResult('win');
+    ok(this.load().stats.wins === 1 && this.MatchStats.result === 'win', 'win recorded');
+    this.onMatchResult('draw');
+    lp = this.load();
+    ok(lp.stats.wins === 1 && lp.stats.losses === 0 && this.MatchStats.result === 'draw', 'draw bumps nothing');
+    this.onQuit();
+    ok(this.load().stats.quits === 1, 'quit recorded');
+    this.bumpStat('totalXpEarned', 1700);
+    ok(this.load().stats.totalXpEarned === 1700, 'bumpStat with amount persists');
+    this.bumpStat('notAStat');
+    ok(!('notAStat' in this.load().stats), 'unknown stat ignored');
+    this.resetMatch();
+    ok(this.MatchStats.kills === 0 && this.MatchXP.total === 0
+      && this.load().stats.kills === 2, 'resetMatch clears deltas/XP, lifetime survives');
+    // put the real profile back
+    try {
+      if (savedRaw === null) localStorage.removeItem(this.KEY);
+      else localStorage.setItem(this.KEY, savedRaw);
+    } catch (e) {}
 
     if (!fails) console.log('[Profile selfTest] all assertions passed');
     return fails === 0;
