@@ -41,11 +41,17 @@ Click a map (Nuketown, Rust, or Shipment) to start a Team Deathmatch, pick a cla
 
 ## Features
 
-- **Team Deathmatch** — Task Force vs Spetsnaz, first to the score limit (default 75) or 10 minutes
-- **Create-a-Class** — 5 editable slots (saved in your browser), 17 weapons
-  (M4A1, FN SCAR-H, Remington ACR, FAMAS, FN FAL, Tavor TAR-21, HK UMP45, HK MP5K,
-  KRISS Vector, FN P90, RPD, CheyTac M200, Barrett M82, HK USP45, Desert Eagle,
-  Glock 18, Franchi SPAS-12)
+- **Game modes** — Team Deathmatch (Task Force vs Spetsnaz, first to the score limit,
+  default 75, or 10 minutes), Free-for-All, and Gun Game (climb the weapon ladder)
+- **Create-a-Class** — 5 editable slots (saved in your browser), 22 weapons
+  - *Assault rifles:* M4A1, FN SCAR-H, Remington ACR, Tavor TAR-21, FAMAS, FN FAL
+  - *SMGs:* HK MP5K, HK UMP45, KRISS Vector, FN P90
+  - *LMGs:* RPD, M240, HK MG4
+  - *Shotguns:* Remington 870 MCS, Atchisson AA-12, Franchi SPAS-12
+  - *Sniper rifles:* CheyTac M200, Barrett M82
+  - *Sidearms:* HK USP45, Desert Eagle, Glock 18
+  - *Melee:* Tomahawk (throwable)
+  - plus attachments (red dot, holographic, foregrip, laser, camos)
 - **Perks** — 3 tiers: Marathon / Sleight of Hand / Scavenger, Stopping Power /
   Lightweight / Cold-Blooded, Steady Aim / Ninja / Commando
 - **Bots** — 4 difficulty levels (Options menu), they patrol, hunt, strafe, and use the killfeed like you do
