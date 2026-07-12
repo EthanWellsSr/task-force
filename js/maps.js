@@ -1490,7 +1490,194 @@ function buildKillhouse(scene, colliders) {
   };
 }
 
-const MAPS = { nuketown: buildNuketown, rust: buildRust, shipment: buildShipment, killhouse: buildKillhouse };
+// ============================================================
+// VACANT — CoD4 deserted Russian office (Ukraine), per
+// docs/vacant-reference.md (#23e). Compass: +x = north, +z = east
+// (top-down +x up). 34 × 24 m playable — bounds { x: 17, z: 12 }.
+// ASYMMETRIC by design, like the real map: tf spawns INSIDE the south
+// office end among cubicles/desks, sp spawns OUTSIDE in the north
+// container yard. The office building fills x −17..10 / z −4..12; the
+// parking lot is the west strip (z −12..−4) with the blown-up truck,
+// car bays and a raised garden planter; lot and yard meet at the NW
+// alley corner. Interior: corridor spine (z 3..5) with a chicane (two
+// wall stubs + a strip pillar cover the full z-band so no straight
+// spine tube survives), cubicle floor, lobby, locker room with
+// staggered rows, offices A/B with offset connecting doors, storage
+// with the loading door. Windows (0.95 sills) are player-only vaults —
+// the corridorClear knee ray keeps bots on doors. #23f BLOCKOUT with
+// debug colors — office palette/smokestacks/poster art are #23g.
+// ============================================================
+function buildVacant(scene, colliders) {
+  const k = new MapKit(scene, colliders);
+  const W = 17, D = 12;      // half extents: 34 m spawn axis (x) × 24 m (z)
+  const SHELL_H = 3.6, T = 0.3, BH = 3.2, IH = 3.0;
+  // debug palette (#23f): loud compass shell walls + zone tints
+  const DBG_N = 0xb03030, DBG_S = 0x3050a0, DBG_E = 0x3a8a3a, DBG_W = 0xc0a030,
+        OFFICE = 0x9aa4b0,  // building exterior walls
+        INNER = 0xb8b4a8,   // interior partition walls
+        DESK = 0x7a6a55, LOCKER = 0x5a6a72, CRATE = 0x6f5f3f,
+        ASPHALT = 0x5b5e63, FLOOR = 0x8a857c, PLAIN = 0x5f6a52;
+  const nsf = { solid: false, shadow: false };
+
+  scene.background = new THREE.Color(0xa8b0b8);
+  scene.fog = new THREE.Fog(0xa8b0b8, 55, 120);
+
+  // ground: office slab + asphalt lot strip over a wider plain
+  k.box(0, -0.55, 0, 130, 1, 130, PLAIN, nsf);
+  k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, FLOOR);
+  k.box(-3.5, 0.012, -8, 27, 0.024, 8, ASPHALT, nsf);      // parking lot paving
+  k.box(13.5, 0.012, 0, 7, 0.024, D * 2, 0x74716a, nsf);   // yard concrete
+
+  // ---- perimeter shell (debug-colored) + invisible blocker caps
+  k.wall('z', -D - T, D + T, W, SHELL_H, T, DBG_N);        // north end wall
+  k.wall('z', -D - T, D + T, -W, SHELL_H, T, DBG_S);       // south end wall
+  k.wall('x', -W, W, D, SHELL_H, T, DBG_E);                // east side wall
+  k.wall('x', -W, W, -D, SHELL_H, T, DBG_W);               // west side wall
+  for (const s of [-1, 1]) {
+    k.blocker(s * (W + 0.6), 6, 0, 1, 12, D * 2 + 4);
+    k.blocker(0, 6, s * (D + 0.6), W * 2 + 4, 12, 1);
+  }
+
+  // ---- building exterior walls. West face (z = −4, onto the lot):
+  // three doors (tf spawn hall, cubicles, lobby) + two vault windows
+  // (cubicles, locker). North face (x = 10, onto the yard): main door,
+  // loading door, locker vault window.
+  k.wall('x', -W, 10, -4, BH, 0.25, OFFICE, [
+    { a: -15.6, b: -14.2 },                          // tf spawn hall lot door
+    { a: -8.1, b: -6.7 },                            // cubicles lot door
+    { a: -3.5, b: -1.7, bottom: 0.95, top: 2.5 },    // cubicles window (vault)
+    { a: 2.3, b: 3.7 },                              // lobby lot door
+    { a: 6.0, b: 7.4, bottom: 0.95, top: 2.5 },      // locker window (vault)
+  ]);
+  k.wall('z', -4, D, 10, BH, 0.25, OFFICE, [
+    { a: -2.5, b: -1.1, bottom: 0.95, top: 2.5 },    // locker window (vault)
+    { a: 3.9, b: 5.3 },                              // main entrance
+    { a: 8.6, b: 10.2 },                             // storage loading door
+  ]);
+
+  // ---- interior walls. tf spawn hall (x −17..−13) + its partition:
+  k.wall('z', -4, D, -13, IH, 0.15, INNER, [
+    { a: -2.6, b: -1.2 },                            // -> cubicles
+    { a: 3.3, b: 4.7 },                              // -> corridor
+    { a: 8.4, b: 9.8 },                              // -> office A
+  ]);
+  k.wall('x', -W, -13, 6, IH, 0.15, INNER, [{ a: -15.4, b: -14.0 }]);
+  // corridor spine (z 3..5, x −13..−2) + chicane stubs
+  k.wall('x', -13, -2, 3, IH, 0.15, INNER, [
+    { a: -11.5, b: -10.1 }, { a: -5.3, b: -3.9 },    // -> cubicle floor
+  ]);
+  k.wall('x', -13, 10, 5, IH, 0.15, INNER, [
+    { a: -9.4, b: -8.0 },                            // -> office A
+    { a: -2.4, b: -1.0 },                            // -> office B
+    { a: 6.4, b: 7.8 },                              // locker -> storage
+  ]);
+  k.box(-8.5, IH / 2, 3.3, 0.35, IH, 0.6, INNER);    // chicane stub (z 3..3.6)
+  k.box(-5, IH / 2, 4.7, 0.35, IH, 0.6, INNER);      // chicane stub (z 4.4..5)
+  k.box(2.5, IH / 2, 4.0, 0.6, IH, 0.8, INNER);      // strip pillar (z 3.6..4.4)
+  // west wing partitions: cubicles | lobby | locker
+  k.wall('z', -4, 3, -2, IH, 0.15, INNER, [{ a: -0.9, b: 0.5 }]);
+  k.wall('z', -4, 3, 4, IH, 0.15, INNER, [{ a: 1.4, b: 2.8 }]);
+  // east wing partitions: office A | office B | storage (offset doors)
+  k.wall('z', 5, D, -5, IH, 0.15, INNER, [{ a: 7.2, b: 8.6 }]);
+  k.wall('z', 5, D, 4, IH, 0.15, INNER, [{ a: 9.8, b: 11.2 }]);
+
+  // ---- furniture / cover masses (coarse hulls, off the door lanes)
+  k.box(-10, 0.625, 0.2, 1.8, 1.25, 0.9, DESK);      // cubicle desk clusters
+  k.box(-9.4, 0.625, -2.0, 0.9, 1.25, 1.8, DESK);
+  k.box(-6, 0.625, 1.4, 1.8, 1.25, 0.9, DESK);
+  k.box(-5.2, 0.625, -1.6, 0.9, 1.25, 1.8, DESK);
+  k.box(0.8, 0.55, -2.6, 2.4, 1.1, 1.0, DESK);       // lobby reception desk
+  k.box(5.8, 0.95, -1.4, 2.4, 1.9, 0.45, LOCKER);    // staggered locker rows
+  k.box(8.2, 0.95, 0.6, 2.4, 1.9, 0.45, LOCKER);
+  k.box(-11, 0.55, 10.8, 2.4, 1.1, 1.0, DESK);       // office A desks
+  k.box(-7, 0.55, 6.3, 1.0, 1.1, 2.2, DESK);
+  k.box(-1.5, 0.55, 11.2, 2.6, 1.1, 0.9, DESK);      // office B desks
+  k.box(1.8, 0.55, 6.4, 1.1, 1.1, 2.0, DESK);
+  k.box(6.6, 0.8, 10.9, 2.2, 1.6, 1.4, CRATE);       // storage masses
+  k.crate(8.6, 7.2, 1.2, CRATE);
+  k.barrel(5, 6.2);
+
+  // ---- parking lot (z −12..−4): blown-up truck landmark, car bays,
+  // raised garden planter, jersey barrier
+  k.box(-13.5, 1.1, -7, 2.2, 2.2, 5, 0x4a4640);      // truck box (burnt)
+  k.box(-13.5, 2.35, -5.6, 2.0, 0.5, 1.6, 0x35322e); // ...collapsed cab
+  k.car(-9, -9.8, 0x6a6660);
+  k.car(-4.5, -9.8, 0x5a6a72);
+  k.car(3, -9.8, 0x6e5a48);
+  k.car(6.5, -7, 0x565a5c);
+  k.box(0, 0.5, -5.6, 3.4, 1.0, 1.2, 0x6b4b2e);      // raised garden planter
+  k.box(0, 1.15, -5.6, 3.0, 0.4, 0.8, 0x4a6a3a, { solid: false }); // overgrowth
+  k.box(-5, 0.55, -6.4, 0.9, 1.1, 2.8, 0x8f8878);    // jersey barrier
+
+  // ---- container yard (x 10..17): sp spawn cover — containers, shed.
+  // The x-long container splits the yard; its west gap (x ~10.1..12.8)
+  // is the only yard N↔S lane besides the alley — deliberate choke.
+  k.box(14.2, 1.3, -6.5, 2.6, 2.6, 6, 0x8a4a35);     // z-long container (alley screen)
+  k.box(14.8, 1.3, 1.5, 4, 2.6, 2.6, 0x4a6a8a);      // x-long container (yard split)
+  k.box(14.2, 1.5, 9, 3, 3, 3.5, 0x7a6a55);          // substation shed mass
+  k.crate(11.0, -2.6, 1.2, CRATE);
+
+  // ---- spawns: tf INSIDE the south office end, sp in the yard behind
+  // the container/shed masses. Asymmetric like the real map.
+  const spawns = {
+    tf: [[-15.6, -2.6], [-15.6, 1.2], [-15.6, 8], [-15.6, 11], [-11.5, 0.5]],
+    sp: [[16.3, -8.7], [15.9, -1.5], [15.8, 4.8], [16.3, 11.3], [12, 11.3]],
+  };
+
+  // ---- waypoints (#23f): all ground level (flat blockout, no elevation).
+  // Doorway pairs on every door, chicane thread, room centers, lot lanes
+  // clear of the car hulls, alley + yard seeds. Windows get NO seeds —
+  // player-only vaults; bots route through doors.
+  const seeds = [
+    // tf spawn hall (S + N rooms, partition door pair)
+    [-15.2, -1.8], [-15.2, 2.6], [-15.2, 8.6], [-14.4, 11],
+    [-14.7, 5.1], [-14.7, 6.9],
+    // x = −13 wall door pairs
+    [-13.9, -1.9], [-12.1, -1.9], [-13.9, 4.0], [-12.1, 4.0],
+    [-13.9, 9.1], [-12.1, 9.1],
+    // corridor + chicane thread
+    [-11.2, 4.2], [-9.4, 4.4], [-7.2, 3.6], [-5.6, 3.6], [-3.6, 4.2],
+    // corridor S wall door pairs (into cubicles)
+    [-10.8, 2.2], [-4.6, 2.2],
+    // corridor N wall door pairs (into offices)
+    [-8.7, 6.0], [-1.7, 6.0],
+    // cubicle floor (clear of desks)
+    [-11.5, 0.5], [-8, -0.6], [-7.2, -3.0], [-4, 0.6], [-3, -2.8],
+    // lobby + partition doors + strip
+    [-2.9, -0.2], [-1.1, -0.2], [1, 0.2], [1.6, -1.6],
+    [3.1, 2.1], [4.9, 2.1], [0.6, 4.2], [4.4, 3.4], [6.8, 4.2],
+    // locker room (dogleg between the rows)
+    [7.0, -0.4], [5.4, -2.6], [9.0, -2.4], [9.2, 1.8],
+    // office A / office B / storage + their door pairs
+    [-9, 8.5], [-11.5, 6.5], [-5.9, 7.9], [-4.1, 7.9],
+    [-1, 8.5], [1.5, 10.5], [3.1, 10.5], [4.9, 10.5],
+    [7, 8.5], [8.8, 10.8],
+    [7.1, 6.0],                                       // locker->storage door (in)
+    // main entrance + loading door pairs (building <-> yard)
+    [9.2, 4.2], [11.2, 4.6], [9.2, 9.4], [11.2, 9.4],
+    // west face lot-door pairs
+    [-14.9, -3.2], [-15.3, -5.4], [-7.4, -3.2], [-7.4, -5.2],
+    [3.0, -3.2], [3.0, -5.2],
+    // parking lot lanes (clear of truck/cars/planter/barrier)
+    [-15.6, -10.3], [-11.5, -10.4], [-10, -6], [-6.6, -9.3],
+    [-2.5, -8.2], [1, -8.2], [-2.5, -5.2], [4.8, -5.4], [8, -10],
+    // alley + yard (the container split forces the west gap or the alley)
+    [12, -8], [12, -4], [16.2, -4.2], [16.2, -2], [12, -1.2],
+    [11.5, 2.9], [11.8, 6.8], [15.8, 6.6], [12, 11.3], [16.3, 11.3],
+  ];
+
+  return {
+    name: 'VACANT',
+    bounds: { x: W, z: D },
+    sun: { color: 0xe8e4d8, intensity: 0.85, pos: [25, 38, -18] },
+    hemi: { sky: 0xaab4bc, ground: 0x565048, intensity: 0.8 },
+    spawns,
+    waypointSeeds: seeds,
+    windows: k.windows,
+  };
+}
+
+const MAPS = { nuketown: buildNuketown, rust: buildRust, shipment: buildShipment, killhouse: buildKillhouse, vacant: buildVacant };
 
 // ============================================================
 // Waypoint graph — filter seeds that land inside geometry, then
