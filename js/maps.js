@@ -1234,40 +1234,88 @@ function buildShipment(scene, colliders) {
 // on the kill floor killing every straight spawn-to-spawn eye-line, the
 // long target-practice room along the east wall (z 7..10), a two-room
 // dogleg corridor loop along the west wall (z −7..−10), and rough
-// crate/cover clusters. All doorways ≥ 1.4 m. Red circle decal, AK
-// poster, targets art and warehouse dressing are #23d.
+// crate/cover clusters. All doorways ≥ 1.4 m.
+// #23d ART/COLLISION PASS: corrugated steel shell palette with pilaster
+// strips, base bands, high window bands and roof trusses (decorative);
+// target silhouettes on the mid-lane boards plus wall-line target
+// stands and a dark back-stop band; the AK-47 diagram poster on the
+// east shell wall, read from map center through the target room's
+// middle doorway; the red landing circle decal beside the tower;
+// exterior training-ground hints (warehouse silhouettes, stack, trees —
+// out of bounds, non-solid); and a boarded skirt under the tower slab
+// (SOLID, y 2.37..3.07) that breaks the platform↔platform perch-duel
+// eye-line flagged in #23c while keeping the under-tower lane walkable.
+// Every new solid is visible; every new visual is solid or clearly
+// decorative (posters, decals, overhead trusses, out-of-bounds scenery).
 // ============================================================
 function buildKillhouse(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 15, D = 10;      // half extents: 30 m spawn axis (x) × 20 m (z)
   const SHELL_H = 6, T = 0.4;
-  // temporary debug palette (#23b/c): loud compass wall colors + zone tints
-  const DBG_N = 0xb03030, DBG_S = 0x3050a0, DBG_E = 0x3a8a3a, DBG_W = 0xc0a030,
+  // warehouse palette (#23d): corrugated grey-blue shell, plywood browns
+  const STEEL = 0x5b6673, STEEL2 = 0x556070, STEELD = 0x49525c,
+        GLASS = 0x2a3138, TRUSS = 0x3f4750,
         FLOOR = 0x8a857c, PLAIN = 0x5f6a52,
         PLY = 0xb08a50,    // plywood partitions (rooms/panels)
-        SHIELD = 0xc07030, // spawn shield plywood (loud for Chrome checks)
+        SHIELD = 0x9c7a42, // spawn shield plywood (darker sheet grade)
         WOOD = 0x8a6d4a,   // tower / platform timber
+        BOARD = 0x8a8478,  // target boards/stands
+        SILH = 0x33383d,   // target silhouette paint
         SANDBAG = 0x8f8060, CRATE = 0x6f5f3f;
+  const ns = { solid: false }, nsf = { solid: false, shadow: false };
 
   scene.background = new THREE.Color(0x9aa4ae);
   scene.fog = new THREE.Fog(0x9aa4ae, 50, 110);
 
-  // ground: concrete training floor over a wider grass plain (the exterior
-  // training grounds — scenery hints come in #23d)
-  k.box(0, -0.55, 0, 120, 1, 120, PLAIN, { solid: false, shadow: false });
+  // ground: concrete training floor over a wider grass plain
+  k.box(0, -0.55, 0, 120, 1, 120, PLAIN, nsf);
   k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, FLOOR);
 
-  // ---- perimeter warehouse shell: four walls, no exits, debug-colored.
+  // ---- perimeter warehouse shell: corrugated steel, no exits.
   // Invisible blocker caps just outside each wall (same technique as the
   // other maps) seal the box on their own.
-  k.wall('z', -D - T, D + T, W, SHELL_H, T, DBG_N);    // north end wall
-  k.wall('z', -D - T, D + T, -W, SHELL_H, T, DBG_S);   // south end wall
-  k.wall('x', -W, W, D, SHELL_H, T, DBG_E);            // east side wall
-  k.wall('x', -W, W, -D, SHELL_H, T, DBG_W);           // west side wall
+  k.wall('z', -D - T, D + T, W, SHELL_H, T, STEEL);    // north end wall
+  k.wall('z', -D - T, D + T, -W, SHELL_H, T, STEEL);   // south end wall
+  k.wall('x', -W, W, D, SHELL_H, T, STEEL2);           // east side wall
+  k.wall('x', -W, W, -D, SHELL_H, T, STEEL2);          // west side wall
   for (const s of [-1, 1]) {
     k.blocker(s * (W + 0.6), 6, 0, 1, 12, D * 2 + 4);  // N/S containment cap
     k.blocker(0, 6, s * (D + 0.6), W * 2 + 4, 14, 1);  // E/W containment cap
   }
+  // shell dressing (#23d, decorative): pilaster strips, dark base bands,
+  // the reference's "giant windows" high on the walls, roof trusses +
+  // ridge beam overhead to sell the warehouse volume.
+  for (const s of [-1, 1]) {
+    for (const z of [-7.5, -2.5, 2.5, 7.5])
+      k.box(s * (W - 0.26), 3, z, 0.12, SHELL_H, 0.5, STEELD, ns);      // N/S pilasters
+    for (const x of [-12, -8, -4, 0, 4, 8, 12])
+      k.box(x, 3, s * (D - 0.26), 0.5, SHELL_H, 0.12, STEELD, ns);      // E/W pilasters
+    k.box(s * (W - 0.24), 0.45, 0, 0.08, 0.9, D * 2 + 0.6, STEELD, ns); // base bands
+    k.box(0, 0.45, s * (D - 0.24), W * 2 - 0.8, 0.9, 0.08, STEELD, ns);
+    for (const z of [-4.6, 4.6])
+      k.box(s * (W - 0.24), 4.9, z, 0.08, 1.1, 5.2, GLASS, ns);         // N/S windows
+    for (const x of [-9.5, -3.2, 3.2, 9.5])
+      k.box(x, 4.9, s * (D - 0.24), 4.6, 1.1, 0.08, GLASS, ns);         // E/W windows
+  }
+  for (const x of [-10, -5, 0, 5, 10])
+    k.box(x, 6.25, 0, 0.3, 0.5, D * 2 + 0.8, TRUSS, nsf);               // roof trusses
+  k.box(0, 6.62, 0, W * 2 + 0.8, 0.28, 0.28, TRUSS, nsf);               // ridge beam
+
+  // ---- exterior training-ground hints (#23d): warehouse silhouettes, a
+  // stack and tree clusters beyond the shell — tall enough that rooflines
+  // and canopies read over the 6 m walls; all far outside the blocker
+  // caps, non-solid, no shadows.
+  k.box(0, 5.5, 18.5, 24, 11, 6, 0x6a7480, nsf);           // warehouse east
+  k.box(4, 11.6, 18.5, 3, 1.2, 6.4, 0x59636e, nsf);        // ...roof monitor
+  k.box(22, 6, -5, 8, 12, 16, 0x707a86, nsf);              // warehouse north
+  k.box(-22.5, 5, 4, 7, 10, 12, 0x66707c, nsf);            // warehouse south
+  k.box(-21, 8, -15, 1.4, 16, 1.4, 0x7d8791, nsf);         // boiler stack SW
+  function tree(x, z, h) {
+    k.box(x, h * 0.3, z, 0.5, h * 0.6, 0.5, 0x5a4632, nsf);
+    k.box(x, h * 0.75, z, h * 0.55, h * 0.7, h * 0.55, 0x3e5a34, nsf);
+  }
+  tree(19, 14.5, 9); tree(23, 12, 11); tree(-18, -15.5, 10);
+  tree(-23, -12, 8); tree(-19, 16, 12); tree(20, -14, 9);
 
   // ---- A. spawn-end shields: tall plywood pairs at x = ±10.4 covering
   // z ±2.6..±7.4 on BOTH flanks of BOTH ends (point- and axis-symmetric).
@@ -1291,11 +1339,10 @@ function buildKillhouse(scene, colliders) {
     k.box(s * 13.9, 0.2, s * 4.65, 1.8, 0.4, 0.7, WOOD);   // step, top 0.4
   }
 
-  // ---- C. central watchtower (placeholder mass, #23d dresses it): four
-  // posts, 3.2 × 3.2 platform slab (top 3.325), 0.8 m rails on every edge
-  // except the stair gap (west edge, x −0.7..0.7). Access: a straight
-  // 8-tread west staircase along −z, risers 0.4 then a 0.125 step onto
-  // the slab — players and bots both climb it. Red landing circle: #23d.
+  // ---- C. central watchtower: four posts, 3.2 × 3.2 platform slab (top
+  // 3.325), 0.8 m rails on every edge except the stair gap (west edge,
+  // x −0.7..0.7). Access: a straight 8-tread west staircase along −z,
+  // risers 0.4 then a 0.125 step onto the slab — players and bots climb.
   for (const px of [-1.1, 1.1])
     for (const pz of [-1.1, 1.1])
       k.box(px, 1.6, pz, 0.35, 3.2, 0.35, WOOD);           // posts
@@ -1309,6 +1356,21 @@ function buildKillhouse(scene, colliders) {
     const top = 0.4 * i, z = -5.75 + 0.55 * (i - 1);
     k.box(0, top / 2, z, 1.2, top, 0.55, WOOD);
   }
+  // boarded skirt under the slab (#23d, SOLID y 2.37..3.07): reads as the
+  // tower's boarded storage underside and blocks the platform↔platform
+  // perch-duel eye-line (flat rays at ~2.75 through the tower core).
+  // 2.37 m of head clearance keeps the under-tower lane fully walkable.
+  k.box(0, 2.72, 0, 3.2, 0.7, 3.2, 0x7a6242);
+  // red landing circle decal beside the tower's east rail (jump-off
+  // landmark from the reference; decal only — no fall-death modeling)
+  function disc(x, y, z, r, color) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.02, 36), k.mat(color));
+    m.position.set(x, y, z);
+    m.receiveShadow = true;
+    scene.add(m);
+  }
+  disc(0, 0.012, 2.9, 1.2, 0xb02820);
+  disc(0, 0.024, 2.9, 0.4, 0xd8d4c8);
 
   // ---- D. kill-floor partitions (point-symmetric pairs). Between them
   // and the shields, every z in −7.4..7.4 is crossed by an eye-height
@@ -1337,15 +1399,40 @@ function buildKillhouse(scene, colliders) {
 
   // ---- F. target-practice room (east side, z 7..10): long lane behind an
   // inner wall at z = 7 with three doorways + a 1.4 m end door at x = ±9.
-  // Target boards (placeholder masses — silhouettes/AK poster are #23d)
-  // and a sandbag break the end-to-end tube.
+  // Mid-lane target boards and a sandbag break the end-to-end tube.
   k.wall('x', -9, 9, 7, 3.0, 0.15, PLY,
     [{ a: -5.8, b: -4.4 }, { a: -0.7, b: 0.7 }, { a: 4.4, b: 5.8 }]);
   k.wall('z', 7, 10, 9, 3.0, 0.15, PLY, [{ a: 7.9, b: 9.3 }]);
   k.wall('z', 7, 10, -9, 3.0, 0.15, PLY, [{ a: 7.9, b: 9.3 }]);
-  k.box(-3, 0.95, 8.5, 0.14, 1.9, 1.6, 0x8a8478);          // target boards
-  k.box(3, 0.95, 8.5, 0.14, 1.9, 1.6, 0x8a8478);
+  k.box(-3, 0.95, 8.5, 0.14, 1.9, 1.6, BOARD);             // mid-lane target boards
+  k.box(3, 0.95, 8.5, 0.14, 1.9, 1.6, BOARD);
   k.box(-1.4, 0.55, 8.6, 0.9, 1.1, 1.6, SANDBAG);
+  // #23d target art: torso+head silhouettes on both faces of each
+  // mid-lane board (decorative paint, the boards are the colliders)
+  for (const bx of [-3, 3])
+    for (const f of [-1, 1]) {
+      k.box(bx + f * 0.085, 1.1, 8.5, 0.03, 0.85, 0.62, SILH, ns);   // torso
+      k.box(bx + f * 0.085, 1.67, 8.5, 0.03, 0.32, 0.26, SILH, ns);  // head
+    }
+  // wall-line target stands against the east shell (SOLID) + silhouettes
+  // facing the room — shot at through the z = 7 doorways — and a dark
+  // back-stop band behind them (decorative)
+  k.box(0, 1.5, 9.66, 16.4, 2.0, 0.06, 0x3a4046, ns);      // back-stop band
+  for (const tx of [-6, 6]) {
+    k.box(tx, 0.85, 9.55, 1.1, 1.7, 0.12, BOARD);          // stand (collider)
+    k.box(tx, 1.05, 9.47, 0.6, 0.8, 0.03, SILH, ns);       // torso
+    k.box(tx, 1.58, 9.47, 0.25, 0.28, 0.03, SILH, ns);     // head
+  }
+  // AK-47 diagram poster (#23d): parchment panel on the east shell wall
+  // at x = 0 — read from map center through the middle z = 7 doorway.
+  // Abstract diagram: receiver, barrel, stock, magazine, grip, label bar.
+  k.box(0, 1.95, 9.60, 2.4, 1.3, 0.05, 0xe8e2cc, ns);      // panel
+  k.box(-0.1, 2.02, 9.56, 0.85, 0.24, 0.03, 0x2e2f33, ns); // receiver
+  k.box(0.85, 2.06, 9.56, 1.05, 0.08, 0.03, 0x2e2f33, ns); // barrel
+  k.box(-0.95, 2.02, 9.56, 0.75, 0.17, 0.03, 0x5a4632, ns);// stock
+  k.box(-0.12, 1.76, 9.56, 0.2, 0.3, 0.03, 0x2e2f33, ns);  // magazine
+  k.box(-0.38, 1.79, 9.56, 0.13, 0.2, 0.03, 0x5a4632, ns); // grip
+  k.box(0, 1.47, 9.56, 1.7, 0.12, 0.03, 0x8a2b22, ns);     // label bar
 
   // ---- G. scatter cover (coarse hulls, off the lanes and seeds)
   k.crate(8.2, -6.1, 1.3, CRATE); k.crate(-8.2, 6.1, 1.3, CRATE);
