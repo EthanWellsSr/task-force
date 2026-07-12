@@ -1787,7 +1787,8 @@ const THROWABLES = {
   // the cloud's, not a blast's) that blocks sight lines both ways via
   // smokeBlocked. Own slot on [E]; one per life, it's strong cover.
   smoke: {
-    name: 'SMOKE', slot: 'tactical', count: 1, fuse: 1.5, radius: 4.5, dmg: 0, minDmg: 0,
+    name: 'SMOKE', slot: 'tactical', unlockLevel: 5, // P14: provisional table L5
+    count: 1, fuse: 1.5, radius: 4.5, dmg: 0, minDmg: 0,
     smokeDur: 8,
     color: 0x4a5346, throwSpeed: 15, throwUp: 3.2,
     detonate: smokeDetonate,
