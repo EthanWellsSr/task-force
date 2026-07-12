@@ -1224,20 +1224,30 @@ function buildShipment(scene, colliders) {
 // (top-down +x up). 30 × 20 m playable — bounds { x: 15, z: 10 } —
 // a single rectangular warehouse interior. tf spawns at the south (−x)
 // end, sp at the north (+x) end, 180° point symmetry.
-// #23b SHELL ONLY: blank concrete floor, debug-colored perimeter shell
-// walls (N red / S blue / E green / W yellow so orientation is obvious
-// in Chrome), invisible blocker caps sealing the box, 5+5 spawns, and a
-// coarse open-floor seed grid so the nav graph builds one component.
-// Interior geometry (kill floor, plywood lanes, watchtower, red circle,
-// target-practice room, side rooms) is #23c — not built here.
+// #23c BLOCKOUT: perimeter shell (debug wall colors kept — art is #23d)
+// plus the full route skeleton: protected spawn pockets behind 2.6 m
+// plywood shield pairs at x = ±10.4 (three exits per end: west gap,
+// center gap, east gap), the reference's stair + open platform in each
+// end pocket, a central watchtower with a west staircase (risers 0.4 —
+// well under the 0.55 step-up; a rise of exactly 0.55 fails a float
+// compare and strands bots, Shipment's lesson), plywood partition lanes
+// on the kill floor killing every straight spawn-to-spawn eye-line, the
+// long target-practice room along the east wall (z 7..10), a two-room
+// dogleg corridor loop along the west wall (z −7..−10), and rough
+// crate/cover clusters. All doorways ≥ 1.4 m. Red circle decal, AK
+// poster, targets art and warehouse dressing are #23d.
 // ============================================================
 function buildKillhouse(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 15, D = 10;      // half extents: 30 m spawn axis (x) × 20 m (z)
   const SHELL_H = 6, T = 0.4;
-  // temporary debug palette (#23b): one loud color per compass wall
+  // temporary debug palette (#23b/c): loud compass wall colors + zone tints
   const DBG_N = 0xb03030, DBG_S = 0x3050a0, DBG_E = 0x3a8a3a, DBG_W = 0xc0a030,
-        FLOOR = 0x8a857c, PLAIN = 0x5f6a52;
+        FLOOR = 0x8a857c, PLAIN = 0x5f6a52,
+        PLY = 0xb08a50,    // plywood partitions (rooms/panels)
+        SHIELD = 0xc07030, // spawn shield plywood (loud for Chrome checks)
+        WOOD = 0x8a6d4a,   // tower / platform timber
+        SANDBAG = 0x8f8060, CRATE = 0x6f5f3f;
 
   scene.background = new THREE.Color(0x9aa4ae);
   scene.fog = new THREE.Fog(0x9aa4ae, 50, 110);
@@ -1256,23 +1266,131 @@ function buildKillhouse(scene, colliders) {
   k.wall('x', -W, W, -D, SHELL_H, T, DBG_W);           // west side wall
   for (const s of [-1, 1]) {
     k.blocker(s * (W + 0.6), 6, 0, 1, 12, D * 2 + 4);  // N/S containment cap
-    k.blocker(0, 6, s * (D + 0.6), W * 2 + 4, 12, 1);  // E/W containment cap
+    k.blocker(0, 6, s * (D + 0.6), W * 2 + 4, 14, 1);  // E/W containment cap
   }
 
-  // ---- spawns (#23b minimal): tf south (−x), sp north (+x). Five points
-  // per team — four across the end at x ≈ ±13.2 plus one forward lane
-  // point — 180° point-symmetric, all on the open shell floor.
-  const spN = [[13.2, -6.5], [13.2, -3], [13.2, 3], [13.2, 6.5], [11.5, 0]];
+  // ---- A. spawn-end shields: tall plywood pairs at x = ±10.4 covering
+  // z ±2.6..±7.4 on BOTH flanks of BOTH ends (point- and axis-symmetric).
+  // 2.6 m tall so neither the watchtower (eye ~4.9) nor the enemy spawn
+  // platform (eye ~2.75) can see the spawn points tucked behind them.
+  // Exits per end: west gap (z ±7.4..±10), center gap (z −2.6..2.6, the
+  // risky lane), east gap into the side-room loops.
+  for (const s of [-1, 1]) {
+    k.wall('z', -7.4, -2.6, s * 10.4, 2.6, 0.12, SHIELD);
+    k.wall('z', 2.6, 7.4, s * 10.4, 2.6, 0.12, SHIELD);
+  }
+
+  // ---- B. spawn stair + open platform (the reference's "small staircase
+  // leading to an open platform" at each end): a 1.2 m timber deck block
+  // against the end wall, up two 0.4 m steps (risers 0.4/0.4/0.4). Sees
+  // mid over the 2.0 m center partitions but NOT past the enemy shields.
+  // sp platform NE corner, tf mirror SW corner.
+  for (const s of [-1, 1]) {
+    k.box(s * 13.9, 0.6, s * 7.0, 1.8, 1.2, 2.6, WOOD);    // deck, top 1.2
+    k.box(s * 13.9, 0.4, s * 5.35, 1.8, 0.8, 0.7, WOOD);   // step, top 0.8
+    k.box(s * 13.9, 0.2, s * 4.65, 1.8, 0.4, 0.7, WOOD);   // step, top 0.4
+  }
+
+  // ---- C. central watchtower (placeholder mass, #23d dresses it): four
+  // posts, 3.2 × 3.2 platform slab (top 3.325), 0.8 m rails on every edge
+  // except the stair gap (west edge, x −0.7..0.7). Access: a straight
+  // 8-tread west staircase along −z, risers 0.4 then a 0.125 step onto
+  // the slab — players and bots both climb it. Red landing circle: #23d.
+  for (const px of [-1.1, 1.1])
+    for (const pz of [-1.1, 1.1])
+      k.box(px, 1.6, pz, 0.35, 3.2, 0.35, WOOD);           // posts
+  k.box(0, 3.2, 0, 3.2, 0.25, 3.2, WOOD);                  // slab, top 3.325
+  k.box(1.54, 3.73, 0, 0.12, 0.8, 3.08, WOOD);             // rail north (+x)
+  k.box(-1.54, 3.73, 0, 0.12, 0.8, 3.08, WOOD);            // rail south (−x)
+  k.box(0, 3.73, 1.54, 3.08, 0.8, 0.12, WOOD);             // rail east (+z)
+  k.box(1.15, 3.73, -1.54, 0.9, 0.8, 0.12, WOOD);          // rail west, split:
+  k.box(-1.15, 3.73, -1.54, 0.9, 0.8, 0.12, WOOD);         // stair gap x ±0.7
+  for (let i = 1; i <= 8; i++) {                           // treads: tops 0.4..3.2
+    const top = 0.4 * i, z = -5.75 + 0.55 * (i - 1);
+    k.box(0, top / 2, z, 1.2, top, 0.55, WOOD);
+  }
+
+  // ---- D. kill-floor partitions (point-symmetric pairs). Between them
+  // and the shields, every z in −7.4..7.4 is crossed by an eye-height
+  // blocker somewhere along x — no straight spawn-to-spawn sightline.
+  k.box(6.2, 1.0, 1.5, 0.1, 2.0, 3.8, PLY);                // P1: z −0.4..3.4
+  k.box(-6.2, 1.0, -1.5, 0.1, 2.0, 3.8, PLY);              // P1 mirror
+  k.box(-3.4, 1.1, 2.2, 4.0, 2.2, 0.1, PLY);               // T1: x −5.4..−1.4
+  k.box(3.4, 1.1, -2.2, 4.0, 2.2, 0.1, PLY);               // T1 mirror
+  k.box(3.3, 0.85, 4.9, 4.2, 1.7, 0.1, PLY);               // P2: x 1.2..5.4
+  k.box(-3.3, 0.85, -4.9, 4.2, 1.7, 0.1, PLY);             // P2 mirror
+  k.box(3.4, 1.3, -4.6, 6, 2.6, 2.6, 0x3d6b64);            // container (solid)
+  k.car(-3.4, 4.6, 0x6a6660);                              // ruined car (mirror-weight)
+  k.box(-8.9, 0.55, -2.2, 0.9, 1.1, 3.2, SANDBAG);         // sandbag runs
+  k.box(8.9, 0.55, 2.2, 0.9, 1.1, 3.2, SANDBAG);
+
+  // ---- E. west rooms (z −7..−10): two plywood training rooms + center
+  // cell forming a dogleg corridor loop. Outer wall at z = −7 with three
+  // 1.4 m doorways; two half-wall dividers with openings at OPPOSITE ends
+  // (x 3.2 open at the south wall, x −3.2 open at the z = −7 wall) so no
+  // straight z-lane threads the whole strip.
+  k.wall('x', -9, 9, -7, 2.6, 0.15, PLY,
+    [{ a: -7.5, b: -6.1 }, { a: -0.7, b: 0.7 }, { a: 6.1, b: 7.5 }]);
+  k.wall('z', -8.6, -7, 3.2, 2.6, 0.15, PLY);              // divider, gap z −10..−8.6
+  k.wall('z', -10, -8.4, -3.2, 2.6, 0.15, PLY);            // divider, gap z −8.4..−7
+  k.crate(-7.6, -9.2, 1.2, CRATE);                         // west room cover
+
+  // ---- F. target-practice room (east side, z 7..10): long lane behind an
+  // inner wall at z = 7 with three doorways + a 1.4 m end door at x = ±9.
+  // Target boards (placeholder masses — silhouettes/AK poster are #23d)
+  // and a sandbag break the end-to-end tube.
+  k.wall('x', -9, 9, 7, 3.0, 0.15, PLY,
+    [{ a: -5.8, b: -4.4 }, { a: -0.7, b: 0.7 }, { a: 4.4, b: 5.8 }]);
+  k.wall('z', 7, 10, 9, 3.0, 0.15, PLY, [{ a: 7.9, b: 9.3 }]);
+  k.wall('z', 7, 10, -9, 3.0, 0.15, PLY, [{ a: 7.9, b: 9.3 }]);
+  k.box(-3, 0.95, 8.5, 0.14, 1.9, 1.6, 0x8a8478);          // target boards
+  k.box(3, 0.95, 8.5, 0.14, 1.9, 1.6, 0x8a8478);
+  k.box(-1.4, 0.55, 8.6, 0.9, 1.1, 1.6, SANDBAG);
+
+  // ---- G. scatter cover (coarse hulls, off the lanes and seeds)
+  k.crate(8.2, -6.1, 1.3, CRATE); k.crate(-8.2, 6.1, 1.3, CRATE);
+  k.barrel(7.8, 5.4); k.barrel(-7.8, -5.4);
+
+  // ---- spawns (#23c): tf south (−x), sp north (+x), 180° point mirrors.
+  // Four points tucked behind the shields (checked against tower + enemy
+  // platform sightlines), one forward point in the center shield gap —
+  // the deliberately risky spawn. All ≥ 3 m apart, clear of geometry.
+  const spN = [[13.4, -8.4], [13.4, -5.2], [11.6, -0.6], [13.4, 3.4], [12.2, 6.9]];
   const spawns = { sp: spN, tf: spN.map(([x, z]) => [-x, -z]) };
 
-  // ---- waypoints (#23b): coarse open-floor grid so the graph builds one
-  // connected component on the empty shell. Replaced by threaded lane /
-  // doorway / tower seeds in #23c — a flat grid would over-connect
-  // through the interior walls once they exist.
-  const seeds = [];
-  for (const x of [-13, -9, -4.5, 0, 4.5, 9, 13])
-    for (const z of [-8, -4, 0, 4, 8])
-      seeds.push([x, z]);
+  // ---- waypoints (#23c): hand-threaded seeds — lane/ring seeds on the
+  // kill floor, doorway PAIRS for every door and divider gap, room
+  // centers, shield-gap exits, and y-aware chains ([x, z, y]) up both
+  // spawn platforms and the tower staircase. buildNavGraph filters any
+  // seed inside geometry; corridorClear keeps edges out of the walls.
+  const seeds = [
+    // kill floor: tower ring + quadrant lanes
+    [2.4, 0], [-2.4, 0], [0, 4.2], [-1.4, -4.2],
+    [2.6, 3.4], [-2.6, -3.4], [5.4, -1.2], [-5.4, 1.2],
+    [5.2, 6.2], [-5.2, -6.2], [7.9, -1.4], [-7.9, 1.4],
+    [7.4, 3.9], [-7.4, -3.9],
+    // shield flanks + center exit gaps
+    [9.2, -5.0], [-9.2, 5.0], [9.2, 4.6], [-9.2, -4.6],
+    [10.4, 0], [-10.4, 0], [11.2, 8.7], [-11.2, -8.7],
+    // spawn pockets
+    [12.6, -8.6], [-12.6, 8.6], [12.6, -4.6], [-12.6, 4.6],
+    [12.4, 0], [-12.4, 0], [12.6, 3.5], [-12.6, -3.5],
+    [11.4, 6.9], [-11.4, -6.9],
+    // west rooms: door pairs, divider-gap pairs, room centers
+    [-6.8, -6.2], [-6.8, -7.9], [0, -6.2], [0, -7.9], [6.8, -6.2], [6.8, -7.9],
+    [-4.2, -7.7], [-2.2, -7.7], [2.2, -9.3], [4.2, -9.3],
+    [-6.0, -8.8], [0, -9.0], [6.4, -8.6],
+    // target room: side-door pairs, end-door pairs, lane seeds
+    [-5.1, 6.2], [-5.1, 7.9], [0, 6.2], [0, 7.9], [5.1, 6.2], [5.1, 7.9],
+    [-10.4, 8.6], [-7.8, 8.6], [10.4, 8.6], [7.8, 8.6],
+    [-4.6, 8.7], [0.6, 8.8], [4.6, 8.7],
+    // spawn platforms (y-aware: 0.4-riser steps then the 1.2 deck)
+    [13.9, 3.6], [13.9, 4.65, 0.4], [13.9, 5.35, 0.8], [13.9, 7.0, 1.2],
+    [-13.9, -3.6], [-13.9, -4.65, 0.4], [-13.9, -5.35, 0.8], [-13.9, -7.0, 1.2],
+    // tower staircase (y-aware, every other tread) + slab top
+    [0, -5.75, 0.4], [0, -4.65, 1.2], [0, -3.55, 2.0], [0, -2.45, 2.8],
+    [0, -1.9, 3.2], [0, -0.4, 3.325], [0, 0.8, 3.325],
+  ];
 
   return {
     name: 'KILLHOUSE',
