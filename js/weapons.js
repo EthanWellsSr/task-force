@@ -14,7 +14,7 @@ const WEAPONS = {
   scar: { slot:'primary', cat:'Assault Rifle', name:'FN SCAR-H',
     dmg:40, minDmg:30, head:1.4, rpm:585, mag:20, reserve:100, reload:2.3, mode:'auto',
     spreadHip:.034, spreadAds:.0038, recoil:.019, bloom:.0055, zoom:1.35, adsTime:.26,
-    speed:.94, range:[30,58], model:'ar' },
+    speed:.94, range:[30,58], model:'ar', unlockLevel:6 },
   acr: { slot:'primary', cat:'Assault Rifle', name:'REMINGTON ACR',
     dmg:28, minDmg:21, head:1.4, rpm:705, mag:30, reserve:120, reload:2.1, mode:'auto',
     spreadHip:.028, spreadAds:.0026, recoil:.0085, bloom:.0030, zoom:1.35, adsTime:.24,
@@ -41,15 +41,15 @@ const WEAPONS = {
   ump45: { slot:'primary', cat:'SMG', name:'HK UMP45',
     dmg:34, minDmg:22, head:1.4, rpm:600, mag:32, reserve:128, reload:1.95, mode:'auto',
     spreadHip:.025, spreadAds:.0045, recoil:.013, bloom:.0040, zoom:1.25, adsTime:.18,
-    speed:1.0, range:[20,40], model:'smg' },
+    speed:1.0, range:[20,40], model:'smg', unlockLevel:3 },
   vector: { slot:'primary', cat:'SMG', name:'KRISS VECTOR',
     dmg:21, minDmg:14, head:1.4, rpm:1090, mag:30, reserve:180, reload:1.8, mode:'auto',
     spreadHip:.026, spreadAds:.0050, recoil:.0075, bloom:.0028, zoom:1.25, adsTime:.17,
-    speed:1.0, range:[14,30], model:'smg' },
+    speed:1.0, range:[14,30], model:'smg', unlockLevel:8 },
   p90: { slot:'primary', cat:'SMG', name:'FN P90',
     dmg:23, minDmg:15, head:1.4, rpm:855, mag:50, reserve:150, reload:2.4, mode:'auto',
     spreadHip:.027, spreadAds:.0052, recoil:.011, bloom:.0035, zoom:1.25, adsTime:.19,
-    speed:.99, range:[16,36], model:'smg' },
+    speed:.99, range:[16,36], model:'smg', unlockLevel:14 },
 
   // ---------- PRIMARY: LMG ----------
   // Three-gun ladder, RPD in the middle: M240 is the slow heavy hitter,
@@ -94,7 +94,7 @@ const WEAPONS = {
   barrett: { slot:'primary', cat:'Sniper Rifle', name:'BARRETT M82',
     dmg:70, minDmg:56, head:1.8, rpm:190, mag:10, reserve:30, reload:3.3, mode:'semi',
     spreadHip:.12, spreadAds:.0012, recoil:.042, bloom:.006, zoom:6.0, adsTime:.4,
-    speed:.9, range:[25,50], model:'sniper' },
+    speed:.9, range:[25,50], model:'sniper', unlockLevel:17 },
 
   // ---------- SECONDARIES ----------
   usp: { slot:'secondary', cat:'Handgun', name:'HK USP45',
@@ -104,7 +104,7 @@ const WEAPONS = {
   deagle: { slot:'secondary', cat:'Handgun', name:'DESERT EAGLE',
     dmg:52, minDmg:35, head:1.6, rpm:250, mag:7, reserve:28, reload:1.8, mode:'semi',
     spreadHip:.030, spreadAds:.0058, recoil:.036, bloom:.0090, zoom:1.2, adsTime:.16,
-    speed:1.0, range:[16,36], model:'pistol' },
+    speed:1.0, range:[16,36], model:'pistol', unlockLevel:9 },
   g18: { slot:'secondary', cat:'Machine Pistol', name:'GLOCK 18',
     dmg:18, minDmg:12, head:1.4, rpm:1000, mag:33, reserve:99, reload:1.85, mode:'auto',
     spreadHip:.034, spreadAds:.0085, recoil:.011, bloom:.0042, zoom:1.2, adsTime:.15,
@@ -143,6 +143,34 @@ function unlockLevelOf(def) {
   return (def && def.unlockLevel) || 1;
 }
 
+// Provisional Level 1-20 unlock table (P14) — one reward per level 2-20,
+// hand-authored from the progression plan. Level 1 is the silent starter
+// kit, so it has no row. `id` is the def key (WEAPONS / ATTACHMENTS /
+// perk / throwable id) when the item exists today; `future: true` rows
+// are final-tuning placeholders (no def yet) the UI labels accordingly.
+// Replaced by the real table after the arsenal/equipment/streak buildout.
+const UNLOCK_TABLE = [
+  { level: 2,  id: 'reddot',      name: 'RED DOT SIGHT',      future: false },
+  { level: 3,  id: 'ump45',       name: 'HK UMP45',           future: false },
+  { level: 4,  id: 'marathon',    name: 'MARATHON',           future: false },
+  { level: 5,  id: 'smoke',       name: 'SMOKE',              future: false }, // throwable def lives in main.js
+  { level: 6,  id: 'scar',        name: 'FN SCAR-H',          future: false },
+  { level: 7,  id: 'holo',        name: 'HOLOGRAPHIC SIGHT',  future: false },
+  { level: 8,  id: 'vector',      name: 'KRISS VECTOR',       future: false },
+  { level: 9,  id: 'deagle',      name: 'DESERT EAGLE',       future: false },
+  { level: 10, id: 'scavenger',   name: 'SCAVENGER',          future: false },
+  { level: 11, id: null,          name: 'FULL-AUTO SHOTGUN',  future: true }, // pending final shotgun roster (P17-P22)
+  { level: 12, id: 'laser',       name: 'LASER SIGHT',        future: false },
+  { level: 13, id: 'coldblooded', name: 'COLD-BLOODED',       future: false },
+  { level: 14, id: 'p90',         name: 'FN P90',             future: false },
+  { level: 15, id: null,          name: 'SEMTEX',             future: true }, // first new lethal (P42)
+  { level: 16, id: 'ninja',       name: 'NINJA',              future: false },
+  { level: 17, id: 'barrett',     name: 'BARRETT M82',        future: false },
+  { level: 18, id: 'foregrip',    name: 'FOREGRIP',           future: false },
+  { level: 19, id: null,          name: 'KILLSTREAK PERK',    future: true }, // 4th-slot or cheaper-streak Tier 1 perk (P38/P39)
+  { level: 20, id: 'camoGold',    name: 'GOLD',               future: false },
+];
+
 // ============================================================
 // ATTACHMENTS — one pick per slot category, per weapon.
 // mods = stat multipliers applied to the base def by resolveWeaponDef.
@@ -159,20 +187,20 @@ const ATTACHMENTS = {
   // slot, so it's mutually exclusive with the red dot via normalizeClass.
   holo: { id:'holo', name:'HOLOGRAPHIC SIGHT', slot:'optic',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
-    mods:{ adsTime:.92, spreadAds:.82 } },
+    mods:{ adsTime:.92, spreadAds:.82 }, unlockLevel:7 },
   foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
-    mods:{ recoil:.8, bloom:.8 } },
+    mods:{ recoil:.8, bloom:.8 }, unlockLevel:18 },
   // Laser (#19c): its own slot (underbarrel is the foregrip's), trades
   // concealment for a tighter hip cone. Beam drawn from the muzzle in
   // buildViewModel; color is a per-class pick like the reticle color.
   laser: { id:'laser', name:'LASER SIGHT', slot:'laser',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
-    mods:{ spreadHip:.8 } },
+    mods:{ spreadHip:.8 }, unlockLevel:12 },
   camoDesert:   { id:'camoDesert',   name:'DESERT CAMO',   slot:'camo', cats:null, mods:{} },
   camoWoodland: { id:'camoWoodland', name:'WOODLAND CAMO', slot:'camo', cats:null, mods:{} },
   camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:null, mods:{} },
-  camoGold:     { id:'camoGold',     name:'GOLD',          slot:'camo', cats:null, mods:{} },
+  camoGold:     { id:'camoGold',     name:'GOLD',          slot:'camo', cats:null, mods:{}, unlockLevel:20 },
 };
 
 function attachmentAllowed(att, def) {
@@ -279,18 +307,18 @@ function normalizeClass(c) {
 // ============================================================
 const PERKS = {
   1: [
-    { id:'marathon',  name:'MARATHON',          desc:'Unlimited sprint' },
+    { id:'marathon',  name:'MARATHON',          desc:'Unlimited sprint', unlockLevel:4 },
     { id:'soh',       name:'SLEIGHT OF HAND',   desc:'Reload 50% faster', unlockLevel:1 },
-    { id:'scavenger', name:'SCAVENGER',         desc:'Resupply ammo from bodies you pass over' },
+    { id:'scavenger', name:'SCAVENGER',         desc:'Resupply ammo from bodies you pass over', unlockLevel:10 },
   ],
   2: [
     { id:'stopping',    name:'STOPPING POWER', desc:'+25% bullet damage', unlockLevel:1 },
     { id:'lightweight', name:'LIGHTWEIGHT',    desc:'Move 8% faster' },
-    { id:'coldblooded', name:'COLD-BLOODED',   desc:'Bots spot you from 30% closer' },
+    { id:'coldblooded', name:'COLD-BLOODED',   desc:'Bots spot you from 30% closer', unlockLevel:13 },
   ],
   3: [
     { id:'steadyaim', name:'STEADY AIM', desc:'35% tighter hip fire', unlockLevel:1 },
-    { id:'ninja',     name:'NINJA',      desc:'Silent steps, quieter shots, bots react 40% slower' },
+    { id:'ninja',     name:'NINJA',      desc:'Silent steps, quieter shots, bots react 40% slower', unlockLevel:16 },
     { id:'commando',  name:'COMMANDO',   desc:'Extended melee lunge range' },
   ],
 };
