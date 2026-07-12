@@ -1371,7 +1371,7 @@ function audioPan(srcPos) {
 // rewards survive death), cycled with [3] and deployed with [G].
 const KILLSTREAKS = [
   {
-    id: 'uav', name: 'UAV', kills: 5,
+    id: 'uav', name: 'UAV', kills: 5, unlockLevel: 1, // P12: starter streak
     deploy() {
       // 20 s of all living enemies on the minimap (drawMinimap);
       // the UAV keeps flying through the owner's death, COD-style
@@ -1380,7 +1380,7 @@ const KILLSTREAKS = [
     },
   },
   {
-    id: 'napalm', name: 'NAPALM STRIKE', kills: 10,
+    id: 'napalm', name: 'NAPALM STRIKE', kills: 10, unlockLevel: 1, // P12: starter streak
     deploy() { deployNapalm(); },
   },
   {
@@ -1763,7 +1763,8 @@ function updateNukeCine(dt) {
 // is a real stun-vs-smoke choice. The old always-on third smoke slot is gone.
 const THROWABLES = {
   frag: {
-    name: 'FRAG', slot: 'lethal', count: 2, fuse: 3.6, radius: 7, dmg: 125, minDmg: 25,
+    name: 'FRAG', slot: 'lethal', unlockLevel: 1, // P12: starter lethal
+    count: 2, fuse: 3.6, radius: 7, dmg: 125, minDmg: 25,
     color: 0x3d4a33, throwSpeed: 15, throwUp: 3.4,
     detonate: fragDetonate,
   },
@@ -1776,7 +1777,8 @@ const THROWABLES = {
   // model: 'flashbang' gives it its own mesh (cylinder, no bulge) so it
   // reads as a stun in flight, not a recolored frag.
   stun: {
-    name: 'STUN', slot: 'tactical', count: 2, fuse: 1.8, radius: 8, dmg: 0, minDmg: 0,
+    name: 'STUN', slot: 'tactical', unlockLevel: 1, // P12: starter tactical
+    count: 2, fuse: 1.8, radius: 8, dmg: 0, minDmg: 0,
     stunMax: 4, stunMin: 1.2, noCookOff: true, model: 'flashbang',
     color: 0x5a6a72, throwSpeed: 17, throwUp: 3.0,
     detonate: stunDetonate,

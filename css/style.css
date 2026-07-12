@@ -378,6 +378,7 @@ tr.me td { color:#e8a33d; font-weight:700; }
 .xp-bar { height:6px; margin-top:6px; background:#2a2d24; border-radius:3px; overflow:hidden; }
 .xp-fill { height:100%; background:#e8a33d; }
 .xp-progress { font-size:11px; color:#9aa08a; margin-top:3px; letter-spacing:1px; }
+.xp-unlock { margin-top:4px; font-size:12px; letter-spacing:2px; color:#7fbf5f; font-weight:800; }
 .xp-deltas { margin-top:8px; font-size:12px; color:#9aa08a; letter-spacing:2px; }
 #endScreen .panel-buttons { justify-content:center; margin-top:26px; }
 

@@ -791,12 +791,31 @@ const UI = {
     const lvl = commit.leveledUp
       ? `LVL ${commit.oldLevel} → LVL ${commit.newLevel} — ${Profile.rankName(commit.newLevel)}`
       : `LVL ${commit.newLevel} — ${Profile.rankName(commit.newLevel)}`;
+    // P13: unlock summary — every item whose unlockLevel falls inside the
+    // levels gained this match (data-only; nothing is enforced yet)
+    let unlockRows = '';
+    if (commit.leveledUp) {
+      const pools = [WEAPONS, ATTACHMENTS];
+      const unlocked = [];
+      for (const pool of pools)
+        for (const k in pool) {
+          const u = pool[k].unlockLevel;
+          if (u > commit.oldLevel && u <= commit.newLevel) unlocked.push(pool[k].name);
+        }
+      for (const tier of Object.values(PERKS))
+        for (const perk of tier) {
+          const u = perk.unlockLevel;
+          if (u > commit.oldLevel && u <= commit.newLevel) unlocked.push(perk.name);
+        }
+      unlockRows = unlocked.map(n =>
+        `<div class="xp-unlock">UNLOCKED — ${n}</div>`).join('');
+    }
     const pr = commit.progress;
     const pct = pr.needed > 0 ? Math.round(100 * pr.current / pr.needed) : 100;
     el.innerHTML = `
       <div class="xp-lines">${rows}
         <div class="xp-line total"><span>TOTAL XP</span><span>+${x.total}</span></div></div>
-      <div class="xp-level${commit.leveledUp ? ' up' : ''}">${lvl}</div>
+      <div class="xp-level${commit.leveledUp ? ' up' : ''}">${lvl}</div>${unlockRows}
       <div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div>
       <div class="xp-progress">${pr.needed > 0 ? pr.current + ' / ' + pr.needed + ' XP' : 'MAX LEVEL'}</div>
       <div class="xp-deltas">K ${s.kills}&nbsp;&nbsp;D ${s.deaths}&nbsp;&nbsp;A ${s.assists}&nbsp;&nbsp;HS ${s.headshots}</div>`;
