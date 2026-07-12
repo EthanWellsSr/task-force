@@ -1218,7 +1218,74 @@ function buildShipment(scene, colliders) {
   };
 }
 
-const MAPS = { nuketown: buildNuketown, rust: buildRust, shipment: buildShipment };
+// ============================================================
+// KILLHOUSE — CoD4 SAS training warehouse (Credenhill, UK), per
+// docs/killhouse-reference.md (#23a). Compass: +x = north, +z = east
+// (top-down +x up). 30 × 20 m playable — bounds { x: 15, z: 10 } —
+// a single rectangular warehouse interior. tf spawns at the south (−x)
+// end, sp at the north (+x) end, 180° point symmetry.
+// #23b SHELL ONLY: blank concrete floor, debug-colored perimeter shell
+// walls (N red / S blue / E green / W yellow so orientation is obvious
+// in Chrome), invisible blocker caps sealing the box, 5+5 spawns, and a
+// coarse open-floor seed grid so the nav graph builds one component.
+// Interior geometry (kill floor, plywood lanes, watchtower, red circle,
+// target-practice room, side rooms) is #23c — not built here.
+// ============================================================
+function buildKillhouse(scene, colliders) {
+  const k = new MapKit(scene, colliders);
+  const W = 15, D = 10;      // half extents: 30 m spawn axis (x) × 20 m (z)
+  const SHELL_H = 6, T = 0.4;
+  // temporary debug palette (#23b): one loud color per compass wall
+  const DBG_N = 0xb03030, DBG_S = 0x3050a0, DBG_E = 0x3a8a3a, DBG_W = 0xc0a030,
+        FLOOR = 0x8a857c, PLAIN = 0x5f6a52;
+
+  scene.background = new THREE.Color(0x9aa4ae);
+  scene.fog = new THREE.Fog(0x9aa4ae, 50, 110);
+
+  // ground: concrete training floor over a wider grass plain (the exterior
+  // training grounds — scenery hints come in #23d)
+  k.box(0, -0.55, 0, 120, 1, 120, PLAIN, { solid: false, shadow: false });
+  k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, FLOOR);
+
+  // ---- perimeter warehouse shell: four walls, no exits, debug-colored.
+  // Invisible blocker caps just outside each wall (same technique as the
+  // other maps) seal the box on their own.
+  k.wall('z', -D - T, D + T, W, SHELL_H, T, DBG_N);    // north end wall
+  k.wall('z', -D - T, D + T, -W, SHELL_H, T, DBG_S);   // south end wall
+  k.wall('x', -W, W, D, SHELL_H, T, DBG_E);            // east side wall
+  k.wall('x', -W, W, -D, SHELL_H, T, DBG_W);           // west side wall
+  for (const s of [-1, 1]) {
+    k.blocker(s * (W + 0.6), 6, 0, 1, 12, D * 2 + 4);  // N/S containment cap
+    k.blocker(0, 6, s * (D + 0.6), W * 2 + 4, 12, 1);  // E/W containment cap
+  }
+
+  // ---- spawns (#23b minimal): tf south (−x), sp north (+x). Five points
+  // per team — four across the end at x ≈ ±13.2 plus one forward lane
+  // point — 180° point-symmetric, all on the open shell floor.
+  const spN = [[13.2, -6.5], [13.2, -3], [13.2, 3], [13.2, 6.5], [11.5, 0]];
+  const spawns = { sp: spN, tf: spN.map(([x, z]) => [-x, -z]) };
+
+  // ---- waypoints (#23b): coarse open-floor grid so the graph builds one
+  // connected component on the empty shell. Replaced by threaded lane /
+  // doorway / tower seeds in #23c — a flat grid would over-connect
+  // through the interior walls once they exist.
+  const seeds = [];
+  for (const x of [-13, -9, -4.5, 0, 4.5, 9, 13])
+    for (const z of [-8, -4, 0, 4, 8])
+      seeds.push([x, z]);
+
+  return {
+    name: 'KILLHOUSE',
+    bounds: { x: W, z: D },
+    sun: { color: 0xf4f0e4, intensity: 0.9, pos: [20, 40, -15] },
+    hemi: { sky: 0xaeb8c4, ground: 0x5a544a, intensity: 0.85 },
+    spawns,
+    waypointSeeds: seeds,
+    windows: k.windows,
+  };
+}
+
+const MAPS = { nuketown: buildNuketown, rust: buildRust, shipment: buildShipment, killhouse: buildKillhouse };
 
 // ============================================================
 // Waypoint graph — filter seeds that land inside geometry, then
