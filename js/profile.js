@@ -227,7 +227,14 @@ const Profile = {
     },
   },
 
-  resetMatch() { this.MatchXP.reset(); this.MatchStats.reset(); },
+  // Guards commitMatch: one commit per match, re-armed by resetMatch.
+  _matchCommitted: false,
+
+  resetMatch() {
+    this.MatchXP.reset();
+    this.MatchStats.reset();
+    this._matchCommitted = false;
+  },
 
   // Generic immediate lifetime bump: load -> add -> save, one
   // localStorage write per event (fine at this scale). Unknown stat
@@ -265,6 +272,40 @@ const Profile = {
   },
   // Mid-match exit: records the quit, never touches result/XP.
   onQuit() { return this.bumpStat('quits'); },
+
+  // ---------- P6: match-end XP commit ----------
+
+  // Normal match end only (quit path is P10 and never commits).
+  // result: 'win' | 'loss' | 'draw'. Adds the match-complete line
+  // (+ win line on 'win'; draws get complete XP but no win XP),
+  // records the lifetime result, then commits MatchXP.total into
+  // profile.xp (total career XP) and totalXpEarned. Level recomputes
+  // from total XP — multi-level jumps allowed, clamped at L20.
+  // Idempotent per match: second call before the next resetMatch/
+  // onMatchStart is a no-op returning null.
+  commitMatch(result) {
+    if (this._matchCommitted) return null;
+    this._matchCommitted = true;
+    this.MatchXP.onMatchComplete();
+    if (result === 'win') this.MatchXP.onMatchWin();
+    this.onMatchResult(result);
+    const earned = this.MatchXP.total;
+    const p = this.load();
+    const oldLevel = p.level;
+    p.xp += earned;
+    p.stats.totalXpEarned += earned;
+    p.level = this.levelFromTotalXp(p.xp);
+    this.save(p);
+    return {
+      xp: this.MatchXP.snapshot(),
+      stats: this.MatchStats.snapshot(),
+      oldLevel,
+      newLevel: p.level,
+      leveledUp: p.level > oldLevel,
+      totalXp: p.xp,
+      progress: this.progressToNext(p.xp),
+    };
+  },
 
   // ---------- self-test (PROFILE_DEBUG only) ----------
 
@@ -359,6 +400,42 @@ const Profile = {
     this.resetMatch();
     ok(this.MatchStats.kills === 0 && this.MatchXP.total === 0
       && this.load().stats.kills === 2, 'resetMatch clears deltas/XP, lifetime survives');
+
+    // P6: match-end commit
+    this.reset(); this.resetMatch();
+    mx.onDirectKill(); mx.onDirectKill();          // 200
+    let res = this.commitMatch('win');             // +100 complete +250 win = 550
+    ok(res && res.totalXp === 550 && res.xp.total === 550, 'win commit totals 550');
+    ok(res.oldLevel === 1 && res.newLevel === 2 && res.leveledUp === true, 'level 1 -> 2');
+    ok(res.progress.level === 2 && res.progress.current === 50 && res.progress.needed === 750, 'commit progress');
+    ok(res.stats.result === 'win', 'result in commit snapshot');
+    let cp = this.load();
+    ok(cp.xp === 550 && cp.level === 2 && cp.stats.totalXpEarned === 550 && cp.stats.wins === 1, 'commit persisted');
+    ok(this.commitMatch('win') === null, 'second commit is a null no-op');
+    ok(this.load().xp === 550 && this.load().stats.wins === 1, 'no double commit');
+    // draw: complete XP, no win XP, no lifetime win/loss
+    this.onMatchStart();                           // re-arms commit
+    mx.onDirectKill();                             // 100
+    res = this.commitMatch('draw');                // +100 complete = 200
+    ok(res.totalXp === 750 && res.xp.matchComplete === 100 && res.xp.matchWin === 0, 'draw pays complete only');
+    cp = this.load();
+    ok(cp.stats.wins === 1 && cp.stats.losses === 0 && res.stats.result === 'draw', 'draw bumps neither');
+    ok(res.oldLevel === 2 && res.newLevel === 2 && !res.leveledUp, 'no level-up on small draw');
+    // loss + multi-level jump: 2 nukes + complete = 2100 -> 2850 total = L4
+    this.onMatchStart();
+    mx.onNukeCalled(); mx.onNukeCalled();
+    res = this.commitMatch('loss');
+    ok(res.totalXp === 2850 && res.oldLevel === 2 && res.newLevel === 4 && res.leveledUp, 'multi-level jump 2 -> 4');
+    cp = this.load();
+    ok(cp.stats.losses === 1 && cp.stats.totalXpEarned === 2850, 'loss + totalXpEarned track commits');
+    // cap clamp: hand-set xp near the top, then a big win
+    cp.xp = 52000; this.save(cp);                  // totalXpEarned untouched by design
+    this.onMatchStart();
+    mx.onNukeCalled();                             // 1000 +100 complete +250 win = 1350
+    res = this.commitMatch('win');
+    ok(res.oldLevel === 4 && res.newLevel === 20 && res.totalXp === 53350, 'clamps at L20');
+    ok(res.progress.level === 20 && res.progress.current === 0 && res.progress.needed === 0, 'cap progress');
+    ok(this.load().stats.totalXpEarned === 4200, 'totalXpEarned counts commits only, not raw xp');
     // put the real profile back
     try {
       if (savedRaw === null) localStorage.removeItem(this.KEY);
