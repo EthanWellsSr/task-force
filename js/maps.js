@@ -1504,20 +1504,30 @@ function buildKillhouse(scene, colliders) {
 // spine tube survives), cubicle floor, lobby, locker room with
 // staggered rows, offices A/B with offset connecting doors, storage
 // with the loading door. Windows (0.95 sills) are player-only vaults —
-// the corridorClear knee ray keeps bots on doors. #23f BLOCKOUT with
-// debug colors — office palette/smokestacks/poster art are #23g.
+// the corridorClear knee ray keeps bots on doors.
+// #23g ART/COLLISION PASS: deserted-office palette (pale office faces,
+// concrete perimeter, dark asphalt, broken-window bands), smokestacks +
+// industrial skyline beyond the caps, movie-poster panel on the yard
+// wall, parking stripes/oil/scorch decals, floor tints, and NEW SOLIDS:
+// two skips/dumpsters cutting the lot south-wall lane (the 23f-flagged
+// eye-open z ≈ −11.5 run), a loading crate + drum by the loading door,
+// and two desk monitors (cover-value masses, so they collide). Every
+// new solid is visible; every new visual is solid or clearly decorative
+// (decals, wall panels, out-of-bounds scenery).
 // ============================================================
 function buildVacant(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 17, D = 12;      // half extents: 34 m spawn axis (x) × 24 m (z)
   const SHELL_H = 3.6, T = 0.3, BH = 3.2, IH = 3.0;
-  // debug palette (#23f): loud compass shell walls + zone tints
-  const DBG_N = 0xb03030, DBG_S = 0x3050a0, DBG_E = 0x3a8a3a, DBG_W = 0xc0a030,
-        OFFICE = 0x9aa4b0,  // building exterior walls
-        INNER = 0xb8b4a8,   // interior partition walls
+  // deserted-office palette (#23g)
+  const CONC = 0x8a8a84,   // yard perimeter concrete (north)
+        CONC2 = 0x82827c,  // lot perimeter concrete (west)
+        OFFICE = 0x9aa4b0, // building exterior walls
+        INNER = 0xb8b4a8,  // interior partition walls
+        GLASS = 0x2a3138, PANE = 0xc4c8cc,   // dead / broken window panes
         DESK = 0x7a6a55, LOCKER = 0x5a6a72, CRATE = 0x6f5f3f,
         ASPHALT = 0x5b5e63, FLOOR = 0x8a857c, PLAIN = 0x5f6a52;
-  const nsf = { solid: false, shadow: false };
+  const ns = { solid: false }, nsf = { solid: false, shadow: false };
 
   scene.background = new THREE.Color(0xa8b0b8);
   scene.fog = new THREE.Fog(0xa8b0b8, 55, 120);
@@ -1527,16 +1537,35 @@ function buildVacant(scene, colliders) {
   k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, FLOOR);
   k.box(-3.5, 0.012, -8, 27, 0.024, 8, ASPHALT, nsf);      // parking lot paving
   k.box(13.5, 0.012, 0, 7, 0.024, D * 2, 0x74716a, nsf);   // yard concrete
+  // floor decals (#23g): interior lino tint + corridor runner, parking
+  // stripes, oil stain, scorch under the blown-up truck
+  k.box(-3.5, 0.013, 4, 26.8, 0.02, 15.8, 0x7c7468, nsf);  // office lino
+  k.box(-7.5, 0.025, 4, 10.8, 0.02, 1.7, 0x6a6458, nsf);   // corridor runner
+  for (const sx of [-11.2, -6.8, -2.3, 0.9, 5.2])
+    k.box(sx, 0.022, -9.9, 0.15, 0.02, 4.0, 0xb8b6ac, nsf); // bay stripes
+  k.box(-7, 0.014, -8.3, 1.8, 0.02, 1.2, 0x4a4a46, nsf);   // oil stain
+  k.box(-13.5, 0.014, -7, 3.2, 0.02, 6, 0x3a3834, nsf);    // truck scorch
 
-  // ---- perimeter shell (debug-colored) + invisible blocker caps
-  k.wall('z', -D - T, D + T, W, SHELL_H, T, DBG_N);        // north end wall
-  k.wall('z', -D - T, D + T, -W, SHELL_H, T, DBG_S);       // south end wall
-  k.wall('x', -W, W, D, SHELL_H, T, DBG_E);                // east side wall
-  k.wall('x', -W, W, -D, SHELL_H, T, DBG_W);               // west side wall
+  // ---- perimeter shell + invisible blocker caps. South/east shell
+  // walls double as the building's own faces (office render); north and
+  // west are yard/lot perimeter concrete.
+  k.wall('z', -D - T, D + T, W, SHELL_H, T, CONC);         // north (yard) wall
+  k.wall('z', -D - T, D + T, -W, SHELL_H, T, OFFICE);      // south (building) face
+  k.wall('x', -W, W, D, SHELL_H, T, OFFICE);               // east (building) face
+  k.wall('x', -W, W, -D, SHELL_H, T, CONC2);               // west (lot) wall
   for (const s of [-1, 1]) {
     k.blocker(s * (W + 0.6), 6, 0, 1, 12, D * 2 + 4);
     k.blocker(0, 6, s * (D + 0.6), W * 2 + 4, 12, 1);
   }
+  // perimeter dressing (#23g, decorative): dark base bands on the
+  // concrete runs + movie-poster panel on the yard wall (the exterior
+  // poster easter egg, abstracted: backing, figure, title bar)
+  k.box(16.83, 0.45, 0, 0.06, 0.9, D * 2 - 1, 0x6e6e68, ns);
+  k.box(0, 0.45, -11.83, W * 2 - 1, 0.9, 0.06, 0x6a6a64, ns);
+  k.box(16.81, 1.9, 6.2, 0.06, 2.4, 1.8, 0xd8d2c0, ns);    // poster backing
+  k.box(16.78, 1.75, 6.5, 0.04, 1.7, 0.7, 0x4a3a30, ns);   // ...figure
+  k.box(16.78, 2.75, 6.2, 0.04, 0.35, 1.5, 0x8a2b22, ns);  // ...title bar
+  k.box(16.78, 1.0, 6.2, 0.04, 0.2, 1.5, 0x35322e, ns);    // ...credits strip
 
   // ---- building exterior walls. West face (z = −4, onto the lot):
   // three doors (tf spawn hall, cubicles, lobby) + two vault windows
@@ -1554,6 +1583,12 @@ function buildVacant(scene, colliders) {
     { a: 3.9, b: 5.3 },                              // main entrance
     { a: 8.6, b: 10.2 },                             // storage loading door
   ]);
+  // broken-window bands (#23g, decorative): dead panes high on both
+  // exterior faces, a couple shattered-pale — the deserted-office read
+  for (const [px, pale] of [[-12.5, 0], [-10.5, 1], [-5.5, 0], [0.5, 0], [5.0, 1], [8.5, 0]])
+    k.box(px, 2.75, -4.15, 1.3, 0.7, 0.04, pale ? PANE : GLASS, ns);
+  for (const [pz, pale] of [[0.8, 1], [2.4, 0], [6.4, 0], [7.8, 0]])
+    k.box(10.15, 2.75, pz, 0.04, 0.7, 1.2, pale ? PANE : GLASS, ns);
 
   // ---- interior walls. tf spawn hall (x −17..−13) + its partition:
   k.wall('z', -4, D, -13, IH, 0.15, INNER, [
@@ -1586,6 +1621,16 @@ function buildVacant(scene, colliders) {
   k.box(-9.4, 0.625, -2.0, 0.9, 1.25, 1.8, DESK);
   k.box(-6, 0.625, 1.4, 1.8, 1.25, 0.9, DESK);
   k.box(-5.2, 0.625, -1.6, 0.9, 1.25, 1.8, DESK);
+  // dead monitors on two cubicle desks (#23g): they extend the cover
+  // silhouette above eye height, so they are SOLID, not decals
+  k.box(-10.2, 1.45, 0.3, 0.5, 0.4, 0.35, 0x2e2f33);
+  k.box(-5.9, 1.45, 1.3, 0.5, 0.4, 0.35, 0x2e2f33);
+  // decal-only dressing: scattered paper, wall stain, office clock
+  k.box(-8.2, 0.015, 0.9, 0.8, 0.01, 0.6, 0xd8d4c8, nsf);
+  k.box(-3.2, 0.015, 7.6, 0.7, 0.01, 0.9, 0xd8d4c8, nsf);
+  k.box(2.2, 0.015, 9.0, 0.6, 0.01, 0.5, 0xd8d4c8, nsf);
+  k.box(-12.92, 2.1, 0.4, 0.03, 1.1, 1.6, 0x8a857a, ns);   // cubicle wall stain
+  k.box(3.92, 2.3, 0.2, 0.03, 0.5, 0.5, 0xe8e2d4, ns);     // lobby clock square
   k.box(0.8, 0.55, -2.6, 2.4, 1.1, 1.0, DESK);       // lobby reception desk
   k.box(5.8, 0.95, -1.4, 2.4, 1.9, 0.45, LOCKER);    // staggered locker rows
   k.box(8.2, 0.95, 0.6, 2.4, 1.9, 0.45, LOCKER);
@@ -1606,8 +1651,14 @@ function buildVacant(scene, colliders) {
   k.car(3, -9.8, 0x6e5a48);
   k.car(6.5, -7, 0x565a5c);
   k.box(0, 0.5, -5.6, 3.4, 1.0, 1.2, 0x6b4b2e);      // raised garden planter
-  k.box(0, 1.15, -5.6, 3.0, 0.4, 0.8, 0x4a6a3a, { solid: false }); // overgrowth
+  k.box(0, 1.15, -5.6, 3.0, 0.4, 0.8, 0x4a6a3a, ns); // overgrowth
   k.box(-5, 0.55, -6.4, 0.9, 1.1, 2.8, 0x8f8878);    // jersey barrier
+  // #23g lot-lane fix: two rusted skips cut the flagged eye-open lane
+  // along the west wall (z ≈ −11.5) into short segments. SOLID.
+  k.box(-2.5, 0.85, -11.2, 2.2, 1.7, 1.3, 0x5a4a38); // skip (mid-lot, tops eye height)
+  k.box(-2.5, 1.76, -11.2, 2.3, 0.12, 1.4, 0x4a3c2e, ns); // ...lid lip
+  k.box(7.5, 0.8, -11.3, 1.6, 1.6, 1.2, 0x4e5a48);   // skip (east end)
+  k.box(7.5, 1.66, -11.3, 1.7, 0.12, 1.3, 0x3e4a3a, ns);  // ...lid lip
 
   // ---- container yard (x 10..17): sp spawn cover — containers, shed.
   // The x-long container splits the yard; its west gap (x ~10.1..12.8)
@@ -1616,6 +1667,31 @@ function buildVacant(scene, colliders) {
   k.box(14.8, 1.3, 1.5, 4, 2.6, 2.6, 0x4a6a8a);      // x-long container (yard split)
   k.box(14.2, 1.5, 9, 3, 3, 3.5, 0x7a6a55);          // substation shed mass
   k.crate(11.0, -2.6, 1.2, CRATE);
+  // container door seams + shed hazard stripe (decorative)
+  k.box(14.2, 1.3, -3.45, 2.4, 2.3, 0.04, 0x6e3a2a, ns);
+  k.box(12.82, 1.3, 1.5, 0.04, 2.3, 2.4, 0x3a5a78, ns);
+  k.box(14.2, 0.5, 7.22, 2.8, 0.3, 0.04, 0xc0a030, ns);
+  // loading props by the loading door (#23g): crate on a pallet + drum
+  k.box(10.8, 0.07, 11.2, 1.3, 0.14, 1.3, 0x8a6f45, ns);   // pallet (decal-thin)
+  k.crate(10.8, 11.2, 1.0, CRATE);                          // crate (SOLID)
+  k.barrel(16.4, 7.6);                                      // drum (SOLID blocker)
+
+  // ---- exterior industrial skyline (#23g): smokestacks + big-box
+  // silhouettes beyond the blocker caps — non-solid, no shadows
+  function stack(x, z, h, r) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.15, h, 12), k.mat(0x7d8791));
+    m.position.set(x, h / 2, z);
+    scene.add(m);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.02, r * 1.02, h * 0.08, 12), k.mat(0x9a3a30));
+    band.position.set(x, h * 0.88, z);
+    scene.add(band);
+  }
+  stack(6, -20, 16, 0.9);
+  stack(11, -23, 13, 0.75);
+  k.box(-10, 4.5, -20, 14, 9, 5, 0x707880, nsf);     // big-box west
+  k.box(22, 5, -8, 10, 10, 8, 0x6a7480, nsf);        // big-box north
+  k.box(-23, 4, 10, 8, 8, 10, 0x66707c, nsf);        // office block south-east
+  k.box(-23, 8.6, 10, 8.4, 0.5, 10.4, 0x565e68, nsf);// ...roof cap
 
   // ---- spawns: tf INSIDE the south office end, sp in the yard behind
   // the container/shed masses. Asymmetric like the real map.
