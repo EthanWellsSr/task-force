@@ -32,6 +32,14 @@ const WEAPONS = {
     dmg:48, minDmg:35, head:1.5, rpm:420, mag:20, reserve:100, reload:2.2, mode:'semi',
     spreadHip:.033, spreadAds:.0028, recoil:.021, bloom:.0048, zoom:1.35, adsTime:.25,
     speed:.95, range:[32,60], model:'ar' },
+  // P24: the high-RPM hose AR — fastest auto in the AR band (875 vs M4A1's
+  // 780), close TTK .206 sits between SCAR and M4A1 and never beats the
+  // MP5K's .200; worst bloom of any auto AR + 16 minDmg past 44 m are the
+  // levers that keep it a 15-30 m spray gun, not an everywhere gun.
+  f2000: { slot:'primary', cat:'Assault Rifle', name:'FN F2000',
+    dmg:26, minDmg:16, head:1.4, rpm:875, mag:30, reserve:150, reload:2.05, mode:'auto',
+    spreadHip:.034, spreadAds:.0042, recoil:.0155, bloom:.0050, zoom:1.35, adsTime:.23,
+    speed:.94, range:[22,44], model:'ar' },
 
   // ---------- PRIMARY: SMGs ----------
   mp5k: { slot:'primary', cat:'SMG', name:'HK MP5K',
@@ -353,6 +361,7 @@ const BOT_LOADOUTS = [
   { primary:'tar21',  secondary:'g18',    lethal:'frag' },
   { primary:'famas',  secondary:'usp',    lethal:'frag' },
   { primary:'fal',    secondary:'deagle', lethal:'frag' },
+  { primary:'f2000',  secondary:'g18',    lethal:'frag' },
   { primary:'mp5k',   secondary:'usp',    lethal:'frag' },
   { primary:'ump45',  secondary:'spas12', lethal:'frag' },
   { primary:'vector', secondary:'g18',    lethal:'frag' },
