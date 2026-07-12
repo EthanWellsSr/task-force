@@ -2737,12 +2737,18 @@ function endMatch(forcedWin) {
 function finishMatch(win) {
   if (G.state === 'end') return;
   G.state = 'end';
+  // P6: commit match XP to the profile exactly once per real match end.
+  // win: true/false/null (draw). Result object held for the P7 end screen.
+  G.lastCommit = Profile.commitMatch(win === true ? 'win' : win === false ? 'loss' : 'draw');
   document.exitPointerLock && document.exitPointerLock();
   AudioSys.matchEnd(win !== false);
   UI.showEnd(G.mode, win, G.scores, G.combatants);
 }
 
 function quitMatch() {
+  // P5/P10: only a live match counts as a quit — this same button is the
+  // end screen's "menu", where the match already committed via finishMatch.
+  if (G.state === 'playing' || G.state === 'dead') Profile.onQuit();
   G.state = 'menu';
   document.exitPointerLock && document.exitPointerLock();
   UI.show('menu');
