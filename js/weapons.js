@@ -354,6 +354,14 @@ const PERKS = {
     { id:'marathon',  name:'MARATHON',          desc:'Unlimited sprint', unlockLevel:4 },
     { id:'soh',       name:'SLEIGHT OF HAND',   desc:'Reload 50% faster', unlockLevel:1 },
     { id:'scavenger', name:'SCAVENGER',         desc:'Resupply ammo from bodies you pass over', unlockLevel:10 },
+    // P38/P39: killstreak-economy perks — data + UI listing only for now.
+    // Selecting/saving works today; behavior lands with the killstreak
+    // selector (P69: arsenal's fourth slot) and data-driven thresholds
+    // (P70: hardline's discount). Safe as inert data because every perk
+    // check in main.js is an id-keyed player.perks.has('<id>') lookup.
+    // Same tier = mutually exclusive by the one-pick-per-tier rule.
+    { id:'arsenal',   name:'ARSENAL',           desc:'Equip a fourth killstreak slot' },
+    { id:'hardline',  name:'HARDLINE',          desc:'Killstreaks cost 1 less kill' },
   ],
   2: [
     { id:'stopping',    name:'STOPPING POWER', desc:'+25% bullet damage', unlockLevel:1 },
