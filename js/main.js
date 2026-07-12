@@ -1768,6 +1768,20 @@ const THROWABLES = {
     color: 0x3d4a33, throwSpeed: 15, throwUp: 3.4,
     detonate: fragDetonate,
   },
+  // P42: semtex — the sticky lethal. First surface OR combatant contact
+  // pins it; stuck to a combatant it rides them and kills through any
+  // cover (they're wearing it — fragDetonate handles that up front).
+  // noCookOff like the stun: the fuse holds in hand and burns a fixed
+  // 2.25 s from release. The trade vs the frag: no cooking and no bounce
+  // control, for stick certainty and a slightly tighter blast (r6 vs 7).
+  // model: 'semtex' = squat tan body + red arming light, reads vs frag.
+  semtex: {
+    name: 'SEMTEX', slot: 'lethal', unlockLevel: 15, // P14: provisional table L15
+    count: 2, fuse: 2.25, radius: 6, dmg: 125, minDmg: 25,
+    sticky: true, noCookOff: true, model: 'semtex',
+    color: 0x6f5f38, throwSpeed: 15, throwUp: 3.4,
+    detonate: fragDetonate,
+  },
   // stun: zero damage — anyone caught in the radius with a clear line to
   // the bang is stunned; duration scales with proximity (stunMax at
   // ground zero, stunMin at the edge). Short fuse so it pops near where
@@ -1818,6 +1832,19 @@ const _grenWorldUp = new THREE.Vector3(0, 1, 0);
 // stun's — straight cylinder body, lighter band, dark top cap.
 function buildGrenadeMesh(def) {
   const g = new THREE.Group();
+  if (def.model === 'semtex') {
+    // squat puck + always-bright red arming light — sticky, not a frag
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6),
+      new THREE.MeshLambertMaterial({ color: def.color }));
+    body.scale.y = 0.85;
+    body.position.y = 0.07;
+    g.add(body);
+    const light = new THREE.Mesh(new THREE.SphereGeometry(0.024, 6, 5),
+      new THREE.MeshBasicMaterial({ color: 0xff2e1f }));
+    light.position.y = 0.135;
+    g.add(light);
+    return g;
+  }
   if (def.model === 'flashbang') {
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 10),
       new THREE.MeshLambertMaterial({ color: def.color }));
@@ -2051,11 +2078,13 @@ function updateGrenadePreview() {
   while (remaining > GREN_PREVIEW_DT && steps < 360) {
     remaining -= GREN_PREVIEW_DT;
     steps++;
-    stepThrowableMotion(_grenPreviewPos, _grenPreviewVel, GREN_PREVIEW_DT, G.colliders);
+    const st = stepThrowableMotion(_grenPreviewPos, _grenPreviewVel, GREN_PREVIEW_DT, G.colliders);
     if (steps >= skipSteps && steps % sampleEvery === 0 && pointCount < GREN_PREVIEW_POINTS) {
       writeGrenadePreviewPoint(gp, pointCount++, _grenPreviewPos);
       lastWrite = steps;
     }
+    // P42: a sticky pins at first contact — the preview arc stops there
+    if (def.sticky && (st & (GREN_STEP_BOUNCED | GREN_STEP_REST))) break;
   }
   if (lastWrite !== steps && pointCount < GREN_PREVIEW_POINTS) {
     writeGrenadePreviewPoint(gp, pointCount++, _grenPreviewPos);
@@ -2078,8 +2107,44 @@ function updateThrowables(dt) {
       continue;
     }
     const p = t.pos, v = t.vel;
+    // P42: a stuck semtex skips physics — pinned to a surface, or riding
+    // its victim at chest height. A victim who dies mid-ride drops the
+    // pin where they fell (stuckTo clears, position freezes).
+    if (t.stuck) {
+      if (t.stuckTo) {
+        if (t.stuckTo.alive) p.set(t.stuckTo.pos.x, t.stuckTo.pos.y + 1.15, t.stuckTo.pos.z);
+        else t.stuckTo = null;
+      }
+      t.mesh.position.copy(p);
+      continue;
+    }
     t.sinceBounce += dt;
     const step = stepThrowableMotion(p, v, dt, G.colliders);
+    // P42: sticky contact — the first combatant OR surface it touches
+    // pins it. Combatants are checked as a cylinder around the torso;
+    // the thrower can't stick themselves (launch offset starts inside
+    // their own cylinder).
+    if (t.def.sticky) {
+      const owner = t.owner || player;
+      let rider = null;
+      for (const b of G.bots) {
+        if (!b.alive || b === owner) continue;
+        if (Math.hypot(p.x - b.pos.x, p.z - b.pos.z) < 0.5 &&
+            p.y > b.pos.y - 0.1 && p.y < b.pos.y + 1.9) { rider = b; break; }
+      }
+      if (!rider && owner !== player && player.alive &&
+          Math.hypot(p.x - player.pos.x, p.z - player.pos.z) < 0.5 &&
+          p.y > player.pos.y - 0.1 && p.y < player.pos.y + 1.9) rider = player;
+      if (rider || (step & (GREN_STEP_BOUNCED | GREN_STEP_REST))) {
+        t.stuck = true;
+        t.stuckTo = rider;
+        v.set(0, 0, 0);
+        // the stick thunk — reuse the bounce foley at the pin point
+        AudioSys.grenadeBounce(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(p));
+        t.mesh.position.copy(p);
+        continue;
+      }
+    }
     if ((step & GREN_STEP_BOUNCED) && t.sinceBounce > 0.12 && Math.hypot(v.x, v.y, v.z) > 1.2) {
       t.sinceBounce = 0;
       AudioSys.grenadeBounce(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(p));
@@ -2096,7 +2161,8 @@ function fragDangerInfo() {
   if (G.state !== 'playing' || !player.alive) return null;
   let best = null;
   for (const t of _throwables) {
-    if (t.def !== THROWABLES.frag) continue;
+    // P42: any live lethal (frag, semtex, future) trips the danger arrow
+    if (t.def.slot !== 'lethal' || t.def.dmg <= 0) continue;
     const owner = t.owner || player;
     if (owner === player || owner.team === player.team) continue;
     const f = blastFactor(t.def, t.pos, player.pos);
@@ -2126,6 +2192,7 @@ function fragDangerInfo() {
     angle: Math.atan2(side, ahead),
     distance: best.distance,
     urgent: best.fuse <= 1.1,
+    name: best.throwable.def.name, // P42: ui can label SEMTEX vs FRAG
   };
 }
 
@@ -2291,6 +2358,14 @@ function blastDamage(def, at, victimPos) {
 function fragDetonate(t) {
   const def = t.def, p = t.pos;
   const owner = t.owner || player;
+  // P42: a semtex riding its victim deals full damage through any cover —
+  // they're wearing it. Handled up front; the area loops below skip them.
+  const stuckTo = t.stuckTo || null;
+  if (stuckTo === player) {
+    if (player.alive) damagePlayer(def.dmg, owner === player ? null : owner, def.name, false);
+  } else if (stuckTo && stuckTo.alive) {
+    stuckTo.hurt(def.dmg, stuckTo === owner ? null : owner, def.name, false);
+  }
   _blastAt.set(p.x, p.y + 0.4, p.z);
   fxFire(_blastAt, 0.3, 4);
   for (let i = 0; i < 4; i++) {
@@ -2300,7 +2375,7 @@ function fragDetonate(t) {
   }
   AudioSys.explosion(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(_blastAt));
   for (const b of G.bots) {
-    if (!b.alive) continue;
+    if (!b.alive || b === stuckTo) continue; // stuck victim already paid in full
     // teammates are safe, but the frag still hurts the thrower themselves
     if (b.team === owner.team && b !== owner) continue;
     const dmg = blastDamage(def, p, b.pos);
@@ -2312,7 +2387,7 @@ function fragDetonate(t) {
   if (owner === player) {
     const selfDmg = blastDamage(def, p, player.pos);
     if (selfDmg > 0) damagePlayer(selfDmg, null, def.name, false);
-  } else if (owner.team !== player.team) {
+  } else if (owner.team !== player.team && stuckTo !== player) {
     const dmg = blastDamage(def, p, player.pos);
     if (dmg > 0) damagePlayer(dmg, owner, def.name, false);
   }
