@@ -207,7 +207,7 @@ const UNLOCK_TABLE = [
   { level: 12, id: 'laser',       name: 'LASER SIGHT',        future: false },
   { level: 13, id: 'coldblooded', name: 'COLD-BLOODED',       future: false },
   { level: 14, id: 'p90',         name: 'FN P90',             future: false },
-  { level: 15, id: null,          name: 'SEMTEX',             future: true }, // first new lethal (P42)
+  { level: 15, id: 'semtex',      name: 'SEMTEX',             future: false }, // P42: shipped (throwable def in main.js)
   { level: 16, id: 'ninja',       name: 'NINJA',              future: false },
   { level: 17, id: 'barrett',     name: 'BARRETT M82',        future: false },
   { level: 18, id: 'foregrip',    name: 'FOREGRIP',           future: false },
@@ -341,7 +341,7 @@ function normalizeClass(c) {
   // throwables (#16a): pre-#16a saves have no equipment fields — default to
   // the classic FRAG + STUN loadout (smoke is now a tactical alternative, not
   // an always-on third slot). Junk values fall back too.
-  if (c.lethal !== 'frag' && c.lethal !== 'none') c.lethal = 'frag';
+  if (c.lethal !== 'frag' && c.lethal !== 'semtex' && c.lethal !== 'none') c.lethal = 'frag'; // P42: semtex is a legal lethal
   if (c.tactical !== 'stun' && c.tactical !== 'smoke' && c.tactical !== 'none') c.tactical = 'stun';
   return c;
 }
