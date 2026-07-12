@@ -10,7 +10,7 @@ const WEAPONS = {
   m4a1: { slot:'primary', cat:'Assault Rifle', name:'M4A1',
     dmg:30, minDmg:20, head:1.4, rpm:780, mag:30, reserve:180, reload:2.05, mode:'auto',
     spreadHip:.030, spreadAds:.0035, recoil:.0135, bloom:.0042, zoom:1.35, adsTime:.24,
-    speed:.95, range:[26,52], model:'ar' },
+    speed:.95, range:[26,52], model:'ar', unlockLevel:1 },
   scar: { slot:'primary', cat:'Assault Rifle', name:'FN SCAR-H',
     dmg:40, minDmg:30, head:1.4, rpm:585, mag:20, reserve:100, reload:2.3, mode:'auto',
     spreadHip:.034, spreadAds:.0038, recoil:.019, bloom:.0055, zoom:1.35, adsTime:.26,
@@ -37,7 +37,7 @@ const WEAPONS = {
   mp5k: { slot:'primary', cat:'SMG', name:'HK MP5K',
     dmg:26, minDmg:16, head:1.4, rpm:900, mag:30, reserve:150, reload:1.85, mode:'auto',
     spreadHip:.024, spreadAds:.0048, recoil:.012, bloom:.0038, zoom:1.25, adsTime:.18,
-    speed:1.0, range:[16,34], model:'smg' },
+    speed:1.0, range:[16,34], model:'smg', unlockLevel:1 },
   ump45: { slot:'primary', cat:'SMG', name:'HK UMP45',
     dmg:34, minDmg:22, head:1.4, rpm:600, mag:32, reserve:128, reload:1.95, mode:'auto',
     spreadHip:.025, spreadAds:.0045, recoil:.013, bloom:.0040, zoom:1.25, adsTime:.18,
@@ -76,7 +76,7 @@ const WEAPONS = {
     dmg:20, minDmg:5, head:1.2, rpm:60, mag:6, reserve:30, reload:2.7, mode:'pump',
     pellets:8, pumpTime:.8,
     spreadHip:.034, spreadAds:.02, recoil:.048, bloom:.004, zoom:1.15, adsTime:.24,
-    speed:.94, range:[5,16], model:'shotgun' },
+    speed:.94, range:[5,16], model:'shotgun', unlockLevel:1 },
   aa12: { slot:'primary', cat:'Shotgun', name:'ATCHISSON AA-12',
     dmg:12, minDmg:4, head:1.2, rpm:300, mag:8, reserve:40, reload:2.5, mode:'semi',
     pellets:8,
@@ -100,7 +100,7 @@ const WEAPONS = {
   usp: { slot:'secondary', cat:'Handgun', name:'HK USP45',
     dmg:32, minDmg:20, head:1.5, rpm:420, mag:12, reserve:48, reload:1.55, mode:'semi',
     spreadHip:.022, spreadAds:.0060, recoil:.016, bloom:.0050, zoom:1.2, adsTime:.14,
-    speed:1.0, range:[14,32], model:'pistol' },
+    speed:1.0, range:[14,32], model:'pistol', unlockLevel:1 },
   deagle: { slot:'secondary', cat:'Handgun', name:'DESERT EAGLE',
     dmg:52, minDmg:35, head:1.6, rpm:250, mag:7, reserve:28, reload:1.8, mode:'semi',
     spreadHip:.030, spreadAds:.0058, recoil:.036, bloom:.0090, zoom:1.2, adsTime:.16,
@@ -135,6 +135,14 @@ function fireModeLabel(w) {
   return { auto:'AUTO', semi:'SEMI', burst:'3-RND BURST', bolt:'BOLT ACTION', pump:'PUMP', throw:'THROWN' }[w.mode];
 }
 
+// Progression metadata (P11) — data-only, nothing enforces locks yet.
+// Weapon/perk/attachment/camo defs may carry an optional `unlockLevel`;
+// anything unmarked is treated as Level 1 (silently available starter
+// gear). The provisional Level 1-20 table (P14) fills in the rest.
+function unlockLevelOf(def) {
+  return (def && def.unlockLevel) || 1;
+}
+
 // ============================================================
 // ATTACHMENTS — one pick per slot category, per weapon.
 // mods = stat multipliers applied to the base def by resolveWeaponDef.
@@ -145,7 +153,7 @@ const ATTACH_SLOTS = ['optic', 'underbarrel', 'laser', 'camo'];
 const ATTACHMENTS = {
   reddot: { id:'reddot', name:'RED DOT SIGHT', slot:'optic',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
-    mods:{ adsTime:.85, spreadAds:.9 } },
+    mods:{ adsTime:.85, spreadAds:.9 }, unlockLevel:2 }, // first unlock (P13)
   // Holo identity vs the red dot: the bigger window aims tighter but the
   // bulkier housing aims up slower (still faster than irons). One optic per
   // slot, so it's mutually exclusive with the red dot via normalizeClass.
@@ -272,16 +280,16 @@ function normalizeClass(c) {
 const PERKS = {
   1: [
     { id:'marathon',  name:'MARATHON',          desc:'Unlimited sprint' },
-    { id:'soh',       name:'SLEIGHT OF HAND',   desc:'Reload 50% faster' },
+    { id:'soh',       name:'SLEIGHT OF HAND',   desc:'Reload 50% faster', unlockLevel:1 },
     { id:'scavenger', name:'SCAVENGER',         desc:'Resupply ammo from bodies you pass over' },
   ],
   2: [
-    { id:'stopping',    name:'STOPPING POWER', desc:'+25% bullet damage' },
+    { id:'stopping',    name:'STOPPING POWER', desc:'+25% bullet damage', unlockLevel:1 },
     { id:'lightweight', name:'LIGHTWEIGHT',    desc:'Move 8% faster' },
     { id:'coldblooded', name:'COLD-BLOODED',   desc:'Bots spot you from 30% closer' },
   ],
   3: [
-    { id:'steadyaim', name:'STEADY AIM', desc:'35% tighter hip fire' },
+    { id:'steadyaim', name:'STEADY AIM', desc:'35% tighter hip fire', unlockLevel:1 },
     { id:'ninja',     name:'NINJA',      desc:'Silent steps, quieter shots, bots react 40% slower' },
     { id:'commando',  name:'COMMANDO',   desc:'Extended melee lunge range' },
   ],
