@@ -379,6 +379,14 @@ tr.me td { color:#e8a33d; font-weight:700; }
 .xp-fill { height:100%; background:#e8a33d; }
 .xp-progress { font-size:11px; color:#9aa08a; margin-top:3px; letter-spacing:1px; }
 .xp-unlock { margin-top:4px; font-size:12px; letter-spacing:2px; color:#7fbf5f; font-weight:800; }
+
+/* P8: profile badge (menu + Create-a-Class) */
+.profile-badge {
+  display:inline-block; margin:2px auto 14px; padding:5px 14px;
+  font-size:13px; letter-spacing:2px; color:#e8a33d;
+  background:rgba(20,22,16,.7); border:1px solid #3a3d32; border-radius:4px;
+}
+#classBadge { margin:0 0 10px; }
 .xp-deltas { margin-top:8px; font-size:12px; color:#9aa08a; letter-spacing:2px; }
 #endScreen .panel-buttons { justify-content:center; margin-top:26px; }
 

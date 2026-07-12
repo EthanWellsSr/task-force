@@ -121,10 +121,26 @@ const UI = {
     for (const s of ['menu', 'classScreen', 'settingsScreen', 'spawnScreen', 'pauseScreen', 'endScreen', 'hud', 'scoreboard'])
       this.$(s).classList.add('hidden');
     if (id === 'pauseScreen') this.renderPauseSettings();
+    if (id === 'menu' || id === 'classScreen') this.renderProfileBadge();
     if (id) this.$(id).classList.remove('hidden');
   },
 
+  // P8: compact profile badge on the menu + Create-a-Class, e.g.
+  // "LVL 7 - SERGEANT   340 / 1750 XP". Re-rendered every time either
+  // screen shows, so XP commits / resets / debug changes always reflect.
+  renderProfileBadge() {
+    const p = Profile.load();
+    const pr = Profile.progressToNext(p.xp);
+    const xpTxt = pr.needed > 0 ? `${pr.current} / ${pr.needed} XP` : 'MAX LEVEL';
+    const txt = `LVL ${p.level} - ${Profile.rankName(p.level)}&nbsp;&nbsp;&nbsp;${xpTxt}`;
+    for (const id of ['menuBadge', 'classBadge']) {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = txt;
+    }
+  },
+
   bindMenus() {
+    this.renderProfileBadge(); // P8: initial render (menu shows at load)
     document.querySelectorAll('.map-card').forEach(card => {
       card.addEventListener('click', () => {
         AudioSys.uiClick();
