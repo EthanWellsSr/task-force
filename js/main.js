@@ -1481,6 +1481,8 @@ const _cineLook = new THREE.Vector3();
 function deployNuke() {
   _nukeT = NUKE_COUNTDOWN;
   AudioSys.nukeSiren();
+  Profile.onNukeCalled();        // P5: immediate lifetime stat
+  Profile.MatchXP.onNukeCalled(); // P4: flat +1000, no per-kill XP
 }
 
 function updateNuke(dt) {
@@ -1666,6 +1668,7 @@ function nukeImpact(x, z) {
     player.alive = false;
     player.hp = 0;
     player.deaths++;
+    Profile.onDeath(); // P5: dying to your own nuke is still a death
     player._killStreakCount = 0;
     player._streakKills = 0;
   }
@@ -2465,7 +2468,11 @@ function registerKill(killer, victim, weaponName, headshot) {
       for (const d of victim.recentDamagers) {
         if (d.attacker === killer || G.time - d.t > ASSIST_WINDOW) continue;
         d.attacker.assists = (d.attacker.assists || 0) + 1;
-        if (d.attacker.isPlayer) UI.showKillMsg('+ASSIST', false);
+        if (d.attacker.isPlayer) {
+          UI.showKillMsg('+ASSIST', false);
+          Profile.onAssist();        // P5: immediate lifetime stat
+          Profile.MatchXP.onAssist(); // P4: +25 match XP
+        }
       }
       victim.recentDamagers.length = 0; // engagement's over
     }
@@ -2473,6 +2480,23 @@ function registerKill(killer, victim, weaponName, headshot) {
     UI.killfeed(killer.name, killer.team, victim.name, victim.team, weaponName, headshot);
     if (killer.isPlayer) {
       AudioSys.hit(true);
+      // P4/P5: XP + lifetime stats by kill source. Nuke kills award nothing
+      // (the +1000 nuke bonus lands at deployNuke); napalm is a killstreak
+      // kill (never a direct kill); melee/headshot bonuses stack on direct.
+      if (weaponName === 'TACTICAL NUKE') {
+        // no XP, no kill stats — by design
+      } else if (weaponName === 'NAPALM') {
+        Profile.onKillstreakKill();
+        Profile.MatchXP.onKillstreakKill();
+      } else {
+        Profile.onKill();
+        Profile.MatchXP.onDirectKill();
+        if (headshot) { Profile.onHeadshot(); Profile.MatchXP.onHeadshot(); }
+        if (weaponName === 'KNIFE' || weaponName === 'TOMAHAWK') {
+          Profile.onMeleeKill();
+          Profile.MatchXP.onMeleeKill();
+        }
+      }
       // kill streak tracking (resets if more than 4 s between kills)
       const STREAK_WINDOW = 4.0;
       if (G.time - killer._lastKillTime <= STREAK_WINDOW) {
@@ -2504,6 +2528,7 @@ function registerKill(killer, victim, weaponName, headshot) {
 }
 
 function startMatch(mapId, modeId = 'tdm') {
+  Profile.onMatchStart(); // P5: matchesPlayed++ and resets MatchXP/MatchStats
   G.mapId = mapId;
   G.modeId = modeById(modeId).id;
   G.mode = modeById(G.modeId);
@@ -2680,6 +2705,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect) {
     }
     player._killStreakCount = 0; // reset streak on death
     player._streakKills = 0;     // streak progress resets; banked rewards survive death
+    Profile.onDeath();           // P5: immediate lifetime stat
     if (attacker) attacker.kills++;
     registerKill(attacker, player, weaponName, headshot);
     // that kill may have ended the match (or started the Nuketown
