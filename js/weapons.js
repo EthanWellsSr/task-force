@@ -123,6 +123,14 @@ const WEAPONS = {
     dmg:70, minDmg:56, head:1.8, rpm:190, mag:10, reserve:30, reload:3.3, mode:'semi',
     spreadHip:.12, spreadAds:.0012, recoil:.042, bloom:.006, zoom:6.0, adsTime:.4,
     speed:.9, range:[25,50], model:'sniper', unlockLevel:17 },
+  // P33: marksman — zoom 2.8 deliberately ducks the `zoom > 3` scope gates
+  // (no overlay/sway/wheel, faster feel for free). head 2.1 is a new family
+  // ceiling by design: one-shot headshot inside ~29 m while the body can
+  // never 2-shot (49 × 2 = 98), so body-spam stays mathematically dead.
+  m14: { slot:'primary', cat:'Sniper Rifle', name:'M14 EBR',
+    dmg:49, minDmg:38, head:2.1, rpm:240, mag:15, reserve:45, reload:2.6, mode:'semi',
+    spreadHip:.09, spreadAds:.0018, recoil:.030, bloom:.0075, zoom:2.8, adsTime:.28,
+    speed:.93, range:[26,52], model:'sniper' },
 
   // ---------- SECONDARIES ----------
   usp: { slot:'secondary', cat:'Handgun', name:'HK USP45',
@@ -391,6 +399,8 @@ const BOT_LOADOUTS = [
   { primary:'r870',   secondary:'usp',    lethal:'frag' },
   { primary:'aa12',   secondary:'g18',    lethal:'frag' },
   { primary:'intervention', secondary:'usp', lethal:null },
+  { primary:'barrett', secondary:'usp', lethal:null },    // P32 flag: was player-only
+  { primary:'m14',     secondary:'usp', lethal:'frag' },  // P33: marksman, not a full sniper
 ];
 
 // Normalized 0..1 stats for the class editor bars
