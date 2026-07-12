@@ -631,11 +631,12 @@ const UI = {
       return;
     }
     const dist = Math.max(0, Math.round(info.distance));
-    const key = dist + ':' + info.angle.toFixed(2) + ':' + (info.urgent ? 1 : 0);
+    const name = info.name || 'FRAG'; // P42: semtex arrows read SEMTEX
+    const key = name + ':' + dist + ':' + info.angle.toFixed(2) + ':' + (info.urgent ? 1 : 0);
     if (c.fragDanger === key) return;
     c.fragDanger = key;
     el.style.setProperty('--frag-angle', info.angle.toFixed(3) + 'rad');
-    el.querySelector('.frag-label').textContent = 'FRAG ' + dist + 'm';
+    el.querySelector('.frag-label').textContent = name + ' ' + dist + 'm';
     el.classList.toggle('urgent', info.urgent);
     el.classList.remove('hidden');
   },
