@@ -770,7 +770,41 @@ const UI = {
     }
   },
 
-  showEnd(mode, win, scores, combatants) {
+  // P7: compact XP recap panel on the end screen. commit is the object
+  // returned by Profile.commitMatch (null on double-fire -> panel hidden).
+  renderEndXp(commit) {
+    const el = this.$('endXp');
+    if (!commit) { el.classList.add('hidden'); return; }
+    const x = commit.xp, s = commit.stats;
+    const lines = [
+      ['DIRECT KILLS',    s.kills,           x.directKills],
+      ['KILLSTREAK KILLS',s.killstreakKills, x.killstreakKills],
+      ['ASSISTS',         s.assists,         x.assists],
+      ['HEADSHOT BONUS',  s.headshots,       x.headshots],
+      ['MELEE BONUS',     s.meleeKills,      x.meleeKills],
+      ['NUKE BONUS',      s.nukesCalled,     x.nukeBonus],
+      ['MATCH COMPLETE',  0,                 x.matchComplete],
+      ['VICTORY',         0,                 x.matchWin],
+    ].filter(l => l[2] > 0);
+    const rows = lines.map(l =>
+      `<div class="xp-line"><span>${l[0]}${l[1] > 1 ? ' ×' + l[1] : ''}</span><span>+${l[2]}</span></div>`).join('');
+    const lvl = commit.leveledUp
+      ? `LVL ${commit.oldLevel} → LVL ${commit.newLevel} — ${Profile.rankName(commit.newLevel)}`
+      : `LVL ${commit.newLevel} — ${Profile.rankName(commit.newLevel)}`;
+    const pr = commit.progress;
+    const pct = pr.needed > 0 ? Math.round(100 * pr.current / pr.needed) : 100;
+    el.innerHTML = `
+      <div class="xp-lines">${rows}
+        <div class="xp-line total"><span>TOTAL XP</span><span>+${x.total}</span></div></div>
+      <div class="xp-level${commit.leveledUp ? ' up' : ''}">${lvl}</div>
+      <div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div>
+      <div class="xp-progress">${pr.needed > 0 ? pr.current + ' / ' + pr.needed + ' XP' : 'MAX LEVEL'}</div>
+      <div class="xp-deltas">K ${s.kills}&nbsp;&nbsp;D ${s.deaths}&nbsp;&nbsp;A ${s.assists}&nbsp;&nbsp;HS ${s.headshots}</div>`;
+    el.classList.remove('hidden');
+  },
+
+  showEnd(mode, win, scores, combatants, commit) {
+    this.renderEndXp(commit);
     if (mode && mode.structure === 'ffa') {
       const res = this.$('endResult');
       res.textContent = win === null ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT';

@@ -362,6 +362,23 @@ tr.me td { color:#e8a33d; font-weight:700; }
 #endResult.lose { color:#d05040; text-shadow:0 0 40px rgba(208,80,64,.35); }
 #endResult.draw { color:#9aa08a; }
 #endScore { font-size:20px; color:#c8c5b8; margin-bottom:24px; letter-spacing:3px; }
+
+/* P7: end-screen XP recap */
+#endXp {
+  width:320px; margin:0 auto 20px; padding:12px 16px; text-align:left;
+  background:rgba(20,22,16,.85); border:1px solid #3a3d32; border-radius:6px;
+}
+.xp-line { display:flex; justify-content:space-between; font-size:13px;
+  color:#c8c5b8; letter-spacing:1px; padding:2px 0; }
+.xp-line span:last-child { color:#e8a33d; }
+.xp-line.total { border-top:1px solid #3a3d32; margin-top:6px; padding-top:6px;
+  font-weight:800; color:#fff; }
+.xp-level { margin-top:10px; font-size:14px; letter-spacing:2px; color:#c8c5b8; }
+.xp-level.up { color:#e8a33d; font-weight:800; }
+.xp-bar { height:6px; margin-top:6px; background:#2a2d24; border-radius:3px; overflow:hidden; }
+.xp-fill { height:100%; background:#e8a33d; }
+.xp-progress { font-size:11px; color:#9aa08a; margin-top:3px; letter-spacing:1px; }
+.xp-deltas { margin-top:8px; font-size:12px; color:#9aa08a; letter-spacing:2px; }
 #endScreen .panel-buttons { justify-content:center; margin-top:26px; }
 
 /* ================= PAUSE ================= */

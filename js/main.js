@@ -2742,7 +2742,7 @@ function finishMatch(win) {
   G.lastCommit = Profile.commitMatch(win === true ? 'win' : win === false ? 'loss' : 'draw');
   document.exitPointerLock && document.exitPointerLock();
   AudioSys.matchEnd(win !== false);
-  UI.showEnd(G.mode, win, G.scores, G.combatants);
+  UI.showEnd(G.mode, win, G.scores, G.combatants, G.lastCommit);
 }
 
 function quitMatch() {
