@@ -1764,14 +1764,16 @@ function buildVacant(scene, colliders) {
 // east (z 11..15, staggered stalls/cars/garage). tf south, sp north,
 // both behind 2.6 m shield lines at x = ∓16 with alley/center/street
 // exit gaps.
-// #23i SHELL + URBAN BLOCKOUT: perimeter + caps, PLACEHOLDER wreck
-// mass (single coarse AABB — the yawed 5-box stepped-hull Sea Knight is
-// #23j), main building GROUND FLOOR only (two rooms, four doors — 2F/
-// roof/stairs are #23j), shop walls (roof counter-perch #23j), arcade
-// colonnade massing (slab + pillars, blocker-capped, not walkable),
-// solid tower placeholder block (platform/steps #23j), walled backyard,
-// street cover, courtyard rubble. Ground-level spawns + seeds only —
-// vertical seeds land with #23j. Debug colors — art is #23k.
+// #23i shell/blockout; #23j HELI + VERTICALITY + COLLISION + NAV:
+// yawed Sea Knight mesh over a 5-box stepped AABB hull with the ≥1.5 m
+// fuselage–tail cut as the seeded signature lane; main building 2F
+// (slab 2.65) + roof (5.25, 0.9 parapet, invisible roof blockers) with
+// staggered interior stairs (NW ground→2F, SE 2F→roof, 6 × 0.433 each)
+// plus the exterior backyard route (0.45 crate chain → annex 2.4 →
+// 6 × 0.45 step run through the S parapet gap); tower platform with
+// rails + east-face treads; shop roof counter-perch at 3.2 via a 6-box
+// street-face chain; forward-spawn screens so the roof sees 0 spawns;
+// dense y-aware seeds. Debug colors — art is #23k.
 // ============================================================
 function buildCrash(scene, colliders) {
   const k = new MapKit(scene, colliders);
@@ -1809,53 +1811,174 @@ function buildCrash(scene, colliders) {
   // ---- G. spawn shields (Killhouse pattern, 2.6 m): tf line at x = −16,
   // sp line at x = 16. Gaps are the three lane exits per end (alley /
   // approach / center / street). Asymmetric panel bands per the doc.
-  for (const [a, b] of [[-13, -8.5], [-7, -2.5], [1, 5.5], [7, 12]])
+  // tf line: the west gap of the doc's four-panel band is MERGED shut
+  // (#23j) — the tower perch saw tf's own spawns straight through it.
+  // tf keeps three exits: alley, center gap (−1.5..1), east gap, street.
+  for (const [a, b] of [[-13, -1.5], [1, 5.5], [7, 12]])
     k.wall('z', a, b, -16, 2.6, 0.12, SHIELD);             // tf panels
-  for (const [a, b] of [[-12, -7.5], [-6, -1.5], [2, 6.5], [8, 13]])
+  for (const [a, b] of [[-12, -7.5], [-6, -1.5], [2, 6.8], [8.2, 13]])
     k.wall('z', a, b, 16, 2.6, 0.12, SHIELD);              // sp panels
+  // forward-spawn screens (#23j): without these the main-building roof
+  // sees both forward spawns through the center gaps. Staggered inside
+  // the gap (Killhouse-shield height); exits pass around both ends.
+  k.box(-14.4, 1.3, -1.0, 0.12, 2.6, 3.2, SHIELD);         // tf screen (z −2.6..0.6)
+  k.box(14.4, 1.3, 1.0, 0.12, 2.6, 3.2, SHIELD);           // sp screen (z −0.6..2.6)
+  k.box(-14.3, 1.3, -4.0, 1.4, 2.6, 0.12, SHIELD);         // tf SW screen: blinds the
+                                                           // tower to the fwd spawn
 
-  // ---- A. crash courtyard: PLACEHOLDER wreck mass (#23i — one coarse
-  // AABB standing in for fuselage+tail; the yawed stepped-hull Sea
-  // Knight with the walkable cut replaces it in #23j) + low rubble/car
-  // cover breaking the longest diagonals.
-  k.box(2, 1.3, 0, 8, 2.6, 3.4, WRECK);                    // wreck placeholder
+  // ---- A. crash courtyard: the Sea Knight (#23j). Visible mesh is a
+  // YAWED group (rotation.y = −0.30, nose SW, tail NE); collision is a
+  // 5-box stepped AABB hull marched along the yawed centerline with
+  // padding (over-cover, Shipment's leaned-container lesson — note
+  // rotation.y maps local +x to (cos a, −sin a) in (x,z), so the march
+  // direction uses −sin). Separated tail is axis-aligned 1.5+ m NE of
+  // the hull — the walkable fuselage–tail CUT is the signature lane.
+  // Fuselage tops are NOT walkable (2.6, no riser chain adjacent).
+  const HY = -0.30, HCS = Math.cos(HY), HSN = -Math.sin(HY); // march dir (0.955, 0.296)
+  const HX = 1.8, HZ = -0.2, HLEN = 8, HWID = 3;
+  (function seaKnight() {
+    const g = new THREE.Group();
+    g.position.set(HX, 0, HZ);
+    g.rotation.y = HY;
+    const add = (w, h, d, x, y, z, color) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), k.mat(color));
+      m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
+      g.add(m); return m;
+    };
+    add(7.6, 2.2, 2.8, 0.2, 1.25, 0, 0x5a6248);            // fuselage body
+    add(1.6, 1.7, 2.2, -3.9, 0.95, 0, 0x525a42);           // cockpit (nose, SW)
+    add(4.6, 0.55, 1.6, 0.4, 2.6, 0, 0x4a523c);            // spine/engine hump
+    add(1.5, 1.3, 1.3, 3.6, 2.5, 0, 0x525a42);             // aft pylon stump
+    add(0.9, 0.5, 0.9, -2.6, 2.75, 0, 0x3a4034);           // fwd rotor mast
+    for (const [hx, hy] of [[-2.6, 3.1], [3.6, 3.35]])     // drooped rotor blades
+      for (const ang of [0.5, 2.6, 4.7]) {
+        const b = add(5.6, 0.07, 0.42, 0, 0, 0, 0x2e3230);
+        b.position.set(hx + 2.6 * Math.cos(ang), hy, -2.6 * Math.sin(ang));
+        b.rotation.y = ang;
+      }
+    scene.add(g);
+  })();
+  // stepped hull: 5 axis-aligned blockers along the yawed centerline
+  {
+    const seg = HLEN / 5, PAD = 0.12;
+    const bw = Math.abs(seg * HCS) + Math.abs(HWID * HSN) + PAD;
+    const bd = Math.abs(seg * HSN) + Math.abs(HWID * HCS) + PAD;
+    for (let i = 0; i < 5; i++) {
+      const u = -HLEN / 2 + seg / 2 + i * seg;
+      k.blocker(HX + u * HCS, 1.3, HZ + u * HSN, bw, 2.6, bd);
+    }
+  }
+  k.box(7.2, 0.8, 4.9, 2.6, 1.6, 1.8, 0x5a6248);           // tail section (solid)
+  k.box(7.6, 1.9, 4.9, 1.8, 0.6, 1.4, 0x525a42);           // ...tail pylon
+  k.box(7.9, 2.35, 4.9, 3.4, 0.08, 0.4, 0x2e3230, { solid: false }); // tail rotor
+  k.box(1.8, 0.016, -0.2, 11, 0.02, 6.5, 0x3a3630, nsf);   // scorch decals
+  k.box(7.2, 0.016, 4.9, 4.5, 0.02, 3.5, 0x443e36, nsf);
   k.car(-2.5, 4.4, 0x8a8478);                              // courtyard car hull
   k.box(7, 0.5, -3.5, 2, 1.0, 1.5, 0x9a8a70);              // rubble
   k.box(-5, 0.45, 1.5, 1.6, 0.9, 1.2, 0x9a8a70);           // rubble
-  k.crate(7.2, 4.6, 1.1, CRATE);
+  k.crate(9.6, 6.4, 1.1, CRATE);
 
-  // ---- B. main building, GROUND FLOOR only (x −4..6, z −12..−5): two
-  // rooms split at x = 1; doors ≥ 1.4 m: two E (courtyard), one S
-  // (backyard), one N (arcade/west end), partition door. 2F/roof/stairs
-  // are #23j — walls stop at GH.
+  // ---- B. main building (x −4..6, z −12..−5): ground floor two rooms
+  // split at x = 1; 2F slab at 2.65; roof at 5.25 with 0.9 parapet and
+  // invisible roof blockers. Access 1 (interior): NW stair ground→2F
+  // (6 × 0.433 risers) then staggered SE stair 2F→roof (6 × 0.433) —
+  // pushing the roof forces a cross of the second floor. Access 2
+  // (exterior): backyard crate chain (0.45) → annex 2.4 → step run to
+  // the roof. E-facing 2F windows are player-only vault perches.
   k.wall('x', -4, 6, -5, GH, 0.2, BLDG, [
     { a: -2.2, b: -0.8 }, { a: 2.8, b: 4.2 },              // E doors -> courtyard
   ]);
   k.wall('x', -4, 6, -12, GH, 0.2, BLDG);                  // W face (alley side)
-  k.wall('z', -12, -5, -4, GH, 0.2, BLDG, [{ a: -9.2, b: -7.8 }]); // S -> backyard
+  k.wall('z', -12, -5, -4, GH, 0.2, BLDG, [{ a: -11.2, b: -9.8 }]); // S -> backyard
   k.wall('z', -12, -5, 6, GH, 0.2, BLDG, [{ a: -7.4, b: -6.0 }]);  // N -> west end
   k.wall('z', -12, -5, 1, GH, 0.15, BLDG, [{ a: -10.4, b: -9.0 }]); // room partition
+  const FY = 2.65, RY = 5.25;                              // 2F / roof walk heights
+  // 2F slab (top 2.65), opening x 2.2..6 / z −12..−10.7 over the NW stair
+  k.box(-0.9, FY - 0.1, -8.5, 6.2, 0.2, 7, BLDG);
+  k.box(4.1, FY - 0.1, -7.85, 3.8, 0.2, 5.7, BLDG);
+  // 2F walls (y0 = 2.65): E face gets the two courtyard window perches
+  k.wall('x', -4, 6, -5, GH, 0.2, BLDG, [
+    { a: -2.6, b: -1.0, bottom: 0.9, top: 2.1 },
+    { a: 2.0, b: 3.6, bottom: 0.9, top: 2.1 },
+  ], FY);
+  k.wall('x', -4, 6, -12, GH, 0.2, BLDG, [], FY);
+  k.wall('z', -12, -5, -4, GH, 0.2, BLDG, [], FY);
+  k.wall('z', -12, -5, 6, GH, 0.2, BLDG, [], FY);
+  k.wall('z', -12, -5, 1, GH, 0.15, BLDG, [{ a: -8.4, b: -7.0 }], FY); // 2F partition
+  // NW stair ground→2F: 6 × 0.433 column treads along the W wall
+  for (let i = 1; i <= 6; i++)
+    k.box(2.3 + 0.55 * (i - 1) + 0.275, 0.433 * i / 2, -11.3, 0.55, 0.433 * i, 1.1, BLDG);
+  // SE stair 2F→roof: 6 × 0.433 columns standing ON the 2F slab
+  for (let i = 1; i <= 6; i++)
+    k.box(-2.95, FY + 0.433 * i / 2, -6.3 - 0.55 * (i - 1), 1.1, 0.433 * i, 0.55, BLDG);
+  // roof slabs (top 5.25), opening x −4..−2.2 / z −9.7..−6 over the SE stair
+  k.box(1.9, RY - 0.1, -8.5, 8.2, 0.2, 7, BLDG);
+  k.box(-3.1, RY - 0.1, -5.5, 1.8, 0.2, 1, BLDG);
+  k.box(-3.1, RY - 0.1, -10.85, 1.8, 0.2, 2.3, BLDG);
+  // 0.9 m parapets; S edge gapped (z −10.6..−9.0) for the annex arrival
+  k.box(5.94, RY + 0.45, -8.5, 0.12, 0.9, 7, BLDG);        // N edge
+  k.box(1, RY + 0.45, -5.06, 10, 0.9, 0.12, BLDG);         // E edge
+  k.box(1, RY + 0.45, -11.94, 10, 0.9, 0.12, BLDG);        // W edge
+  k.box(-3.94, RY + 0.45, -11.3, 0.12, 0.9, 1.4, BLDG);    // S edge (alley side)
+  k.box(-3.94, RY + 0.45, -7.0, 0.12, 0.9, 4.0, BLDG);     // S edge (yard side)
+  // invisible roof blockers above the parapets (start above head+jump
+  // height of the annex run so climbers pass under them in the gap)
+  k.blocker(6.4, 7.8, -8.5, 0.8, 3.0, 8.4);                // N
+  k.blocker(1, 7.8, -4.8, 11.6, 3.0, 0.8);                 // E
+  k.blocker(1, 7.8, -12.2, 11.6, 3.0, 0.8);                // W
+  k.blocker(-4.4, 7.8, -11.45, 0.8, 3.0, 1.7);             // S (gap z −10.6..−9.0)
+  k.blocker(-4.4, 7.8, -6.85, 0.8, 3.0, 4.3);
 
   // ---- F. backyard (x −8..−4, z −12..−5): 2 m walls, cut to the alley,
-  // shares the building's S door. Annex/crate chain is #23j.
+  // shares the building's S door (west end — the annex run owns the east
+  // half of the face). Access 2: 0.45 crate chain → annex 2.4 → 6 × 0.45
+  // step run + 0.15 onto the roof through the parapet gap.
   k.wall('z', -12, -5, -8, 2.0, 0.2, YARD);                // yard S wall
   k.wall('x', -8, -4, -5, 2.0, 0.2, YARD);                 // yard E wall
   k.wall('x', -8, -4, -12, 2.0, 0.2, YARD, [{ a: -7.4, b: -6.0 }]); // W cut -> alley
+  k.box(-4.8, 1.2, -5.8, 1.6, 2.4, 1.6, YARD);             // annex (top 2.4 walkable)
+  for (let i = 1; i <= 4; i++)                             // crate chain, 0.45 rises
+    k.box(-7.7 + 0.55 * (i - 1), 0.45 * i / 2, -5.75, 0.55, 0.45 * i, 1.0, CRATE);
+  k.box(-5.75, 1.125, -5.75, 0.55, 2.25, 1.0, CRATE);      // top crate (2.25 -> annex)
+  for (let i = 1; i <= 6; i++)                             // annex -> roof step run
+    k.box(-4.5, (2.4 + 0.45 * i) / 2, -7.0 - 0.55 * (i - 1), 0.9, 2.4 + 0.45 * i, 0.55, YARD);
   // alley chicane: backyard dogleg stub + west-wall stub — together they
   // cover the full z −15..−12 band so no straight alley tube survives
   k.box(-8, 1.0, -12.8, 0.3, 2.0, 1.6, YARD);              // stub off the yard corner
   k.box(2, 1.0, -14.2, 0.3, 2.0, 1.6, YARD);               // stub off the west wall
 
-  // ---- F. tower placeholder (SW corner): solid 3×3 block at (−12,−12).
-  // Platform + rails + 0.45 steps are #23j.
+  // ---- F. tower (SW corner): solid 3×3 body, walkable top at 2.6 with
+  // 0.5 rails; 5 × 0.45 treads + 0.35 final rise from the EAST
+  // (cross-lane) face — alley-side steps would choke the 1.5 m alley
+  // pass, a doc deviation. Courtyard-blind (the main building blocks).
   k.box(-12, 1.3, -12, 3, 2.6, 3, YARD);
+  k.box(-10.56, 2.85, -12, 0.12, 0.5, 3, YARD);            // rail N
+  k.box(-13.44, 2.85, -12, 0.12, 0.5, 3, YARD);            // rail S
+  k.box(-12, 2.85, -13.44, 3, 0.5, 0.12, YARD);            // rail W
+  k.box(-12.97, 2.85, -10.56, 0.94, 0.5, 0.12, YARD);      // rail E, split:
+  k.box(-11.03, 2.85, -10.56, 0.94, 0.5, 0.12, YARD);      // stair gap x −12.5..−11.5
+  for (let i = 1; i <= 5; i++)                             // treads: tops 0.45..2.25
+    k.box(-12, 0.45 * i / 2, -10.5 + 0.275 + 0.55 * (5 - i), 1.0, 0.45 * i, 0.55, YARD);
 
-  // ---- C. shop (x −2..3, z 7..11): single story, W door to courtyard,
-  // offset E door to the back street. Roof counter-perch is #23j.
+  // ---- C. shop (x −2..3, z 7..11): W door to courtyard, offset E door
+  // to the back street. Roof counter-perch at 3.2 (#23j): 6-box chain,
+  // 0.5 rises — the doc's "2-crate chain" cannot reach 3 m under the
+  // 0.5 step limit, and it runs up the S (connector) face because the
+  // E face carries the street door + clutter; both documented
+  // deviations. Low parapet, S-edge gap at the chain arrival.
   k.wall('x', -2, 3, 7, 3.0, 0.2, SHOP, [{ a: -0.2, b: 1.2 }]);
   k.wall('x', -2, 3, 11, 3.0, 0.2, SHOP, [{ a: 0.6, b: 2.0 }]);
   k.wall('z', 7, 11, 3, 3.0, 0.2, SHOP);
   k.wall('z', 7, 11, -2, 3.0, 0.2, SHOP);
+  k.box(0.5, 3.1, 9, 5, 0.2, 4, SHOP);                     // roof slab (top 3.2)
+  k.box(0.5, 3.4, 7.06, 5, 0.4, 0.12, SHOP);               // parapet W (courtyard)
+  k.box(2.94, 3.4, 9, 0.12, 0.4, 4, SHOP);                 // parapet N
+  k.box(0.5, 3.4, 10.94, 5, 0.4, 0.12, SHOP);              // parapet E (street)
+  k.box(-1.94, 3.4, 8.3, 0.12, 0.4, 2.6, SHOP);            // parapet S, chain gap z>9.6
+  // chain on the S (connector) face — the E face carries the street door
+  // and its clutter, so the doc's street-face chain moved here (deviation)
+  for (let i = 1; i <= 6; i++)                             // 0.5 rises, tops 0.5..3.0
+    k.box(-2.6, 0.5 * i / 2, 7.4 + 0.6 * (i - 1), 0.6, 0.5 * i, 0.6, CRATE);
 
   // ---- D. arcade colonnade (x 8..11, z −8..4): pillars + solid slab at
   // y 3.0, blocker-capped (massing only — never walkable). sp's shielded
@@ -1874,34 +1997,44 @@ function buildCrash(scene, colliders) {
   k.box(-7, 2, 14.2, 8, 4, 1.6, 0x4a6a8a);                 // blue facade S
   k.wall('z', 12.5, 15, -3, 3.0, 0.2, 0x5a7a9a);           // garage S wall
   k.wall('z', 12.5, 15, 1, 3.0, 0.2, 0x5a7a9a);            // garage N wall
-  k.box(3.5, 0.95, 11.6, 2.4, 1.9, 1.2, STALL);            // market stalls
+  k.box(4.5, 0.95, 11.6, 2.4, 1.9, 1.2, STALL);            // market stalls
   k.box(-4.5, 0.95, 12.2, 2.4, 1.9, 1.2, STALL);
   k.box(10, 0.55, 12.6, 4.2, 1.1, 1.8, 0x6a6660);          // x-long car hulls
   k.box(9.8, 1.35, 12.6, 2.0, 0.7, 1.7, 0x1a1d20);
   k.box(-9, 0.55, 13, 4.2, 1.1, 1.8, 0x8a6a4a);
   k.box(-9.2, 1.35, 13, 2.0, 0.7, 1.7, 0x1a1d20);
+  // #23j cover finalization: alley drum + south cross-lane rubble
+  k.barrel(-2.6, -14.4);
+  k.box(-10.5, 0.5, 1.8, 1.6, 1.0, 1.4, 0x9a8a70);
 
   // ---- spawns: 5 per team, four behind the shield lines + one forward
-  // lane point (deliberately risky). Asymmetric — each point LOS-checked
-  // per-point (no mirror shortcut), per the doc's §Asymmetry #4.
+  // lane point (deliberately risky, roof-blinded by the screens).
+  // Asymmetric — each point LOS-checked per-point (doc §Asymmetry #4);
+  // z positions tuned so every roof-rectangle ray crosses a shield panel.
   const spawns = {
-    tf: [[-18, -11], [-18, -5], [-18, 3], [-18, 9], [-15.5, -1]],
-    sp: [[18, -10], [18, -4], [18, 4], [18, 10], [15.5, 1]],
+    tf: [[-18, -11], [-18, -5], [-18, 3.5], [-18, 10.5], [-15.5, -1]],
+    sp: [[18, -10], [18, -4], [18, 5], [18, 12], [15.5, 1]],
   };
 
-  // ---- waypoints (#23i): ground-only threaded seeds — three lane
-  // threads (alley chicane pairs / courtyard ring / street weave),
-  // doorway pairs for every interior, shield-gap pairs both ends.
-  // Vertical seeds (stairs/roofs/tower/shop perch) land with #23j.
+  // ---- waypoints (#23j): ground threads (alley chicane / courtyard
+  // ring re-threaded through the fuselage–tail CUT / street weave),
+  // doorway pairs for every interior, screen-pass pairs, and y-aware
+  // chains up the NW stair → 2F → SE stair → roof, the annex crate
+  // chain + step run, the tower treads, and the shop-roof chain.
+  // Elevated islands are impossible by construction: every roof node is
+  // ≥ 8.6 m (the nav-link limit) from every other roof group, so no
+  // cross-gap roof edge can form.
   const seeds = [
-    // tf pocket + gap pairs
-    [-18, -11.5], [-18, -5.5], [-18, 2.5], [-18, 9.5], [-17, -1],
-    [-16.6, -7.8], [-15.2, -7.8], [-16.6, -0.8], [-15, -0.8],
+    // tf pocket + gap pairs + screen passes
+    [-18, -11.5], [-18, -5.5], [-18, 2.5], [-18, 10.5], [-17, -1],
+    [-16.6, -0.8], [-15, -0.8],
     [-16.6, 6.2], [-15.2, 6.2], [-16.6, 13], [-14.5, 13.2],
-    // sp pocket + gap pairs
-    [18, -11], [18, -5.5], [18, 2.5], [18, 11], [16.8, 1],
-    [16.6, -6.8], [15, -6.8], [16.6, 0.3], [14.8, 0.3],
-    [16.6, 7.2], [15, 7.2], [16.6, 14], [14.5, 13.6],
+    [-15.2, 1.4], [-13.6, 1.4], [-15.2, -3.1], [-13.6, -3.1],
+    // sp pocket + gap pairs + screen passes
+    [18, -11], [18, -5.5], [18, 5.5], [18, 12.5], [16.8, 1],
+    [16.6, -6.8], [15, -6.8], [16.6, 0.3], [15.1, 0.3],
+    [16.6, 7.5], [15, 7.5], [16.6, 14], [14.5, 13.6],
+    [15.2, -1.4], [13.6, -1.4], [15.2, 3.3], [13.6, 3.3],
     // alley thread (west lane, through both chicane stubs)
     [-17, -13.8], [-14.5, -14.2], [-12, -14.3], [-9.5, -14.3],
     [-8, -14.3], [-4, -14], [-1, -13.9], [0.8, -12.7], [3.2, -12.7],
@@ -1909,23 +2042,46 @@ function buildCrash(scene, colliders) {
     // south cross-lane + west approach
     [-10, -7], [-10, -1], [-10, 4], [-12, 8], [-14.8, -11.5],
     [9, -10.5], [13, -10], [13, -4], [13, 2],
-    // courtyard ring (placeholder wreck at x −2..6, z −1.7..1.7)
+    // courtyard ring + the fuselage–tail cut thread
     [-4, -2], [-4.5, 3], [0, 3.4], [5, 4.4], [7.4, 1],
     [6.2, -2.2], [1, -3.5], [-2, -3.4], [-6, -3],
-    // main building doors + rooms
+    [2.6, 2.9], [4.6, 3.2], [6.7, 3.2], [8.0, 3.2],
+    // main building doors + rooms (ground)
     [-1.5, -3.9], [-1.5, -6.1], [3.5, -3.9], [3.5, -6.1],
-    [-3, -8.5], [-5, -8.5], [5, -6.7], [7, -6.7],
-    [0, -9.7], [2, -9.7], [-2.5, -10.8], [4, -10.5],
-    // backyard + alley cut pair
-    [-6.5, -10.5], [-6.7, -11.3], [-6.7, -12.8],
+    [-3, -10.5], [-5, -10.5], [5, -6.7], [7, -6.7],
+    [0, -9.7], [2, -9.7], [-2.5, -10.8], [4.2, -7.5],
+    // backyard + alley cut pair + chain approach
+    [-6.5, -10.5], [-6.7, -11.3], [-6.7, -12.8], [-7, -7],
     // arcade walkway + north-of-arcade approach
     [9.5, -5.5], [9.5, -1], [9.5, 3], [12.5, -7],
     // shop doors + interior + east-of-courtyard connector
     [0.5, 6.3], [0.5, 7.9], [0.5, 9], [1.3, 10.3], [1.3, 11.9],
     [-3.8, 6.8], [7, 8.5], [11.5, 9.5],
-    // street weave (between stalls/cars/garage) + garage pocket
-    [-12, 12.2], [-7.5, 11.6], [-1, 11.8], [-1, 13.6],
-    [2.6, 13], [6.3, 12.6], [10, 11.2], [13, 12.6],
+    // street weave + garage pocket + shop-chain approach
+    [-12, 12.2], [-7.5, 11.6], [-2.2, 11.8], [-1, 13.6],
+    [2.6, 13], [6.3, 12.6], [10, 11.2], [13, 12.6], [0, 12.3],
+    // NW stair (ground -> 2F) + 2F floor + window perch + 2F door pair
+    [2.575, -11.3, 0.433], [3.675, -11.3, 1.299], [4.775, -11.3, 2.165],
+    [5.325, -11.3, 2.598],
+    [4.5, -9.8, 2.65], [3, -6, 2.65], [1.9, -7.7, 2.65], [0.1, -7.7, 2.65],
+    [-1.8, -5.8, 2.65], [-1.9, -9.8, 2.65],
+    // SE stair (2F -> roof) + roof
+    [-2.95, -6.3, 3.083], [-2.95, -7.4, 3.949], [-2.95, -8.5, 4.815],
+    [-2.95, -9.05, 5.248],
+    [-3.1, -10.6, 5.25], [0, -8.5, 5.25], [3.5, -7, 5.25],
+    [5, -10.5, 5.25], [1, -6, 5.25],
+    // annex crate chain + step run (backyard access 2)
+    [-7.15, -5.75, 0.9], [-6.05, -5.75, 1.8], [-5.75, -5.75, 2.25],
+    [-4.8, -5.8, 2.4],
+    [-4.5, -7.0, 2.85], [-4.5, -8.1, 3.75], [-4.5, -9.2, 4.65],
+    [-4.5, -9.75, 5.1],
+    // tower treads + top (approach from the cross-lane)
+    [-12, -7.2],
+    [-12, -8.03, 0.45], [-12, -9.13, 1.35], [-12, -10.23, 2.25],
+    [-12, -11.3, 2.6], [-12, -12.6, 2.6],
+    // shop-roof chain (S face) + perch
+    [-2.6, 7.4, 0.5], [-2.6, 8.6, 1.5], [-2.6, 9.8, 2.5], [-2.6, 10.4, 3.0],
+    [-1.2, 10.1, 3.2], [1.5, 8.5, 3.2],
   ];
 
   return {
