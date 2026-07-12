@@ -1753,7 +1753,193 @@ function buildVacant(scene, colliders) {
   };
 }
 
-const MAPS = { nuketown: buildNuketown, rust: buildRust, shipment: buildShipment, killhouse: buildKillhouse, vacant: buildVacant };
+// ============================================================
+// CRASH — CoD4 Basrah desert town around a downed Sea Knight, per
+// docs/crash-reference.md (#23h). Compass: +x = north, +z = east
+// (top-down +x up). 40 × 30 m playable — bounds { x: 20, z: 15 }.
+// ASYMMETRIC (no 180° mirror): balance comes from route timing and
+// counter-angles; every spawn LOS check runs per-point. Three lanes on
+// the spawn axis: back ALLEY west (z −15..−12, chicaned by the backyard
+// dogleg stub + a west-wall stub), crash COURTYARD center, back STREET
+// east (z 11..15, staggered stalls/cars/garage). tf south, sp north,
+// both behind 2.6 m shield lines at x = ∓16 with alley/center/street
+// exit gaps.
+// #23i SHELL + URBAN BLOCKOUT: perimeter + caps, PLACEHOLDER wreck
+// mass (single coarse AABB — the yawed 5-box stepped-hull Sea Knight is
+// #23j), main building GROUND FLOOR only (two rooms, four doors — 2F/
+// roof/stairs are #23j), shop walls (roof counter-perch #23j), arcade
+// colonnade massing (slab + pillars, blocker-capped, not walkable),
+// solid tower placeholder block (platform/steps #23j), walled backyard,
+// street cover, courtyard rubble. Ground-level spawns + seeds only —
+// vertical seeds land with #23j. Debug colors — art is #23k.
+// ============================================================
+function buildCrash(scene, colliders) {
+  const k = new MapKit(scene, colliders);
+  const W = 20, D = 15;      // half extents: 40 m spawn axis (x) × 30 m (z)
+  const SHELL_H = 5, T = 0.4, GH = 2.6;   // GH = ground-floor wall height
+  // debug palette (#23i): loud compass shell walls + zone tints
+  const DBG_N = 0xb03030, DBG_S = 0x3050a0, DBG_E = 0x3a8a3a, DBG_W = 0xc0a030,
+        BLDG = 0x9a8a6a,    // main building walls
+        SHOP = 0x8a7a5a,    // shop walls
+        YARD = 0x7a6a50,    // backyard walls / alley stubs
+        SHIELD = 0x9c7a42,  // spawn shield plywood
+        WRECK = 0xc07030,   // placeholder wreck (loud until #23j)
+        ARC = 0xa89878,     // arcade pillars/slab
+        STALL = 0x8f6a4a, CRATE = 0x6f5f3f,
+        SAND = 0xc9a97c, PLAIN = 0xb08c5f;
+  const nsf = { solid: false, shadow: false };
+
+  scene.background = new THREE.Color(0xdcc49a);
+  scene.fog = new THREE.Fog(0xdcc49a, 60, 130);
+
+  // ground: sun-bleached town floor over a wider desert plain
+  k.box(0, -0.55, 0, 140, 1, 140, PLAIN, nsf);
+  k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, SAND);
+
+  // ---- perimeter town walls (debug-colored) + invisible blocker caps
+  k.wall('z', -D - T, D + T, W, SHELL_H, T, DBG_N);        // north end wall
+  k.wall('z', -D - T, D + T, -W, SHELL_H, T, DBG_S);       // south end wall
+  k.wall('x', -W, W, D, SHELL_H, T, DBG_E);                // east side wall
+  k.wall('x', -W, W, -D, SHELL_H, T, DBG_W);               // west side wall
+  for (const s of [-1, 1]) {
+    k.blocker(s * (W + 0.6), 7, 0, 1, 14, D * 2 + 4);
+    k.blocker(0, 7, s * (D + 0.6), W * 2 + 4, 14, 1);
+  }
+
+  // ---- G. spawn shields (Killhouse pattern, 2.6 m): tf line at x = −16,
+  // sp line at x = 16. Gaps are the three lane exits per end (alley /
+  // approach / center / street). Asymmetric panel bands per the doc.
+  for (const [a, b] of [[-13, -8.5], [-7, -2.5], [1, 5.5], [7, 12]])
+    k.wall('z', a, b, -16, 2.6, 0.12, SHIELD);             // tf panels
+  for (const [a, b] of [[-12, -7.5], [-6, -1.5], [2, 6.5], [8, 13]])
+    k.wall('z', a, b, 16, 2.6, 0.12, SHIELD);              // sp panels
+
+  // ---- A. crash courtyard: PLACEHOLDER wreck mass (#23i — one coarse
+  // AABB standing in for fuselage+tail; the yawed stepped-hull Sea
+  // Knight with the walkable cut replaces it in #23j) + low rubble/car
+  // cover breaking the longest diagonals.
+  k.box(2, 1.3, 0, 8, 2.6, 3.4, WRECK);                    // wreck placeholder
+  k.car(-2.5, 4.4, 0x8a8478);                              // courtyard car hull
+  k.box(7, 0.5, -3.5, 2, 1.0, 1.5, 0x9a8a70);              // rubble
+  k.box(-5, 0.45, 1.5, 1.6, 0.9, 1.2, 0x9a8a70);           // rubble
+  k.crate(7.2, 4.6, 1.1, CRATE);
+
+  // ---- B. main building, GROUND FLOOR only (x −4..6, z −12..−5): two
+  // rooms split at x = 1; doors ≥ 1.4 m: two E (courtyard), one S
+  // (backyard), one N (arcade/west end), partition door. 2F/roof/stairs
+  // are #23j — walls stop at GH.
+  k.wall('x', -4, 6, -5, GH, 0.2, BLDG, [
+    { a: -2.2, b: -0.8 }, { a: 2.8, b: 4.2 },              // E doors -> courtyard
+  ]);
+  k.wall('x', -4, 6, -12, GH, 0.2, BLDG);                  // W face (alley side)
+  k.wall('z', -12, -5, -4, GH, 0.2, BLDG, [{ a: -9.2, b: -7.8 }]); // S -> backyard
+  k.wall('z', -12, -5, 6, GH, 0.2, BLDG, [{ a: -7.4, b: -6.0 }]);  // N -> west end
+  k.wall('z', -12, -5, 1, GH, 0.15, BLDG, [{ a: -10.4, b: -9.0 }]); // room partition
+
+  // ---- F. backyard (x −8..−4, z −12..−5): 2 m walls, cut to the alley,
+  // shares the building's S door. Annex/crate chain is #23j.
+  k.wall('z', -12, -5, -8, 2.0, 0.2, YARD);                // yard S wall
+  k.wall('x', -8, -4, -5, 2.0, 0.2, YARD);                 // yard E wall
+  k.wall('x', -8, -4, -12, 2.0, 0.2, YARD, [{ a: -7.4, b: -6.0 }]); // W cut -> alley
+  // alley chicane: backyard dogleg stub + west-wall stub — together they
+  // cover the full z −15..−12 band so no straight alley tube survives
+  k.box(-8, 1.0, -12.8, 0.3, 2.0, 1.6, YARD);              // stub off the yard corner
+  k.box(2, 1.0, -14.2, 0.3, 2.0, 1.6, YARD);               // stub off the west wall
+
+  // ---- F. tower placeholder (SW corner): solid 3×3 block at (−12,−12).
+  // Platform + rails + 0.45 steps are #23j.
+  k.box(-12, 1.3, -12, 3, 2.6, 3, YARD);
+
+  // ---- C. shop (x −2..3, z 7..11): single story, W door to courtyard,
+  // offset E door to the back street. Roof counter-perch is #23j.
+  k.wall('x', -2, 3, 7, 3.0, 0.2, SHOP, [{ a: -0.2, b: 1.2 }]);
+  k.wall('x', -2, 3, 11, 3.0, 0.2, SHOP, [{ a: 0.6, b: 2.0 }]);
+  k.wall('z', 7, 11, 3, 3.0, 0.2, SHOP);
+  k.wall('z', 7, 11, -2, 3.0, 0.2, SHOP);
+
+  // ---- D. arcade colonnade (x 8..11, z −8..4): pillars + solid slab at
+  // y 3.0, blocker-capped (massing only — never walkable). sp's shielded
+  // approach; blinds the future main roof to the sp pockets.
+  for (const pz of [-7.3, -4.9, -2.5, -0.1, 2.3])
+    k.box(8.3, 1.5, pz, 0.6, 3.0, 0.6, ARC);               // south pillar row
+  for (const pz of [-6, -2, 2])
+    k.box(10.7, 1.5, pz, 0.6, 3.0, 0.6, ARC);              // north pillar row
+  k.box(9.5, 3.15, -2, 3, 0.3, 12, ARC);                   // slab (solid)
+  k.blocker(9.5, 4.4, -2, 3, 2.2, 12);                     // cap above the slab
+
+  // ---- E. back street (east lane, z 11..15): blue-facade frontage with
+  // a walk-in garage pocket at mid-street; staggered stalls + car hulls
+  // so no full-length street eye-lane survives (bands verified).
+  k.box(6, 2, 14.2, 8, 4, 1.6, 0x4a6a8a);                  // blue facade N
+  k.box(-7, 2, 14.2, 8, 4, 1.6, 0x4a6a8a);                 // blue facade S
+  k.wall('z', 12.5, 15, -3, 3.0, 0.2, 0x5a7a9a);           // garage S wall
+  k.wall('z', 12.5, 15, 1, 3.0, 0.2, 0x5a7a9a);            // garage N wall
+  k.box(3.5, 0.95, 11.6, 2.4, 1.9, 1.2, STALL);            // market stalls
+  k.box(-4.5, 0.95, 12.2, 2.4, 1.9, 1.2, STALL);
+  k.box(10, 0.55, 12.6, 4.2, 1.1, 1.8, 0x6a6660);          // x-long car hulls
+  k.box(9.8, 1.35, 12.6, 2.0, 0.7, 1.7, 0x1a1d20);
+  k.box(-9, 0.55, 13, 4.2, 1.1, 1.8, 0x8a6a4a);
+  k.box(-9.2, 1.35, 13, 2.0, 0.7, 1.7, 0x1a1d20);
+
+  // ---- spawns: 5 per team, four behind the shield lines + one forward
+  // lane point (deliberately risky). Asymmetric — each point LOS-checked
+  // per-point (no mirror shortcut), per the doc's §Asymmetry #4.
+  const spawns = {
+    tf: [[-18, -11], [-18, -5], [-18, 3], [-18, 9], [-15.5, -1]],
+    sp: [[18, -10], [18, -4], [18, 4], [18, 10], [15.5, 1]],
+  };
+
+  // ---- waypoints (#23i): ground-only threaded seeds — three lane
+  // threads (alley chicane pairs / courtyard ring / street weave),
+  // doorway pairs for every interior, shield-gap pairs both ends.
+  // Vertical seeds (stairs/roofs/tower/shop perch) land with #23j.
+  const seeds = [
+    // tf pocket + gap pairs
+    [-18, -11.5], [-18, -5.5], [-18, 2.5], [-18, 9.5], [-17, -1],
+    [-16.6, -7.8], [-15.2, -7.8], [-16.6, -0.8], [-15, -0.8],
+    [-16.6, 6.2], [-15.2, 6.2], [-16.6, 13], [-14.5, 13.2],
+    // sp pocket + gap pairs
+    [18, -11], [18, -5.5], [18, 2.5], [18, 11], [16.8, 1],
+    [16.6, -6.8], [15, -6.8], [16.6, 0.3], [14.8, 0.3],
+    [16.6, 7.2], [15, 7.2], [16.6, 14], [14.5, 13.6],
+    // alley thread (west lane, through both chicane stubs)
+    [-17, -13.8], [-14.5, -14.2], [-12, -14.3], [-9.5, -14.3],
+    [-8, -14.3], [-4, -14], [-1, -13.9], [0.8, -12.7], [3.2, -12.7],
+    [6, -13.5], [10, -13.8], [13.5, -13.8], [16, -13.8],
+    // south cross-lane + west approach
+    [-10, -7], [-10, -1], [-10, 4], [-12, 8], [-14.8, -11.5],
+    [9, -10.5], [13, -10], [13, -4], [13, 2],
+    // courtyard ring (placeholder wreck at x −2..6, z −1.7..1.7)
+    [-4, -2], [-4.5, 3], [0, 3.4], [5, 4.4], [7.4, 1],
+    [6.2, -2.2], [1, -3.5], [-2, -3.4], [-6, -3],
+    // main building doors + rooms
+    [-1.5, -3.9], [-1.5, -6.1], [3.5, -3.9], [3.5, -6.1],
+    [-3, -8.5], [-5, -8.5], [5, -6.7], [7, -6.7],
+    [0, -9.7], [2, -9.7], [-2.5, -10.8], [4, -10.5],
+    // backyard + alley cut pair
+    [-6.5, -10.5], [-6.7, -11.3], [-6.7, -12.8],
+    // arcade walkway + north-of-arcade approach
+    [9.5, -5.5], [9.5, -1], [9.5, 3], [12.5, -7],
+    // shop doors + interior + east-of-courtyard connector
+    [0.5, 6.3], [0.5, 7.9], [0.5, 9], [1.3, 10.3], [1.3, 11.9],
+    [-3.8, 6.8], [7, 8.5], [11.5, 9.5],
+    // street weave (between stalls/cars/garage) + garage pocket
+    [-12, 12.2], [-7.5, 11.6], [-1, 11.8], [-1, 13.6],
+    [2.6, 13], [6.3, 12.6], [10, 11.2], [13, 12.6],
+  ];
+
+  return {
+    name: 'CRASH',
+    bounds: { x: W, z: D },
+    sun: { color: 0xffe2b0, intensity: 1.05, pos: [28, 42, 18] },
+    hemi: { sky: 0xe8d4ac, ground: 0x9a7a50, intensity: 0.75 },
+    spawns,
+    waypointSeeds: seeds,
+    windows: k.windows,
+  };
+}
+
+const MAPS = { nuketown: buildNuketown, rust: buildRust, shipment: buildShipment, killhouse: buildKillhouse, vacant: buildVacant, crash: buildCrash };
 
 // ============================================================
 // Waypoint graph — filter seeds that land inside geometry, then
