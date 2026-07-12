@@ -58,6 +58,14 @@ const WEAPONS = {
     dmg:23, minDmg:15, head:1.4, rpm:855, mag:50, reserve:150, reload:2.4, mode:'auto',
     spreadHip:.027, spreadAds:.0052, recoil:.011, bloom:.0035, zoom:1.25, adsTime:.19,
     speed:.99, range:[16,36], model:'smg', unlockLevel:14 },
+  // P27: the ultra-close bullet hose — new rpm ceiling (1250), close TTK
+  // .192 edges MP5K/UMP45 (.200) but only inside 10 m; the [10,22] window,
+  // worst-in-class recoil/bloom/ADS spread and 96 reserve are the severity.
+  // Best hip cone in the game + instant handling: hipfire IS the gun.
+  mac10: { slot:'primary', cat:'SMG', name:'MAC-10',
+    dmg:22, minDmg:11, head:1.4, rpm:1250, mag:32, reserve:96, reload:1.8, mode:'auto',
+    spreadHip:.022, spreadAds:.0075, recoil:.019, bloom:.0060, zoom:1.25, adsTime:.16,
+    speed:1.0, range:[10,22], model:'smg' },
 
   // ---------- PRIMARY: LMG ----------
   // Three-gun ladder, RPD in the middle: M240 is the slow heavy hitter,
@@ -366,6 +374,7 @@ const BOT_LOADOUTS = [
   { primary:'ump45',  secondary:'spas12', lethal:'frag' },
   { primary:'vector', secondary:'g18',    lethal:'frag' },
   { primary:'p90',    secondary:'usp',    lethal:'frag' },
+  { primary:'mac10',  secondary:'usp',    lethal:'frag' },
   { primary:'rpd',    secondary:'deagle', lethal:'frag' },
   { primary:'m240',   secondary:'usp',    lethal:'frag' },
   { primary:'mg4',    secondary:'deagle', lethal:'frag' },
