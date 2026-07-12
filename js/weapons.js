@@ -77,10 +77,13 @@ const WEAPONS = {
     pellets:8, pumpTime:.8,
     spreadHip:.034, spreadAds:.02, recoil:.048, bloom:.004, zoom:1.15, adsTime:.24,
     speed:.94, range:[5,16], model:'shotgun', unlockLevel:1 },
+  // P18: true full-auto (was semi-in-practice). The panic-hose identity —
+  // hold to fire, mag gone in 1.6 s; heavy recoil/bloom + the [6,15]
+  // falloff cliff make sustained fire past point-blank a losing trade.
   aa12: { slot:'primary', cat:'Shotgun', name:'ATCHISSON AA-12',
-    dmg:12, minDmg:4, head:1.2, rpm:300, mag:8, reserve:40, reload:2.5, mode:'semi',
+    dmg:12, minDmg:4, head:1.2, rpm:300, mag:8, reserve:40, reload:2.5, mode:'auto',
     pellets:8,
-    spreadHip:.05, spreadAds:.034, recoil:.028, bloom:.006, zoom:1.15, adsTime:.22,
+    spreadHip:.05, spreadAds:.034, recoil:.05, bloom:.02, zoom:1.15, adsTime:.22,
     speed:.93, range:[6,15], model:'shotgun' },
 
   // ---------- PRIMARY: SNIPERS ----------
