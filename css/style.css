@@ -388,6 +388,12 @@ tr.me td { color:#e8a33d; font-weight:700; }
 }
 #classBadge { margin:0 0 10px; }
 
+/* P15: unlock-level hint chip (data-only, nothing disabled yet) */
+.w-lock {
+  margin-left:8px; padding:1px 5px; font-size:10px; letter-spacing:1px;
+  color:#e8a33d; border:1px solid #6a5a2a; border-radius:3px; vertical-align:1px;
+}
+
 /* P9: dev/progression tools */
 .settings-section-title.dev { color:#7a6a3a; }
 .dev-tools { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }

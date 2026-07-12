@@ -355,6 +355,11 @@ const UI = {
     this.renderClassSlots();
     this.$('className').value = c.name;
 
+    // P15: unlock-hint chip for any def with unlock metadata past Level 1.
+    // Data-only — nothing is disabled until the gate-enforcement slice.
+    const lockChip = def =>
+      unlockLevelOf(def) > 1
+        ? `<span class="w-lock" title="UNLOCKS AT LEVEL ${unlockLevelOf(def)}">LVL ${unlockLevelOf(def)}</span>` : '';
     const mkWeaponList = (elId, slot, selectedKey, onPick) => {
       const wrap = this.$(elId);
       wrap.innerHTML = '';
@@ -363,7 +368,7 @@ const UI = {
         if (w.slot !== slot) continue;
         const div = document.createElement('div');
         div.className = 'weapon-item' + (key === selectedKey ? ' selected' : '');
-        div.innerHTML = `<span>${w.name}</span><span class="w-cat">${w.cat}</span>`;
+        div.innerHTML = `<span>${w.name}${lockChip(w)}</span><span class="w-cat">${w.cat}</span>`;
         div.onclick = () => { AudioSys.uiClick(); onPick(key); };
         div.onmouseenter = () => this.renderWeaponStats(key);
         wrap.appendChild(div);
@@ -393,7 +398,7 @@ const UI = {
         for (const a of opts) {
           const div = document.createElement('div');
           div.className = 'weapon-item' + (picked.includes(a.id) ? ' selected' : '');
-          div.innerHTML = `<span>${a.name}</span><span class="w-cat">${attachmentDesc(a)}</span>`;
+          div.innerHTML = `<span>${a.name}${lockChip(a)}</span><span class="w-cat">${attachmentDesc(a)}</span>`;
           div.onclick = () => {
             AudioSys.uiClick();
             const i = picked.indexOf(a.id);
@@ -462,7 +467,7 @@ const UI = {
       PERKS[tier].forEach(p => {
         const div = document.createElement('div');
         div.className = 'perk-item' + (c.perks[tier - 1] === p.id ? ' selected' : '');
-        div.innerHTML = `<span>${p.name}</span><span class="p-desc">${p.desc}</span>`;
+        div.innerHTML = `<span>${p.name}${lockChip(p)}</span><span class="p-desc">${p.desc}</span>`;
         div.onclick = () => { AudioSys.uiClick(); c.perks[tier - 1] = p.id; this.saveClasses(); this.renderClassEditor(); };
         wrap.appendChild(div);
       });
@@ -474,13 +479,13 @@ const UI = {
       const wrap = this.$(elId);
       wrap.innerHTML = '';
       const opts = Object.keys(THROWABLES).filter(id => THROWABLES[id].slot === cat)
-        .map(id => ({ id, name: THROWABLES[id].name }));
-      opts.push({ id: 'none', name: 'NONE' });
+        .map(id => ({ id, name: THROWABLES[id].name, def: THROWABLES[id] }));
+      opts.push({ id: 'none', name: 'NONE', def: null });
       const cur = c[slotField] || 'none';
       for (const o of opts) {
         const div = document.createElement('div');
         div.className = 'weapon-item' + (o.id === cur ? ' selected' : '');
-        div.innerHTML = `<span>${o.name}</span>`;
+        div.innerHTML = `<span>${o.name}${o.def ? lockChip(o.def) : ''}</span>`;
         div.onclick = () => { AudioSys.uiClick(); c[slotField] = o.id; this.saveClasses(); this.renderClassEditor(); };
         wrap.appendChild(div);
       }
