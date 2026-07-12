@@ -141,6 +141,14 @@ const WEAPONS = {
     dmg:52, minDmg:35, head:1.6, rpm:250, mag:7, reserve:28, reload:1.8, mode:'semi',
     spreadHip:.030, spreadAds:.0058, recoil:.036, bloom:.0090, zoom:1.2, adsTime:.16,
     speed:1.0, range:[16,36], model:'pistol', unlockLevel:9 },
+  // P36: the forgiving service pistol — wins on consistency, not paper
+  // speed: ~half the USP's recoil/bloom, tightest pistol cones, fastest
+  // ADS in the game, 15-round mag. Close TTK .375 sits between the Deagle
+  // (.240) and USP (.429); 16 minDmg past 28 m is the price.
+  m9: { slot:'secondary', cat:'Handgun', name:'BERETTA M9',
+    dmg:26, minDmg:16, head:1.5, rpm:480, mag:15, reserve:60, reload:1.5, mode:'semi',
+    spreadHip:.020, spreadAds:.0045, recoil:.009, bloom:.0030, zoom:1.2, adsTime:.13,
+    speed:1.0, range:[12,28], model:'pistol' },
   g18: { slot:'secondary', cat:'Machine Pistol', name:'GLOCK 18',
     dmg:18, minDmg:12, head:1.4, rpm:1000, mag:33, reserve:99, reload:1.85, mode:'auto',
     spreadHip:.034, spreadAds:.0085, recoil:.011, bloom:.0042, zoom:1.2, adsTime:.15,
