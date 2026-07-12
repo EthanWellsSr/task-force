@@ -196,7 +196,12 @@ const UI = {
     this.$('btnDeploy').onclick = () => { AudioSys.uiClick(); MAIN.deploy(); };
     this.$('btnResume').onclick = () => MAIN.resume();
     this.$('btnChangeClass').onclick = () => { AudioSys.uiClick(); this.renderClassEditor(); this.show('classScreen'); };
-    this.$('btnQuitMatch').onclick = () => { AudioSys.uiClick(); MAIN.quitMatch(); };
+    this.$('btnQuitMatch').onclick = () => {
+      AudioSys.uiClick();
+      // P10: deliberate quit — lifetime stats stay, quit recorded, no XP
+      if (!window.confirm('Quit match? Lifetime stats stay, this records a quit, and you earn no XP.')) return;
+      MAIN.quitMatch();
+    };
     this.$('btnRematch').onclick = () => { AudioSys.uiClick(); MAIN.rematch(); };
     this.$('btnEndMenu').onclick = () => { AudioSys.uiClick(); MAIN.quitMatch(); };
 
