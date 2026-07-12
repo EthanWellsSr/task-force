@@ -133,14 +133,48 @@ const UI = {
     const pr = Profile.progressToNext(p.xp);
     const xpTxt = pr.needed > 0 ? `${pr.current} / ${pr.needed} XP` : 'MAX LEVEL';
     const txt = `LVL ${p.level} - ${Profile.rankName(p.level)}&nbsp;&nbsp;&nbsp;${xpTxt}`;
-    for (const id of ['menuBadge', 'classBadge']) {
+    for (const id of ['menuBadge', 'classBadge', 'devBadge']) {
       const el = document.getElementById(id);
       if (el) el.innerHTML = txt;
     }
   },
 
+  // P9: dev/progression testing tools (Options). Every action confirms
+  // deliberately, applies via Profile, and re-renders the badges.
+  bindDevTools() {
+    const apply = (msg, fn) => {
+      if (!window.confirm(msg)) return;
+      fn();
+      this.renderProfileBadge();
+      AudioSys.uiClick();
+    };
+    this.$('devAddXp').onclick = () => apply('Add 500 XP to your profile?', () => {
+      const p = Profile.load();
+      p.xp += 500;
+      p.level = Profile.levelFromTotalXp(p.xp);
+      p.stats.totalXpEarned += 500;
+      Profile.save(p);
+    });
+    this.$('devSetL10').onclick = () => apply('Set profile to Level 10? (XP jumps to the L10 threshold)', () => {
+      const p = Profile.load();
+      p.xp = Profile.xpThreshold(10);
+      p.level = 10;
+      Profile.save(p);
+    });
+    this.$('devMaxLevel').onclick = () => apply('Set profile to MAX level (20)?', () => {
+      const p = Profile.load();
+      p.xp = Profile.xpThreshold(Profile.LEVEL_CAP);
+      p.level = Profile.LEVEL_CAP;
+      Profile.save(p);
+    });
+    this.$('devResetProfile').onclick = () => apply('RESET your profile? Level, XP, and lifetime stats are wiped. This cannot be undone.', () => {
+      Profile.reset();
+    });
+  },
+
   bindMenus() {
     this.renderProfileBadge(); // P8: initial render (menu shows at load)
+    this.bindDevTools();       // P9: progression dev tools in Options
     document.querySelectorAll('.map-card').forEach(card => {
       card.addEventListener('click', () => {
         AudioSys.uiClick();
