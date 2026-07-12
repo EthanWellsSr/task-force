@@ -68,8 +68,8 @@ const WEAPONS = {
     speed:1.0, range:[10,22], model:'smg' },
 
   // ---------- PRIMARY: LMG ----------
-  // Three-gun ladder, RPD in the middle: M240 is the slow heavy hitter,
-  // MG4 the fast light one, RPD between them on dmg/rpm/recoil/speed.
+  // Ladder: M240 the slow heavy hitter, MG4 the fast light one, RPD between
+  // them on dmg/rpm/recoil/speed, M60E4 (P30) the very-heavy sustain anchor.
   rpd: { slot:'primary', cat:'LMG', name:'RPD',
     dmg:36, minDmg:28, head:1.4, rpm:660, mag:100, reserve:200, reload:4.4, mode:'auto',
     spreadHip:.044, spreadAds:.0050, recoil:.017, bloom:.0038, zoom:1.35, adsTime:.34,
@@ -82,6 +82,15 @@ const WEAPONS = {
     dmg:28, minDmg:20, head:1.4, rpm:850, mag:100, reserve:200, reload:4.0, mode:'auto',
     spreadHip:.040, spreadAds:.0046, recoil:.013, bloom:.0034, zoom:1.35, adsTime:.30,
     speed:.88, range:[28,56], model:'lmg' },
+  // P30: the distance-proof belt anchor — 34 minDmg keeps a 3-shot kill at
+  // EVERY range (flat .224 TTK, the FAL of LMGs), and 39 base dodges the SP
+  // 2-shot (48.75 x 2 = 97.5 < 100, SP changes nothing). First belt-identity
+  // mag (150/150), and it pays for all of it with the heaviest handling in
+  // the game: .44 ADS, .82 speed, 6.2 reload, .026 kick.
+  m60: { slot:'primary', cat:'LMG', name:'M60E4',
+    dmg:39, minDmg:34, head:1.4, rpm:535, mag:150, reserve:150, reload:6.2, mode:'auto',
+    spreadHip:.052, spreadAds:.0058, recoil:.026, bloom:.0050, zoom:1.35, adsTime:.44,
+    speed:.82, range:[36,72], model:'lmg' },
 
   // ---------- PRIMARY: SHOTGUNS ----------
   // Pellet balance vs 100 HP: r870 one-shots to ~9-10 m (falloff + spread
@@ -378,6 +387,7 @@ const BOT_LOADOUTS = [
   { primary:'rpd',    secondary:'deagle', lethal:'frag' },
   { primary:'m240',   secondary:'usp',    lethal:'frag' },
   { primary:'mg4',    secondary:'deagle', lethal:'frag' },
+  { primary:'m60',    secondary:'usp',    lethal:'frag' },
   { primary:'r870',   secondary:'usp',    lethal:'frag' },
   { primary:'aa12',   secondary:'g18',    lethal:'frag' },
   { primary:'intervention', secondary:'usp', lethal:null },
