@@ -220,7 +220,7 @@ const UNLOCK_TABLE = [
 // mods = stat multipliers applied to the base def by resolveWeaponDef.
 // cats = weapon categories the attachment mounts on (null = all).
 // ============================================================
-const ATTACH_SLOTS = ['optic', 'underbarrel', 'laser', 'camo'];
+const ATTACH_SLOTS = ['optic', 'underbarrel', 'laser', 'mag', 'camo']; // P56: 'mag' slot (editor rows + save hygiene pick it up from here)
 
 const ATTACHMENTS = {
   reddot: { id:'reddot', name:'RED DOT SIGHT', slot:'optic',
@@ -250,6 +250,19 @@ const ATTACHMENTS = {
   laser: { id:'laser', name:'LASER SIGHT', slot:'laser',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
     mods:{ spreadHip:.8 }, unlockLevel:12 },
+  // P56: extended mags — +50% magazine for +15% reload time. Reserve is
+  // deliberately UNMODIFIED: the total pool stays, you just visit it less
+  // often (and Scavenger's mag×1.5 resupply quietly scales with the
+  // resolved def — flagged-intentional synergy, see #P55-design §2). Odd
+  // magazines round in resolveWeaponDef's mag special case. Snipers
+  // excluded (7→10 bolt rounds is identity-flat; they already trade
+  // everything for damage). The doc's cats said 'Pistol' — this sandbox's
+  // category strings are 'Handgun' + 'Machine Pistol' (G18's 33-rounder
+  // is the classic). No unlockLevel yet: the doc suggested L10 but P14's
+  // table already holds L10 (Scavenger) — final slotting belongs to P78.
+  extmags: { id:'extmags', name:'EXTENDED MAGS', slot:'mag',
+    cats:['Assault Rifle','SMG','LMG','Handgun','Machine Pistol','Shotgun'],
+    mods:{ mag:1.5, reload:1.15 } },
   camoDesert:   { id:'camoDesert',   name:'DESERT CAMO',   slot:'camo', cats:null, mods:{} },
   camoWoodland: { id:'camoWoodland', name:'WOODLAND CAMO', slot:'camo', cats:null, mods:{} },
   camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:null, mods:{} },
@@ -292,7 +305,7 @@ function laserHex(id) {
 }
 
 // Short mod summary for the class editor rows ("ADS TIME -15% · ADS SPREAD -10%")
-const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', spreadHip:'HIP SPREAD', recoil:'RECOIL', bloom:'BLOOM', zoom:'ZOOM' };
+const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', spreadHip:'HIP SPREAD', recoil:'RECOIL', bloom:'BLOOM', zoom:'ZOOM', mag:'MAG', reload:'RELOAD' }; // P56: mag-slot labels
 function attachmentDesc(att) {
   const parts = [];
   for (const stat in att.mods) {
@@ -321,6 +334,10 @@ function resolveWeaponDef(key, attIds, dotColor, laserColor) {
     const mods = ATTACHMENTS[id].mods;
     for (const stat in mods) def[stat] *= mods[stat];
   }
+  // P56: mag is a round count — an odd base ×1.5 lands on .5 (Deagle
+  // 7 → 10.5), so a modified mag rounds to NEAREST (Math.round: 10.5 →
+  // 11, generous by half a round; even bases multiply exact, untouched)
+  if (def.mag !== base.mag) def.mag = Math.round(def.mag);
   return def;
 }
 
