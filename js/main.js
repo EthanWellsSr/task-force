@@ -1313,7 +1313,7 @@ function drawMinimap() {
     if (b.team === player.team) {
       mmCtx.fillStyle = '#5aa0e0';
       mmCtx.beginPath(); mmCtx.arc(x, y, 2.5, 0, 7); mmCtx.fill();
-    } else if (uav || G.time - b.lastShotTime < 1.8) {
+    } else if (uav || G.time - b.lastShotTime < 1.8 || G.time < b.pingedUntil) { // P51: snapshot mark, live-tracking
       mmCtx.fillStyle = '#e05a4a';
       mmCtx.beginPath(); mmCtx.arc(x, y, 2.5, 0, 7); mmCtx.fill();
     }
@@ -1894,6 +1894,21 @@ const THROWABLES = {
     decoy: true, decoyDur: 8, noCookOff: true, model: 'decoy',
     color: 0x6a5c3a, throwSpeed: 15, throwUp: 3.2,
     detonate: null, // never detonates — the emitter branch removes it
+  },
+  // P51: snapshot — the recon tactical. Pops on a short fuse (cookable,
+  // like the smoke) and marks every enemy within 14 m — THROUGH WALLS,
+  // radius-only, no LOS gate (documented balance decision: the ball IS
+  // the lever, a whiffed throw reveals nobody) — as live minimap dots
+  // for pingDur seconds (drawMinimap reads b.pos each frame, so the
+  // marks track movement). Victims learn nothing but the pop's sound;
+  // bots don't read minimaps, so the ignorance is symmetric. Player-only;
+  // bots never throw tacticals. Distinct teal body, default silhouette.
+  snapshot: {
+    name: 'SNAPSHOT', slot: 'tactical',
+    count: 1, fuse: 1.5, radius: 14, dmg: 0, minDmg: 0,
+    pingDur: 5,
+    color: 0x3e6a6e, throwSpeed: 15, throwUp: 3.2,
+    detonate: snapDetonate,
   },
 };
 const GREN_R = 0.08, GREN_H = 0.16, GREN_BOUNCE = 0.42;
@@ -2776,6 +2791,28 @@ function stunDetonate(t) {
   // the bang is loud — enemies within earshot investigate the spot
   _blastAt.set(p.x, p.y + 0.4, p.z); // blastFactor reuses the scratch
   for (const b of G.bots) b.hearShot({ pos: _blastAt, team: player.team }, 30);
+}
+
+// P51: snapshot pop — pure intel, no blast, no capability effects. Every
+// enemy within the def's radius (3-D distance, THROUGH WALLS — no LOS
+// gate by design) is marked: b.pingedUntil feeds drawMinimap's enemy-dot
+// condition, and since the map reads b.pos live the dot tracks them for
+// the full window. Death clears it via spawn() (a respawned bot isn't
+// the bot you scanned). The pop is the victims' only tell — a sonar
+// chirp, loud enough that nearby enemies come look (hearShot like the
+// other tacticals' bangs).
+function snapDetonate(t) {
+  const def = t.def, p = t.pos;
+  const owner = t.owner || player;
+  fxSpark(_blastAt.set(p.x, p.y + 0.4, p.z), false, 2.2); // small pale pop
+  AudioSys.sonarPing(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(_blastAt));
+  for (const b of G.bots) {
+    if (!b.alive || b.team === owner.team) continue;
+    if (b.pos.distanceTo(p) > def.radius) continue;
+    b.pingedUntil = G.time + def.pingDur;
+  }
+  _blastAt.set(p.x, p.y + 0.4, p.z);
+  for (const b of G.bots) b.hearShot({ pos: _blastAt, team: owner.team }, 20);
 }
 
 // white flash + heavily slowed look/move; stunMax remembers the applied

@@ -185,6 +185,7 @@ class Bot {
     this.reloadT = 0;
     this.target = null; this.lastKnown = null;
     this.lastShotTime = -99; // don't let a pre-death shot flash our new spot on the minimap
+    this.pingedUntil = 0; // P51: a snapshot mark dies with the marked life
     this.path = null; this.combatPath = null; this.tacticKind = null;
     this.mesh.visible = true;
     this.mesh.rotation.set(0, this.yaw, 0);

@@ -351,7 +351,7 @@ function normalizeClass(c) {
   // the classic FRAG + STUN loadout (smoke is now a tactical alternative, not
   // an always-on third slot). Junk values fall back too.
   if (!['frag', 'semtex', 'c4', 'claymore', 'throwingknife', 'none'].includes(c.lethal)) c.lethal = 'frag'; // P42-P45: legal lethals
-  if (!['stun', 'smoke', 'decoy', 'none'].includes(c.tactical)) c.tactical = 'stun'; // P49: decoy joins the tactical list
+  if (!['stun', 'smoke', 'decoy', 'snapshot', 'none'].includes(c.tactical)) c.tactical = 'stun'; // P49/P51: legal tacticals
   return c;
 }
 

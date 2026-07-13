@@ -264,6 +264,28 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 1.4);
   },
 
+  // P51: snapshot pop — a sonar chirp: two quick rising sine pips a
+  // fourth apart with a short ring-off. Reads "scanner", not "weapon" —
+  // deliberately unlike every bang in the kit so victims can learn it.
+  sonarPing(dist = 0, pan = 0) {
+    if (!this.ensure()) return;
+    const atten = dist <= 0 ? 1 : Math.max(0.05, 1 - dist / 55);
+    const t = this.ctx.currentTime;
+    const out = this._dest(pan);
+    for (const [at, f0, f1] of [[0, 920, 1500], [0.15, 1220, 2000]]) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f0, t + at);
+      osc.frequency.exponentialRampToValueAtTime(f1, t + at + 0.09);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t + at);
+      g.gain.exponentialRampToValueAtTime(0.2 * atten, t + at + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, t + at + 0.38);
+      osc.connect(g); g.connect(out);
+      osc.start(t + at); osc.stop(t + at + 0.42);
+    }
+  },
+
   // P49: decoy grenade's fake gunshot — the AR crack recipe run muffled:
   // band dropped to ~550 Hz (jittered per pop so no two reads identical),
   // softer gain, duller thump. Reads as suppressed fire a block away.
