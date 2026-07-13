@@ -1911,9 +1911,12 @@ function buildCrash(scene, colliders) {
   // SE stair 2F→roof: 6 × 0.433 columns standing ON the 2F slab
   for (let i = 1; i <= 6; i++)
     k.box(-2.95, FY + 0.433 * i / 2, -6.3 - 0.55 * (i - 1), 1.1, 0.433 * i, 0.55, BLDG);
-  // roof slabs (top 5.25), opening x −4..−2.2 / z −9.7..−6 over the SE stair
+  // roof slabs (top 5.25), opening x −4..−2.2 / z −9.7..−5.6 over the SE
+  // stair — the opening extends to z −5.6 because a body stepping onto
+  // the lower treads (top + 1.75 > 5.05) pokes into any slab above the
+  // flight; the old z −6 edge overhung t1/t2 and stalled climbers (#23j fix)
   k.box(1.9, RY - 0.1, -8.5, 8.2, 0.2, 7, BLDG);
-  k.box(-3.1, RY - 0.1, -5.5, 1.8, 0.2, 1, BLDG);
+  k.box(-3.1, RY - 0.1, -5.3, 1.8, 0.2, 0.6, BLDG);
   k.box(-3.1, RY - 0.1, -10.85, 1.8, 0.2, 2.3, BLDG);
   // 0.9 m parapets; S edge gapped (z −10.6..−9.0) for the annex arrival
   k.box(5.94, RY + 0.45, -8.5, 0.12, 0.9, 7, BLDG);        // N edge
@@ -1926,8 +1929,9 @@ function buildCrash(scene, colliders) {
   k.blocker(6.4, 7.8, -8.5, 0.8, 3.0, 8.4);                // N
   k.blocker(1, 7.8, -4.8, 11.6, 3.0, 0.8);                 // E
   k.blocker(1, 7.8, -12.2, 11.6, 3.0, 0.8);                // W
-  k.blocker(-4.4, 7.8, -11.45, 0.8, 3.0, 1.7);             // S (gap z −10.6..−9.0)
-  k.blocker(-4.4, 7.8, -6.85, 0.8, 3.0, 4.3);
+  k.blocker(-4.4, 7.8, -11.45, 0.8, 3.0, 1.7);             // S (gap z −10.6..−8.0 —
+  k.blocker(-4.4, 7.8, -6.35, 0.8, 3.0, 3.3);              // sized so a body topping
+                                                           // the run's s5 clears it)
 
   // ---- F. backyard (x −8..−4, z −12..−5): 2 m walls, cut to the alley,
   // shares the building's S door (west end — the annex run owns the east
@@ -1937,9 +1941,14 @@ function buildCrash(scene, colliders) {
   k.wall('x', -8, -4, -5, 2.0, 0.2, YARD);                 // yard E wall
   k.wall('x', -8, -4, -12, 2.0, 0.2, YARD, [{ a: -7.4, b: -6.0 }]); // W cut -> alley
   k.box(-4.8, 1.2, -5.8, 1.6, 2.4, 1.6, YARD);             // annex (top 2.4 walkable)
-  for (let i = 1; i <= 4; i++)                             // crate chain, 0.45 rises
-    k.box(-7.7 + 0.55 * (i - 1), 0.45 * i / 2, -5.75, 0.55, 0.45 * i, 1.0, CRATE);
-  k.box(-5.75, 1.125, -5.75, 0.55, 2.25, 1.0, CRATE);      // top crate (2.25 -> annex)
+  // crate chain marches ALONG z at x = −5.6 (#23j fix: the old x-march
+  // sat flush against the yard S wall, so the only mount was sideways —
+  // and a 0.35-halfW body mounting sideways always clipped the parallel
+  // riser column; _fitsAt vetoed every step). Mount from the south,
+  // 0.45 rises, then the 2.25 top crate onto the annex (0.15).
+  for (let i = 1; i <= 4; i++)
+    k.box(-5.6, 0.45 * i / 2, -9.0 + 0.6 * (i - 1), 0.7, 0.45 * i, 0.6, CRATE);
+  k.box(-5.6, 1.125, -6.85, 0.7, 2.25, 0.7, CRATE);        // top crate (2.25 -> annex)
   for (let i = 1; i <= 6; i++)                             // annex -> roof step run
     k.box(-4.5, (2.4 + 0.45 * i) / 2, -7.0 - 0.55 * (i - 1), 0.9, 2.4 + 0.45 * i, 0.55, YARD);
   // alley chicane: backyard dogleg stub + west-wall stub — together they
@@ -2051,7 +2060,7 @@ function buildCrash(scene, colliders) {
     [-3, -10.5], [-5, -10.5], [5, -6.7], [7, -6.7],
     [0, -9.7], [2, -9.7], [-2.5, -10.8], [4.2, -7.5],
     // backyard + alley cut pair + chain approach
-    [-6.5, -10.5], [-6.7, -11.3], [-6.7, -12.8], [-7, -7],
+    [-6.5, -10.5], [-6.7, -11.3], [-6.7, -12.8], [-7, -7], [-5.6, -10.1],
     // arcade walkway + north-of-arcade approach
     [9.5, -5.5], [9.5, -1], [9.5, 3], [12.5, -7],
     // shop doors + interior + east-of-courtyard connector
@@ -2060,27 +2069,34 @@ function buildCrash(scene, colliders) {
     // street weave + garage pocket + shop-chain approach
     [-12, 12.2], [-7.5, 11.6], [-2.2, 11.8], [-1, 13.6],
     [2.6, 13], [6.3, 12.6], [10, 11.2], [13, 12.6], [0, 12.3],
+    // Stair/chain seeds sit ~0.19 DOWNHILL of their tread center: the
+    // engine's _fitsAt is a strict full-body sweep with no step
+    // tolerance, so a 0.35-halfW body centered on a 0.55-deep tread
+    // clips the NEXT riser column — the #23j defect (bots stalled
+    // because no standing body could exist at a tread-centered seed).
+    // Top-of-flight seeds stay centered; every seed below now has
+    // ≥ 0.1 m of clear air past the body box to the next riser.
     // NW stair (ground -> 2F) + 2F floor + window perch + 2F door pair
-    [2.575, -11.3, 0.433], [3.675, -11.3, 1.299], [4.775, -11.3, 2.165],
+    [2.39, -11.3, 0.433], [3.49, -11.3, 1.299], [4.59, -11.3, 2.165],
     [5.325, -11.3, 2.598],
     [4.5, -9.8, 2.65], [3, -6, 2.65], [1.9, -7.7, 2.65], [0.1, -7.7, 2.65],
     [-1.8, -5.8, 2.65], [-1.9, -9.8, 2.65],
     // SE stair (2F -> roof) + roof
-    [-2.95, -6.3, 3.083], [-2.95, -7.4, 3.949], [-2.95, -8.5, 4.815],
+    [-2.95, -6.11, 3.083], [-2.95, -7.21, 3.949], [-2.95, -8.31, 4.815],
     [-2.95, -9.05, 5.248],
     [-3.1, -10.6, 5.25], [0, -8.5, 5.25], [3.5, -7, 5.25],
     [5, -10.5, 5.25], [1, -6, 5.25],
-    // annex crate chain + step run (backyard access 2)
-    [-7.15, -5.75, 0.9], [-6.05, -5.75, 1.8], [-5.75, -5.75, 2.25],
+    // annex crate chain (z-march) + step run (backyard access 2)
+    [-5.6, -9.19, 0.45], [-5.6, -7.99, 1.35], [-5.6, -7.05, 2.25],
     [-4.8, -5.8, 2.4],
-    [-4.5, -7.0, 2.85], [-4.5, -8.1, 3.75], [-4.5, -9.2, 4.65],
+    [-4.5, -6.81, 2.85], [-4.5, -7.91, 3.75], [-4.5, -9.01, 4.65],
     [-4.5, -9.75, 5.1],
     // tower treads + top (approach from the cross-lane)
     [-12, -7.2],
-    [-12, -8.03, 0.45], [-12, -9.13, 1.35], [-12, -10.23, 2.25],
+    [-12, -7.84, 0.45], [-12, -8.94, 1.35], [-12, -10.04, 2.25],
     [-12, -11.3, 2.6], [-12, -12.6, 2.6],
     // shop-roof chain (S face) + perch
-    [-2.6, 7.4, 0.5], [-2.6, 8.6, 1.5], [-2.6, 9.8, 2.5], [-2.6, 10.4, 3.0],
+    [-2.6, 7.25, 0.5], [-2.6, 8.45, 1.5], [-2.6, 9.65, 2.5], [-2.6, 10.4, 3.0],
     [-1.2, 10.1, 3.2], [1.5, 8.5, 3.2],
   ];
 
