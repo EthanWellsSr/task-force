@@ -1773,40 +1773,77 @@ function buildVacant(scene, colliders) {
 // 6 × 0.45 step run through the S parapet gap); tower platform with
 // rails + east-face treads; shop roof counter-perch at 3.2 via a 6-box
 // street-face chain; forward-spawn screens so the roof sees 0 spawns;
-// dense y-aware seeds. Debug colors — art is #23k.
+// dense y-aware seeds.
+// #23k ART: desert-town palette (tans/adobe/sandstone), burning-building
+// silhouettes + smoke columns beyond the N/E walls, distant skyline
+// band, olive-drab Sea Knight dressing (glass, door, sponsons, drooped
+// blades — mesh only, the verified stepped hull untouched), red-and-
+// white tower paint, shop/garage signage, blue-factory trim, stall
+// awnings, dust/track/scorch decals. One new solid: the garage engine
+// block. Minimap needs no tuning — buildMinimapBg's y-band filter
+// (1.2..1.8) draws walls/shields/hull/cars and skips roofs/parapets.
 // ============================================================
 function buildCrash(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 20, D = 15;      // half extents: 40 m spawn axis (x) × 30 m (z)
   const SHELL_H = 5, T = 0.4, GH = 2.6;   // GH = ground-floor wall height
-  // debug palette (#23i): loud compass shell walls + zone tints
-  const DBG_N = 0xb03030, DBG_S = 0x3050a0, DBG_E = 0x3a8a3a, DBG_W = 0xc0a030,
-        BLDG = 0x9a8a6a,    // main building walls
-        SHOP = 0x8a7a5a,    // shop walls
-        YARD = 0x7a6a50,    // backyard walls / alley stubs
+  // desert-town palette (#23k): sun-bleached tans, adobe, sandstone
+  const NWALL = 0xbfa878, SWALL = 0xb8a070, EWALL = 0xb4a078, WWALL = 0xa89468,
+        BLDG = 0xb09876,    // main building adobe
+        SHOP = 0xa8905e,    // shop plaster
+        YARD = 0x9c8660,    // backyard walls / alley stubs
         SHIELD = 0x9c7a42,  // spawn shield plywood
-        WRECK = 0xc07030,   // placeholder wreck (loud until #23j)
-        ARC = 0xa89878,     // arcade pillars/slab
+        ARC = 0xc0ac82,     // arcade sandstone
         STALL = 0x8f6a4a, CRATE = 0x6f5f3f,
+        OLIVE = 0x5a6248, OLIVE2 = 0x525a42,                // Sea Knight drab
         SAND = 0xc9a97c, PLAIN = 0xb08c5f;
-  const nsf = { solid: false, shadow: false };
+  const ns = { solid: false }, nsf = { solid: false, shadow: false };
 
   scene.background = new THREE.Color(0xdcc49a);
   scene.fog = new THREE.Fog(0xdcc49a, 60, 130);
 
-  // ground: sun-bleached town floor over a wider desert plain
+  // ground: sun-bleached town floor over a wider desert plain, with
+  // dust/track decals (#23k)
   k.box(0, -0.55, 0, 140, 1, 140, PLAIN, nsf);
   k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, SAND);
+  k.box(-2, 0.012, -13.6, 30, 0.02, 2.2, 0xb59767, nsf);   // alley dust ribbon
+  k.box(0, 0.012, 12.8, 36, 0.02, 3.6, 0x9a8a6c, nsf);     // street grime
+  for (const tz of [11.9, 13.3])
+    k.box(2, 0.02, tz, 24, 0.012, 0.25, 0x6e6252, nsf);    // tire tracks
+  k.box(-11, 0.012, -8.5, 8, 0.02, 5, 0xc4a273, nsf);      // cross-lane sand drift
 
-  // ---- perimeter town walls (debug-colored) + invisible blocker caps
-  k.wall('z', -D - T, D + T, W, SHELL_H, T, DBG_N);        // north end wall
-  k.wall('z', -D - T, D + T, -W, SHELL_H, T, DBG_S);       // south end wall
-  k.wall('x', -W, W, D, SHELL_H, T, DBG_E);                // east side wall
-  k.wall('x', -W, W, -D, SHELL_H, T, DBG_W);               // west side wall
+  // ---- perimeter town walls + invisible blocker caps; dark base bands
+  // read as street shadow lines (decorative)
+  k.wall('z', -D - T, D + T, W, SHELL_H, T, NWALL);        // north end wall
+  k.wall('z', -D - T, D + T, -W, SHELL_H, T, SWALL);       // south end wall
+  k.wall('x', -W, W, D, SHELL_H, T, EWALL);                // east side wall
+  k.wall('x', -W, W, -D, SHELL_H, T, WWALL);               // west side wall
   for (const s of [-1, 1]) {
     k.blocker(s * (W + 0.6), 7, 0, 1, 14, D * 2 + 4);
     k.blocker(0, 7, s * (D + 0.6), W * 2 + 4, 14, 1);
   }
+  k.box(19.76, 0.5, 0, 0.06, 1.0, D * 2 - 1, 0x8a744e, ns);
+  k.box(-19.76, 0.5, 0, 0.06, 1.0, D * 2 - 1, 0x8a744e, ns);
+
+  // ---- exterior dressing (#23k, all non-solid, beyond the caps):
+  // burning-building silhouettes N + E with fire bands and smoke
+  // columns, and a distant city-skyline band.
+  function burningBuilding(x, z, w, h, d) {
+    k.box(x, h / 2, z, w, h, d, 0x4a4038, nsf);            // charred shell
+    k.box(x, h * 0.55, z, w * 0.7, h * 0.16, d + 0.1, 0xd86a20, nsf); // fire band
+    k.box(x, h * 0.3, z, w + 0.1, h * 0.1, d * 0.7, 0xb04a18, nsf);
+    for (let i = 0; i < 3; i++)                            // smoke column
+      k.box(x + 0.4 * i, h + 1.2 + 2.2 * i, z - 0.3 * i,
+            1.6 + 1.1 * i, 2.0, 1.6 + 1.1 * i, i ? 0x5a564e : 0x46423c, nsf);
+  }
+  burningBuilding(24, -4, 7, 8, 5);                        // beyond N wall
+  burningBuilding(26, 8, 5, 6.5, 5);
+  burningBuilding(6, 19.5, 6, 7, 4);                       // beyond E wall
+  for (const [sx, sz, sw, sh] of [[30, -12, 10, 11], [33, 2, 12, 14], [29, 14, 8, 9],
+                                  [-6, 22, 12, 10], [-16, 20, 8, 8], [16, 21, 9, 12]])
+    k.box(sx, sh / 2, sz, sw, sh, 4, 0x9a8e7c, nsf);       // skyline band
+  k.box(-24, 5, -2, 6, 10, 12, 0xb0a088, nsf);             // west town mass
+  k.box(-23, 4, -11, 5, 8, 7, 0xa89880, nsf);
 
   // ---- G. spawn shields (Killhouse pattern, 2.6 m): tf line at x = −16,
   // sp line at x = 16. Gaps are the three lane exits per end (alley /
@@ -1845,16 +1882,25 @@ function buildCrash(scene, colliders) {
       m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
       g.add(m); return m;
     };
-    add(7.6, 2.2, 2.8, 0.2, 1.25, 0, 0x5a6248);            // fuselage body
-    add(1.6, 1.7, 2.2, -3.9, 0.95, 0, 0x525a42);           // cockpit (nose, SW)
+    add(7.6, 2.2, 2.8, 0.2, 1.25, 0, OLIVE);               // fuselage body
+    add(1.6, 1.7, 2.2, -3.9, 0.95, 0, OLIVE2);             // cockpit (nose, SW)
     add(4.6, 0.55, 1.6, 0.4, 2.6, 0, 0x4a523c);            // spine/engine hump
-    add(1.5, 1.3, 1.3, 3.6, 2.5, 0, 0x525a42);             // aft pylon stump
+    add(1.5, 1.3, 1.3, 3.6, 2.5, 0, OLIVE2);               // aft pylon stump
     add(0.9, 0.5, 0.9, -2.6, 2.75, 0, 0x3a4034);           // fwd rotor mast
+    // #23k art (visible mesh only — the stepped hull is untouched):
+    add(1.2, 0.65, 2.24, -4.05, 1.55, 0, 0x22282c);        // cockpit glass wrap
+    add(5.6, 0.34, 2.84, 0.1, 1.9, 0, 0x22282c);           // cabin window strip
+    add(1.0, 1.3, 2.86, -0.9, 0.95, 0, 0x3a4034);          // side door (open, dark)
+    add(7.7, 0.5, 2.9, 0.2, 0.3, 0, 0x6a7256);             // belly band (faded)
+    add(2.2, 1.0, 3.1, 0.9, 0.55, 0, OLIVE2);              // sponson stubs
+    add(0.9, 0.5, 1.1, 3.9, 1.65, -1.15, 0x8a8478);        // tail-number panel
+    add(2.4, 0.16, 2.92, -2.2, 0.35, 0, 0x8a4b34);         // rust/burn streak
     for (const [hx, hy] of [[-2.6, 3.1], [3.6, 3.35]])     // drooped rotor blades
       for (const ang of [0.5, 2.6, 4.7]) {
         const b = add(5.6, 0.07, 0.42, 0, 0, 0, 0x2e3230);
         b.position.set(hx + 2.6 * Math.cos(ang), hy, -2.6 * Math.sin(ang));
         b.rotation.y = ang;
+        b.rotation.z = 0.07;                               // #23k droop
       }
     scene.add(g);
   })();
@@ -1868,14 +1914,21 @@ function buildCrash(scene, colliders) {
       k.blocker(HX + u * HCS, 1.3, HZ + u * HSN, bw, 2.6, bd);
     }
   }
-  k.box(7.2, 0.8, 4.9, 2.6, 1.6, 1.8, 0x5a6248);           // tail section (solid)
-  k.box(7.6, 1.9, 4.9, 1.8, 0.6, 1.4, 0x525a42);           // ...tail pylon
-  k.box(7.9, 2.35, 4.9, 3.4, 0.08, 0.4, 0x2e3230, { solid: false }); // tail rotor
+  k.box(7.2, 0.8, 4.9, 2.6, 1.6, 1.8, OLIVE);              // tail section (solid)
+  k.box(7.6, 1.9, 4.9, 1.8, 0.6, 1.4, OLIVE2);             // ...tail pylon
+  k.box(7.9, 2.35, 4.9, 3.4, 0.08, 0.4, 0x2e3230, ns);     // tail rotor
+  k.box(6.0, 0.9, 4.9, 0.24, 1.4, 1.5, 0x3a4034, ns);      // torn bulkhead (cut face)
   k.box(1.8, 0.016, -0.2, 11, 0.02, 6.5, 0x3a3630, nsf);   // scorch decals
   k.box(7.2, 0.016, 4.9, 4.5, 0.02, 3.5, 0x443e36, nsf);
+  for (let i = 0; i < 3; i++)                              // wreck smoke wisps
+    k.box(3.9 + 0.5 * i, 3.4 + 1.9 * i, 0.6 + 0.4 * i,
+          1.1 + 0.8 * i, 1.6, 1.1 + 0.8 * i, i ? 0x6a665e : 0x54504a, nsf);
   k.car(-2.5, 4.4, 0x8a8478);                              // courtyard car hull
+  k.box(-2.5, 0.02, 4.4, 2.6, 0.02, 5.0, 0x8a7a5e, nsf);   // ...dust apron
   k.box(7, 0.5, -3.5, 2, 1.0, 1.5, 0x9a8a70);              // rubble
+  k.box(7, 1.06, -3.5, 1.4, 0.16, 1.0, 0xb4a488, ns);      // ...broken slab cap
   k.box(-5, 0.45, 1.5, 1.6, 0.9, 1.2, 0x9a8a70);           // rubble
+  k.box(-5.3, 0.96, 1.3, 0.7, 0.18, 0.6, 0x8a7a60, ns);    // ...brick spill
   k.crate(9.6, 6.4, 1.1, CRATE);
 
   // ---- B. main building (x −4..6, z −12..−5): ground floor two rooms
@@ -1960,14 +2013,16 @@ function buildCrash(scene, colliders) {
   // 0.5 rails; 5 × 0.45 treads + 0.35 final rise from the EAST
   // (cross-lane) face — alley-side steps would choke the 1.5 m alley
   // pass, a doc deviation. Courtyard-blind (the main building blocks).
-  k.box(-12, 1.3, -12, 3, 2.6, 3, YARD);
-  k.box(-10.56, 2.85, -12, 0.12, 0.5, 3, YARD);            // rail N
-  k.box(-13.44, 2.85, -12, 0.12, 0.5, 3, YARD);            // rail S
-  k.box(-12, 2.85, -13.44, 3, 0.5, 0.12, YARD);            // rail W
-  k.box(-12.97, 2.85, -10.56, 0.94, 0.5, 0.12, YARD);      // rail E, split:
-  k.box(-11.03, 2.85, -10.56, 0.94, 0.5, 0.12, YARD);      // stair gap x −12.5..−11.5
+  k.box(-12, 1.3, -12, 3, 2.6, 3, 0xd8d0c4);               // body: white paint
+  k.box(-12, 0.6, -12, 3.06, 0.55, 3.06, 0x9a3a30, ns);    // red band (low)
+  k.box(-12, 1.75, -12, 3.06, 0.55, 3.06, 0x9a3a30, ns);   // red band (high)
+  k.box(-10.56, 2.85, -12, 0.12, 0.5, 3, 0x9a3a30);        // rail N (red)
+  k.box(-13.44, 2.85, -12, 0.12, 0.5, 3, 0x9a3a30);        // rail S
+  k.box(-12, 2.85, -13.44, 3, 0.5, 0.12, 0x9a3a30);        // rail W
+  k.box(-12.97, 2.85, -10.56, 0.94, 0.5, 0.12, 0x9a3a30);  // rail E, split:
+  k.box(-11.03, 2.85, -10.56, 0.94, 0.5, 0.12, 0x9a3a30);  // stair gap x −12.5..−11.5
   for (let i = 1; i <= 5; i++)                             // treads: tops 0.45..2.25
-    k.box(-12, 0.45 * i / 2, -10.5 + 0.275 + 0.55 * (5 - i), 1.0, 0.45 * i, 0.55, YARD);
+    k.box(-12, 0.45 * i / 2, -10.5 + 0.275 + 0.55 * (5 - i), 1.0, 0.45 * i, 0.55, 0xd0c8bc);
 
   // ---- C. shop (x −2..3, z 7..11): W door to courtyard, offset E door
   // to the back street. Roof counter-perch at 3.2 (#23j): 6-box chain,
@@ -1988,6 +2043,11 @@ function buildCrash(scene, colliders) {
   // and its clutter, so the doc's street-face chain moved here (deviation)
   for (let i = 1; i <= 6; i++)                             // 0.5 rises, tops 0.5..3.0
     k.box(-2.6, 0.5 * i / 2, 7.4 + 0.6 * (i - 1), 0.6, 0.5 * i, 0.6, CRATE);
+  // shop signage (#23k): hand-painted board over the courtyard door +
+  // a green trade stripe along the lintel
+  k.box(0.5, 2.62, 6.86, 1.9, 0.55, 0.06, 0xe0d6bc, ns);
+  k.box(0.5, 2.62, 6.83, 1.3, 0.28, 0.04, 0x3e6a4a, ns);
+  k.box(0.5, 2.9, 6.88, 5.0, 0.14, 0.05, 0x3e6a4a, ns);
 
   // ---- D. arcade colonnade (x 8..11, z −8..4): pillars + solid slab at
   // y 3.0, blocker-capped (massing only — never walkable). sp's shielded
@@ -2004,17 +2064,33 @@ function buildCrash(scene, colliders) {
   // so no full-length street eye-lane survives (bands verified).
   k.box(6, 2, 14.2, 8, 4, 1.6, 0x4a6a8a);                  // blue facade N
   k.box(-7, 2, 14.2, 8, 4, 1.6, 0x4a6a8a);                 // blue facade S
+  // #23k blue/factory identity dressing (decorative): white trim caps,
+  // dark factory-window rows, corrugation shadow strips, garage sign
+  for (const fx of [6, -7]) {
+    k.box(fx, 4.06, 14.2, 8.2, 0.18, 1.7, 0xd8dce0, ns);   // trim cap
+    for (const wx of [-2.6, 0, 2.6])
+      k.box(fx + wx, 2.7, 13.36, 1.7, 0.9, 0.05, 0x262c33, ns); // window row
+    k.box(fx, 1.1, 13.37, 7.6, 0.12, 0.04, 0x3a5a78, ns);  // seam stripe
+  }
   k.wall('z', 12.5, 15, -3, 3.0, 0.2, 0x5a7a9a);           // garage S wall
   k.wall('z', 12.5, 15, 1, 3.0, 0.2, 0x5a7a9a);            // garage N wall
+  k.box(-1, 3.16, 12.6, 4.2, 0.32, 0.5, 0x3a5a78, ns);     // garage lintel board
+  k.box(-1, 3.16, 12.32, 3.0, 0.2, 0.05, 0xd8dce0, ns);    // ...white letters bar
+  k.box(-1, 0.5, 14.55, 1.6, 1.0, 0.9, 0x33383d);          // engine block (SOLID)
   k.box(4.5, 0.95, 11.6, 2.4, 1.9, 1.2, STALL);            // market stalls
   k.box(-4.5, 0.95, 12.2, 2.4, 1.9, 1.2, STALL);
+  k.box(4.5, 1.98, 11.6, 2.7, 0.1, 1.6, 0xb0433a, ns);     // stall awnings
+  k.box(-4.5, 1.98, 12.2, 2.7, 0.1, 1.6, 0x3e6a4a, ns);
   k.box(10, 0.55, 12.6, 4.2, 1.1, 1.8, 0x6a6660);          // x-long car hulls
   k.box(9.8, 1.35, 12.6, 2.0, 0.7, 1.7, 0x1a1d20);
   k.box(-9, 0.55, 13, 4.2, 1.1, 1.8, 0x8a6a4a);
   k.box(-9.2, 1.35, 13, 2.0, 0.7, 1.7, 0x1a1d20);
+  k.box(10, 0.02, 12.6, 4.8, 0.02, 2.4, 0x5a544a, nsf);    // car shadow stains
+  k.box(-9, 0.02, 13, 4.8, 0.02, 2.4, 0x5a544a, nsf);
   // #23j cover finalization: alley drum + south cross-lane rubble
   k.barrel(-2.6, -14.4);
   k.box(-10.5, 0.5, 1.8, 1.6, 1.0, 1.4, 0x9a8a70);
+  k.box(-10.5, 1.06, 1.8, 1.1, 0.14, 0.9, 0xb4a488, ns);   // ...slab cap
 
   // ---- spawns: 5 per team, four behind the shield lines + one forward
   // lane point (deliberately risky, roof-blinded by the screens).
