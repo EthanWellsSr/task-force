@@ -188,7 +188,8 @@ function prepareGunGameCombatant(c) {
 }
 
 function advanceGunGame(killer, victim, weaponName) {
-  if (weaponName === 'KNIFE' || weaponName === 'TOMAHAWK') {
+  // P45: the throwing knife demotes too — all three are humiliation kills
+  if (weaponName === 'KNIFE' || weaponName === 'TOMAHAWK' || weaponName === 'THROWING KNIFE') {
     victim.tier = Math.max(0, (victim.tier || 0) - 1);
     victim._gunGameComplete = false;
     G.scores[victim.team] = Math.min((victim.tier || 0) + 1, GUN_LADDER.length);
@@ -1812,6 +1813,23 @@ const THROWABLES = {
     color: 0x55603c, throwSpeed: 4, throwUp: 1.6,
     detonate: claymoreDetonate,
   },
+  // P45: throwing knife — the lethal-slot humiliation pick. NOT grenade
+  // physics: startCooking short-circuits on def.knife into an instant
+  // flat throw that delegates to the tomahawk engine (throwKnife pushes
+  // into _tomahawks with kind:'knife') — same per-step body sweep (any
+  // direct hit is an instant kill), same stick-on-first-contact, same
+  // walk-over ground pickup, which restores this slot's count instead of
+  // the tomahawk weapon slot. No fuse, no blast, and it never enters
+  // _throwables, so the danger arrow can't see it. dmg/radius here are
+  // display-only; the kill is the engine's 9999. Kills demote in Gun
+  // Game like KNIFE/TOMAHAWK (it's a humiliation kill).
+  throwingknife: {
+    name: 'THROWING KNIFE', slot: 'lethal',
+    count: 1, fuse: Infinity, radius: 0, dmg: 135, minDmg: 135,
+    knife: true, noCookOff: true,
+    color: 0x8a9096, throwSpeed: 27, throwUp: 1.6,
+    detonate: null, // never detonates — it never enters _throwables
+  },
   // stun: zero damage — anyone caught in the radius with a clear line to
   // the bang is stunned; duration scales with proximity (stunMax at
   // ground zero, stunMin at the edge). Short fuse so it pops near where
@@ -2036,6 +2054,13 @@ function startCooking(slot = 'lethal') {
   const def = THROWABLES[kind];
   if (!def || player[fields.left] <= 0 || player.cooking !== null) return;
   if (player.throwT > 0 || player.switchT > 0 || player.meleeT > 0.33) return;
+  // P45: a knife doesn't cook or lob — it leaves flat on the keydown
+  // (throwKnife delegates flight/kill/pickup to the tomahawk engine)
+  if (def.knife) {
+    player[fields.left]--;
+    throwKnife();
+    return;
+  }
   player[fields.left]--;
   player.cooking = def.fuse;
   player.cookKind = kind;
@@ -2404,13 +2429,46 @@ function throwTomahawk(w) {
   AudioSys.throwWhoosh();
 }
 
-// a landed axe: rests on the ground/wall as a walk-over pickup
-function dropAxePickup(at) {
-  const mesh = buildTomahawkMesh();
+// P45: box-built throwing knife for the thrown mesh + ground pickup —
+// slimmer than the axe so the two pickups read differently at a glance
+function buildKnifeMesh() {
+  const g = new THREE.Group();
+  const mat = c => new THREE.MeshLambertMaterial({ color: c });
+  const box = (wd, h, d, c, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(wd, h, d), mat(c));
+    m.position.set(x, y, z); m.castShadow = true; g.add(m);
+  };
+  box(0.022, 0.03, 0.16, 0x3a3f35, 0, 0, 0.1);    // grip
+  box(0.012, 0.05, 0.26, 0xc6ccd2, 0, 0, -0.11);  // blade
+  box(0.05, 0.05, 0.02, 0x5a5f57, 0, 0, 0.015);   // guard
+  return g;
+}
+
+// P45: the lethal-slot knife throw — same launch/feel as the tomahawk,
+// tagged kind:'knife' so the shared engine routes the kill name, pickup
+// mesh, and retrieval (equipLeft, not the tomahawk weapon slot) correctly
+function throwKnife() {
+  const dir = G.camera.getWorldDirection(_shotDir);
+  const pos = new THREE.Vector3(player.pos.x, player.pos.y + eyeHeight() - 0.05, player.pos.z)
+    .addScaledVector(dir, 0.4);
+  const vel = new THREE.Vector3().copy(dir).multiplyScalar(TOMA_SPEED);
+  vel.y += TOMA_UP;
+  const mesh = buildKnifeMesh();
+  mesh.position.copy(pos);
+  G.scene.add(mesh);
+  _tomahawks.push({ mesh, pos, vel, spin: 26, kind: 'knife' });
+  player.spawnProtectT = 0;
+  player.throwT = 0.55;
+  AudioSys.throwWhoosh();
+}
+
+// a landed axe/knife: rests on the ground/wall as a walk-over pickup
+function dropAxePickup(at, kind) {
+  const mesh = kind === 'knife' ? buildKnifeMesh() : buildTomahawkMesh();
   mesh.position.copy(at);
   mesh.rotation.set(Math.PI * 0.5, Math.random() * Math.PI, 0); // lie flat, random spin
   G.scene.add(mesh);
-  _axePickups.push({ mesh, pos: at.clone() });
+  _axePickups.push({ mesh, pos: at.clone(), kind });
 }
 
 function updateTomahawks(dt) {
@@ -2436,14 +2494,15 @@ function updateTomahawks(dt) {
         }
       }
       if (hitBot) {
-        hitBot.hurt(9999, player, 'TOMAHAWK', false); // instant kill
+        // instant kill; the name drives Gun Game demotion + melee XP
+        hitBot.hurt(9999, player, t.kind === 'knife' ? 'THROWING KNIFE' : 'TOMAHAWK', false);
         UI.showHitmarker(true);
         AudioSys.hit(false);
         _axeRay.at(hitDist, _axeHitPt);
         _axeHitPt.y = Math.max(0, _axeHitPt.y);
         G.scene.remove(t.mesh);
         _tomahawks.splice(i, 1);
-        dropAxePickup(_axeHitPt); // drops where it struck (retrieve on foot)
+        dropAxePickup(_axeHitPt, t.kind); // drops where it struck (retrieve on foot)
         continue;
       }
     }
@@ -2472,25 +2531,31 @@ function updateTomahawks(dt) {
       AudioSys.grenadeBounce(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(p));
       G.scene.remove(t.mesh);
       _tomahawks.splice(i, 1);
-      dropAxePickup(p);
+      dropAxePickup(p, t.kind);
     }
   }
 
-  // --- retrieval: walk over a landed axe to refill the tomahawk slot
+  // --- retrieval: walk over a landed axe/knife. An axe refills the
+  // tomahawk weapon slot; a knife (P45) refills the lethal equip count —
+  // and only when the knife is the equipped lethal and not already full.
   if (player.alive) {
     const slot = player.weapons.find(wp => wp.def.throwWeapon);
-    if (slot && slot.mag < 1) {
-      for (let i = _axePickups.length - 1; i >= 0; i--) {
-        const pk = _axePickups[i];
-        if (Math.abs(pk.pos.y - player.pos.y) < 2 &&
-            Math.hypot(pk.pos.x - player.pos.x, pk.pos.z - player.pos.z) < TOMA_PICKUP_R) {
-          slot.mag = 1; // back in hand
-          G.scene.remove(pk.mesh);
-          _axePickups.splice(i, 1);
-          AudioSys.reload();
-          break; // only one axe exists at a time
-        }
+    for (let i = _axePickups.length - 1; i >= 0; i--) {
+      const pk = _axePickups[i];
+      if (Math.abs(pk.pos.y - player.pos.y) >= 2 ||
+          Math.hypot(pk.pos.x - player.pos.x, pk.pos.z - player.pos.z) >= TOMA_PICKUP_R) continue;
+      if (pk.kind === 'knife') {
+        if (player.equip !== 'throwingknife' ||
+            player.equipLeft >= THROWABLES.throwingknife.count) continue;
+        player.equipLeft++;
+      } else {
+        if (!slot || slot.mag >= 1) continue;
+        slot.mag = 1; // back in hand
       }
+      G.scene.remove(pk.mesh);
+      _axePickups.splice(i, 1);
+      AudioSys.reload();
+      break;
     }
   }
 }
@@ -2769,8 +2834,8 @@ function registerKill(killer, victim, weaponName, headshot) {
         Profile.onKill();
         Profile.MatchXP.onDirectKill();
         if (headshot) { Profile.onHeadshot(); Profile.MatchXP.onHeadshot(); }
-        if (weaponName === 'KNIFE' || weaponName === 'TOMAHAWK') {
-          Profile.onMeleeKill();
+        if (weaponName === 'KNIFE' || weaponName === 'TOMAHAWK' || weaponName === 'THROWING KNIFE') {
+          Profile.onMeleeKill();  // P45: knife kills count as melee bonus
           Profile.MatchXP.onMeleeKill();
         }
       }

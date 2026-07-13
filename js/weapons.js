@@ -341,7 +341,7 @@ function normalizeClass(c) {
   // throwables (#16a): pre-#16a saves have no equipment fields — default to
   // the classic FRAG + STUN loadout (smoke is now a tactical alternative, not
   // an always-on third slot). Junk values fall back too.
-  if (!['frag', 'semtex', 'c4', 'claymore', 'none'].includes(c.lethal)) c.lethal = 'frag'; // P42-P44: legal lethals
+  if (!['frag', 'semtex', 'c4', 'claymore', 'throwingknife', 'none'].includes(c.lethal)) c.lethal = 'frag'; // P42-P45: legal lethals
   if (c.tactical !== 'stun' && c.tactical !== 'smoke' && c.tactical !== 'none') c.tactical = 'stun';
   return c;
 }
