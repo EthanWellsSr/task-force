@@ -280,6 +280,9 @@ const player = {
   lastShotTime: -99,
   _stepT: 0, _killStreakCount: 0, _lastKillTime: -99, _streakKills: 0,
   _bankedStreaks: [], _streakSel: 0,
+  // P60: per-life awarded set (>= trigger needs it — see registerKill) +
+  // the streak loadout, computed at spawn in deploy() and nowhere else
+  _streakAwarded: new Set(), equippedStreakIds: [],
   // #16a: one lethal ([F]) + one tactical ([T]) equipment, chosen per class
   // (either can be null = NONE). Set from the class in deploy().
   equip: 'frag', equipLeft: 0, equipTac: 'stun', equipTacLeft: 0,
@@ -1428,9 +1431,19 @@ function audioPan(srcPos) {
 // ---------- killstreak rewards (COD-style, manual deploy) ----------
 // Earned once per life at a kills-since-death threshold, banked (banked
 // rewards survive death), cycled with [3] and deployed with [G].
-const KILLSTREAKS = [
-  {
+// P60 (#P60-design §1): id-keyed registry (the THROWABLES/MAPS
+// convention); KILLSTREAK_ORDER drives UI lists and threshold order.
+// selectable = may occupy a class streak slot (P67 wires the picker);
+// special = always armed for everyone, never a slot (the nuke).
+// weaponName = the kill-attribution tag a DEPLOYED streak's kills carry;
+// STREAK_WEAPON_NAMES derives from it and gates streak progress — the
+// locked rule "killstreak kills never feed streak progress" (this is the
+// P60 bug fix: napalm kills used to march toward the nuke). P61–P65 add
+// cuav/carepackage/airstrike defs here; the earn loop is count-agnostic.
+const KILLSTREAKS = {
+  uav: {
     id: 'uav', name: 'UAV', kills: 5, unlockLevel: 1, // P12: starter streak
+    selectable: true, weaponName: null, // reveals — it never kills
     deploy() {
       // 20 s of all living enemies on the minimap (drawMinimap);
       // the UAV keeps flying through the owner's death, COD-style
@@ -1438,15 +1451,31 @@ const KILLSTREAKS = [
       AudioSys.uav();
     },
   },
-  {
+  napalm: {
     id: 'napalm', name: 'NAPALM STRIKE', kills: 10, unlockLevel: 1, // P12: starter streak
+    selectable: true, weaponName: 'NAPALM',
     deploy() { deployNapalm(); },
   },
-  {
+  nuke: {
     id: 'nuke', name: 'TACTICAL NUKE', kills: 25,
+    selectable: false, special: true, // always armed, never a slot
+    weaponName: 'TACTICAL NUKE',
     deploy() { deployNuke(); },
   },
-];
+};
+const KILLSTREAK_ORDER = ['uav', 'napalm', 'nuke'];
+// Kill-source guard set, derived once (locked rule: killstreak kills do
+// not count toward streak progress — covers NAPALM today, AIRSTRIKE etc.
+// automatically the day their defs land with a weaponName)
+const STREAK_WEAPON_NAMES = new Set(
+  Object.values(KILLSTREAKS).map(k => k.weaponName).filter(Boolean));
+
+// P60/P70: effective threshold — HARDLINE discounts by one kill (floor 2,
+// the sane minimum). Special streaks (nuke) are never "equipped", so
+// hardline exempts them by construction.
+function effKills(ks) {
+  return ks.special ? ks.kills : Math.max(2, ks.kills - (player.perks.has('hardline') ? 1 : 0));
+}
 
 // ---- napalm strike (#7b): random bombardment across the map ----
 // Canisters rain down staggered over ~5 s; each impact burns a radius
@@ -1730,6 +1759,7 @@ function nukeImpact(x, z) {
     Profile.onDeath(); // P5: dying to your own nuke is still a death
     player._killStreakCount = 0;
     player._streakKills = 0;
+    player._streakAwarded.clear(); // P60: dying to your own nuke resets the awarded set too
   }
 }
 
@@ -3107,10 +3137,24 @@ function registerKill(killer, victim, weaponName, headshot) {
       const hsTag = headshot ? 'HEADSHOT! ' : '';
       // killstreak rewards: kills-since-death (not the 4 s multi-kill
       // window above) hitting a threshold banks that reward for manual
-      // deploy — announced on its own banner, not in the kill message
-      killer._streakKills++;
-      for (const ks of KILLSTREAKS)
-        if (killer._streakKills === ks.kills) earnKillstreak(ks);
+      // deploy — announced on its own banner, not in the kill message.
+      // P60, per the locked rules: (1) killstreak kills (NAPALM today,
+      // AIRSTRIKE tomorrow — STREAK_WEAPON_NAMES) never feed progress,
+      // so a 10-streak napalm can't march its owner toward the nuke;
+      // (2) the trigger is >= with a per-life awarded set (hardline can
+      // drop two streaks onto the same effective number, and === would
+      // skip one); (3) a streak already sitting in the bank re-earns
+      // NOTHING — no duplicate copy, no substitute reward — but the
+      // award still burns for this life (no re-earn after deploying it).
+      if (!STREAK_WEAPON_NAMES.has(weaponName)) {
+        killer._streakKills++;
+        for (const id of killer.equippedStreakIds || []) {
+          const ks = KILLSTREAKS[id];
+          if (killer._streakAwarded.has(id) || killer._streakKills < effKills(ks)) continue;
+          killer._streakAwarded.add(id);
+          if (!killer._bankedStreaks.some(b => b.id === id)) earnKillstreak(ks);
+        }
+      }
       if (streakMsg) {
         UI.showKillMsg(hsTag + streakMsg, true);
       } else {
@@ -3157,7 +3201,8 @@ function startMatch(mapId, modeId = 'tdm') {
   player.kills = 0; player.deaths = 0; player.assists = 0;
   player.recentDamagers.length = 0; // #16d
   player._streakKills = 0;
-  player._bankedStreaks = []; player._streakSel = 0;
+  player._streakAwarded.clear(); // P60: awarded set resets with progress
+  player._bankedStreaks = []; player._streakSel = 0; // locked: the bank dies at match start ONLY
   refreshStreakTag();
   G.uavUntil = 0; // G.time restarts at 0, so a stale value would be a free UAV
   _napalmDrops.length = 0; // no strikes carry across a rematch
@@ -3227,6 +3272,13 @@ function deploy() {
   if (player.respawnT > 0) return;
   const cls = UI.classes[UI.selectedClass];
   player.perks = new Set(cls.perks);
+  // P60: the streak loadout is computed AT SPAWN and nowhere else (P71's
+  // "selection applies on respawn only" falls out of that). Until P67
+  // stores streak ids on the class, everyone runs every selectable streak
+  // (today that's the uav+napalm starter pair — behavior unchanged);
+  // special streaks (nuke) ALWAYS arm, appended after — never a slot.
+  player.equippedStreakIds = KILLSTREAK_ORDER.filter(id => KILLSTREAKS[id].selectable);
+  for (const id of KILLSTREAK_ORDER) if (KILLSTREAKS[id].special) player.equippedStreakIds.push(id);
   const mkState = slot => {
     // resolved def (base + attachment mods) — every curW().def consumer
     // (fire path, startReload, HUD, viewmodel) reads modified stats from here
@@ -3315,6 +3367,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect) {
     }
     player._killStreakCount = 0; // reset streak on death
     player._streakKills = 0;     // streak progress resets; banked rewards survive death
+    player._streakAwarded.clear(); // P60: a fresh life can earn everything again
     Profile.onDeath();           // P5: immediate lifetime stat
     if (attacker) attacker.kills++;
     registerKill(attacker, player, weaponName, headshot);
