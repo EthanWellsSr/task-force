@@ -114,7 +114,16 @@ const MODES = {
   },
 };
 
-const GUN_LADDER = ['usp', 'g18', 'mp5k', 'ump45', 'm4a1', 'famas', 'rpd', 'intervention', 'r870', 'tomahawk'];
+// P74: the 16-tier ladder (#P73-design): pistols (skill floor rising) →
+// shotguns (one-shot rhythm) → SMGs (spray control) → ARs (discipline) →
+// LMG (power/pig) → bolt sniper (precision wall) → tomahawk finale.
+// Every consumer is length-generic (clamps/length reads), so the array IS
+// the ladder. Deliberate skips per the audit docs: FAMAS (bot burst path
+// missing — dead bot tier until P25), Barrett M82 (semi bot path would
+// out-fire the bolt — lobby-clearing sniper bot), M14 EBR (same, plus
+// back-to-back sniper tiers kill flow). 'intervention' is the CheyTac.
+const GUN_LADDER = ['m9', 'usp', 'deagle', 'g18', 'spas12', 'r870', 'aa12', 'mac10',
+  'vector', 'ump45', 'm4a1', 'scar', 'fal', 'm60', 'intervention', 'tomahawk'];
 
 function modeById(id) {
   return MODES[id] || MODES.tdm;
