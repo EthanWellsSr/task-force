@@ -1795,6 +1795,23 @@ const THROWABLES = {
     color: 0x4a5230, throwSpeed: 9, throwUp: 2.6,
     detonate: fragDetonate,
   },
+  // P44: claymore — the placed proximity mine. A stubby toss that plants
+  // upright on its first floor rest, facing where the owner aimed at
+  // placement. An ENEMY entering the tripRange/60-degree cone in front
+  // (LOS-checked) starts the tripDelay beep window — the classic
+  // sprint-past counterplay — then a directional blast: frag falloff in
+  // the frontal arc only, nothing behind the faceplate. Owner/teammates
+  // never trip it. Persists through owner death as area denial; the next
+  // placement replaces it (one active per owner). Player-only; bots
+  // never place one. model: 'claymore' = slab on prongs, green blink.
+  claymore: {
+    name: 'CLAYMORE', slot: 'lethal',
+    count: 1, fuse: Infinity, radius: 5, dmg: 125, minDmg: 25,
+    plants: true, proximity: true, noCookOff: true, model: 'claymore',
+    tripRange: 3.5, tripDot: 0.866, tripDelay: 0.35, // dot = cos(30°) half-angle
+    color: 0x55603c, throwSpeed: 4, throwUp: 1.6,
+    detonate: claymoreDetonate,
+  },
   // stun: zero damage — anyone caught in the radius with a clear line to
   // the bang is stunned; duration scales with proximity (stunMax at
   // ground zero, stunMin at the edge). Short fuse so it pops near where
@@ -1845,6 +1862,27 @@ const _grenWorldUp = new THREE.Vector3(0, 1, 0);
 // stun's — straight cylinder body, lighter band, dark top cap.
 function buildGrenadeMesh(def) {
   const g = new THREE.Group();
+  if (def.model === 'claymore') {
+    // "FRONT TOWARD ENEMY": slab on splayed prongs, green ready blink on
+    // the face. Local +z is the watched direction (rotation.y = facingYaw).
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.08, 0.03),
+      new THREE.MeshLambertMaterial({ color: def.color }));
+    body.position.y = 0.1;
+    g.add(body);
+    for (const s of [-1, 1]) {
+      const prong = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.1, 5),
+        new THREE.MeshLambertMaterial({ color: 0x2c3128 }));
+      prong.position.set(s * 0.045, 0.045, 0);
+      prong.rotation.z = s * 0.35;
+      g.add(prong);
+    }
+    const light = new THREE.Mesh(new THREE.SphereGeometry(0.012, 5, 4),
+      new THREE.MeshBasicMaterial({ color: 0x46ff58 }));
+    light.position.set(0, 0.125, 0.018);
+    g.add(light);
+    g.userData.blinkLight = light;
+    return g;
+  }
   if (def.model === 'c4') {
     // flat olive slab + antenna — reads as a planted charge, not a grenade
     const slab = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.055, 0.11),
@@ -1940,8 +1978,17 @@ function spawnThrowable(def, fuse, speed, up) {
   const mesh = buildGrenadeMesh(def);
   mesh.position.copy(pos);
   G.scene.add(mesh);
-  _throwables.push({ def, mesh, pos, vel, fuse,
-    spin: 5 + Math.random() * 3, sinceBounce: 0 });
+  const t = { def, mesh, pos, vel, fuse,
+    spin: 5 + Math.random() * 3, sinceBounce: 0 };
+  // P44: a planting def remembers the aim direction at placement — the
+  // planted mine watches (and blasts) along this horizontal facing
+  if (def.plants) {
+    const fl = Math.hypot(dir.x, dir.z) || 1;
+    t.facingX = dir.x / fl;
+    t.facingZ = dir.z / fl;
+    t.facingYaw = Math.atan2(t.facingX, t.facingZ);
+  }
+  _throwables.push(t);
 }
 
 // #16b: a bot lobs a throwable at aimPos. Bots don't cook (instant throw),
@@ -2006,6 +2053,18 @@ function releaseThrow(slot) {
   player.cooking = null;
   player.spawnProtectT = 0; // #18a: throwing ends spawn invuln immediately
   player.throwT = 0.55; // re-throw cooldown; also drives the viewmodel animation
+  // P44: one active claymore per owner — a fresh placement replaces the
+  // old one (COD rule; also the only way a mine ever leaves before match
+  // end, since claymores persist through their owner's death)
+  if (def.proximity) {
+    for (let i = _throwables.length - 1; i >= 0; i--) {
+      const o = _throwables[i];
+      if (o.def.proximity && (o.owner || player) === player) {
+        G.scene.remove(o.mesh);
+        _throwables.splice(i, 1);
+      }
+    }
+  }
   spawnThrowable(def, fuse, def.throwSpeed, def.throwUp);
   AudioSys.throwWhoosh();
 }
@@ -2125,8 +2184,10 @@ function updateGrenadePreview() {
       writeGrenadePreviewPoint(gp, pointCount++, _grenPreviewPos);
       lastWrite = steps;
     }
-    // P42: a sticky pins at first contact — the preview arc stops there
+    // P42: a sticky pins at first contact — the preview arc stops there.
+    // P44: a planting def stops where it would come to rest.
     if (def.sticky && (st & (GREN_STEP_BOUNCED | GREN_STEP_REST))) break;
+    if (def.plants && (st & GREN_STEP_REST)) break;
   }
   if (lastWrite !== steps && pointCount < GREN_PREVIEW_POINTS) {
     writeGrenadePreviewPoint(gp, pointCount++, _grenPreviewPos);
@@ -2160,8 +2221,47 @@ function updateThrowables(dt) {
       t.mesh.position.copy(p);
       continue;
     }
+    // P44: a planted claymore skips physics — blink the ready light, watch
+    // the cone, and once tripped burn the short delay then fire
+    if (t.planted) {
+      const bl = t.mesh.userData.blinkLight;
+      if (bl) bl.visible = (G.time % 1.1) < 0.65;
+      if (t.tripT !== undefined) {
+        t.tripT -= dt;
+        if (t.tripT <= 0) {
+          G.scene.remove(t.mesh);
+          _throwables.splice(i, 1);
+          t.def.detonate(t);
+        }
+        continue;
+      }
+      const owner = t.owner || player;
+      let tripped = null;
+      for (const b of G.bots) {
+        if (!b.alive || b.team === owner.team) continue;
+        if (claymoreSees(t, b.pos)) { tripped = b; break; }
+      }
+      if (!tripped && owner !== player && player.alive &&
+          player.team !== owner.team && claymoreSees(t, player.pos)) tripped = player;
+      if (tripped) {
+        t.tripT = t.def.tripDelay;
+        // the arming click — the audible tell that starts the sprint window
+        AudioSys.grenadeBounce(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(p));
+      }
+      continue;
+    }
     t.sinceBounce += dt;
     const step = stepThrowableMotion(p, v, dt, G.colliders);
+    // P44: a claymore plants upright on its first floor rest, aimed along
+    // the facing captured at placement
+    if (t.def.plants && (step & GREN_STEP_REST)) {
+      t.planted = true;
+      v.set(0, 0, 0);
+      t.mesh.position.copy(p);
+      t.mesh.rotation.set(0, t.facingYaw, 0);
+      AudioSys.grenadeBounce(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(p));
+      continue;
+    }
     // P42: sticky contact — the first combatant OR surface it touches
     // pins it. Combatants are checked as a cylinder around the torso;
     // the thrower can't stick themselves (launch offset starts inside
@@ -2199,15 +2299,31 @@ function updateThrowables(dt) {
   }
 }
 
+// P44: directional proximity check — inside tripRange, within the frontal
+// cone (dot vs tripDot = cos of the half-angle), on a similar floor level,
+// with a clear line from the mine to the victim's knees-to-chest.
+function claymoreSees(t, victimPos) {
+  const dx = victimPos.x - t.pos.x, dz = victimPos.z - t.pos.z;
+  const d = Math.hypot(dx, dz);
+  if (d > t.def.tripRange || Math.abs(victimPos.y - t.pos.y) > 2) return false;
+  if (d > 0.001 && (dx * t.facingX + dz * t.facingZ) / d < t.def.tripDot) return false;
+  // same ray heights as blastFactor (+0.4 sensor, +1.2 chest) so a trip
+  // implies the blast's own LOS — ground clutter can't cause a dud fire
+  _blastAt.set(t.pos.x, t.pos.y + 0.4, t.pos.z);
+  _victimAt.set(victimPos.x, victimPos.y + 1.2, victimPos.z);
+  return losClear(_blastAt, _victimAt, G.colliders);
+}
+
 function fragDangerInfo() {
   if (G.state !== 'playing' || !player.alive) return null;
   let best = null;
   for (const t of _throwables) {
     // P42: any live lethal (frag, semtex, future) trips the danger arrow.
-    // P43: remote charges are deliberately EXCLUDED — no fuse means no
-    // urgency window for the scan to key on; the counterplay for a
-    // planted C4 is spotting the block, not an arrow.
-    if (t.def.slot !== 'lethal' || t.def.dmg <= 0 || t.def.remote) continue;
+    // P43/P44: remote charges AND proximity mines are deliberately
+    // EXCLUDED — no fuse means no urgency window for the scan to key on;
+    // the counterplay for a planted C4/claymore is spotting it, not an
+    // arrow (the claymore's beep-then-boom is its own last warning).
+    if (t.def.slot !== 'lethal' || t.def.dmg <= 0 || t.def.remote || t.def.proximity) continue;
     const owner = t.owner || player;
     if (owner === player || owner.team === player.team) continue;
     const f = blastFactor(t.def, t.pos, player.pos);
@@ -2438,6 +2554,44 @@ function fragDetonate(t) {
   }
   // the blast is loud — enemies within earshot investigate the spot
   _blastAt.set(p.x, p.y + 0.4, p.z); // blastDamage reuses the scratch
+  for (const b of G.bots) b.hearShot({ pos: _blastAt, team: owner.team }, 30);
+}
+
+// P44: claymore blast — frag-style falloff (blastDamage handles radius,
+// height and LOS) but DIRECTIONAL: only victims in front of the faceplate
+// (positive dot with the stored facing) take damage; behind takes zero.
+// Point-blank (< 0.4 m, e.g. standing on it) always counts as in front.
+function claymoreDetonate(t) {
+  const def = t.def, p = t.pos;
+  const owner = t.owner || player;
+  const inFront = (victimPos) => {
+    const dx = victimPos.x - p.x, dz = victimPos.z - p.z;
+    const d = Math.hypot(dx, dz);
+    return d < 0.4 || (dx * t.facingX + dz * t.facingZ) / d > 0;
+  };
+  _blastAt.set(p.x, p.y + 0.2, p.z);
+  fxFire(_blastAt, 0.3, 3.5);
+  AudioSys.explosion(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(_blastAt));
+  for (const b of G.bots) {
+    if (!b.alive) continue;
+    if (b.team === owner.team && b !== owner) continue; // teammates safe
+    if (!inFront(b.pos)) continue;
+    const dmg = blastDamage(def, p, b.pos);
+    if (dmg > 0) b.hurt(dmg, b === owner ? null : owner, def.name, false);
+  }
+  // the owner CAN be clipped by their own mine's frontal arc (frag rule:
+  // self-damage, uncredited); an enemy's mine credits its owner
+  if (owner === player) {
+    if (inFront(player.pos)) {
+      const selfDmg = blastDamage(def, p, player.pos);
+      if (selfDmg > 0) damagePlayer(selfDmg, null, def.name, false);
+    }
+  } else if (owner.team !== player.team && inFront(player.pos)) {
+    const dmg = blastDamage(def, p, player.pos);
+    if (dmg > 0) damagePlayer(dmg, owner, def.name, false);
+  }
+  // the blast is loud — enemies within earshot investigate the spot
+  _blastAt.set(p.x, p.y + 0.2, p.z);
   for (const b of G.bots) b.hearShot({ pos: _blastAt, team: owner.team }, 30);
 }
 
