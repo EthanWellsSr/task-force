@@ -1782,6 +1782,19 @@ const THROWABLES = {
     color: 0x6f5f38, throwSpeed: 15, throwUp: 3.4,
     detonate: fragDetonate,
   },
+  // P43: C4 — the remote charge. Short heavy lob, sticks like the semtex
+  // (same sticky path), and its Infinity fuse never burns down: it fires
+  // only on the manual trigger — pressing the lethal key again while the
+  // charge is out (detonateRemoteCharges on the keydown path). Single
+  // charge, despawns with its owner's death. Player-only; bots never
+  // place one. model: 'c4' = flat olive slab + antenna.
+  c4: {
+    name: 'C4', slot: 'lethal',
+    count: 1, fuse: Infinity, radius: 7, dmg: 125, minDmg: 25,
+    sticky: true, remote: true, noCookOff: true, model: 'c4',
+    color: 0x4a5230, throwSpeed: 9, throwUp: 2.6,
+    detonate: fragDetonate,
+  },
   // stun: zero damage — anyone caught in the radius with a clear line to
   // the bang is stunned; duration scales with proximity (stunMax at
   // ground zero, stunMin at the edge). Short fuse so it pops near where
@@ -1832,6 +1845,18 @@ const _grenWorldUp = new THREE.Vector3(0, 1, 0);
 // stun's — straight cylinder body, lighter band, dark top cap.
 function buildGrenadeMesh(def) {
   const g = new THREE.Group();
+  if (def.model === 'c4') {
+    // flat olive slab + antenna — reads as a planted charge, not a grenade
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.055, 0.11),
+      new THREE.MeshLambertMaterial({ color: def.color }));
+    slab.position.y = 0.03;
+    g.add(slab);
+    const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.09, 5),
+      new THREE.MeshLambertMaterial({ color: 0x22261f }));
+    ant.position.set(0.055, 0.1, 0.03);
+    g.add(ant);
+    return g;
+  }
   if (def.model === 'semtex') {
     // squat puck + always-bright red arming light — sticky, not a frag
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6),
@@ -1987,6 +2012,23 @@ function releaseThrow(slot) {
 
 // instant pin-pull + lob in one call (DEBUG / tests)
 function throwEquipment(slot = 'lethal') { startCooking(slot); releaseThrow(slot); }
+
+// P43: pressing the lethal key with a live C4 out detonates it instead of
+// starting another throw (the keydown path tries this first). Fires every
+// player-owned remote charge — in flight or stuck. Player-only mechanic;
+// bots never place remote charges. Returns true if anything fired.
+function detonateRemoteCharges() {
+  let fired = false;
+  for (let i = _throwables.length - 1; i >= 0; i--) {
+    const t = _throwables[i];
+    if (!t.def.remote || (t.owner || player) !== player) continue;
+    G.scene.remove(t.mesh);
+    _throwables.splice(i, 1);
+    t.def.detonate(t);
+    fired = true;
+  }
+  return fired;
+}
 
 function settleThrowableBounce(v, dt) {
   let result = 0;
@@ -2161,8 +2203,11 @@ function fragDangerInfo() {
   if (G.state !== 'playing' || !player.alive) return null;
   let best = null;
   for (const t of _throwables) {
-    // P42: any live lethal (frag, semtex, future) trips the danger arrow
-    if (t.def.slot !== 'lethal' || t.def.dmg <= 0) continue;
+    // P42: any live lethal (frag, semtex, future) trips the danger arrow.
+    // P43: remote charges are deliberately EXCLUDED — no fuse means no
+    // urgency window for the scan to key on; the counterplay for a
+    // planted C4 is spotting the block, not an arrow.
+    if (t.def.slot !== 'lethal' || t.def.dmg <= 0 || t.def.remote) continue;
     const owner = t.owner || player;
     if (owner === player || owner.team === player.team) continue;
     const f = blastFactor(t.def, t.pos, player.pos);
@@ -2781,6 +2826,16 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect) {
       player.cooking = null;
       spawnThrowable(cdef, fuse, 1.2, 1.2);
     }
+    // P43: a dead owner's remote charges despawn — no orphaned C4. This
+    // also swallows a mid-cook C4 the drop above just spawned (a fuseless
+    // charge with no living trigger hand is a dud, not a hazard).
+    for (let i = _throwables.length - 1; i >= 0; i--) {
+      const t = _throwables[i];
+      if (t.def.remote && (t.owner || player) === player) {
+        G.scene.remove(t.mesh);
+        _throwables.splice(i, 1);
+      }
+    }
     player._killStreakCount = 0; // reset streak on death
     player._streakKills = 0;     // streak progress resets; banked rewards survive death
     Profile.onDeath();           // P5: immediate lifetime stat
@@ -2906,7 +2961,10 @@ document.addEventListener('keydown', e => {
   if (UI.actionMatches('primaryWeapon', e.code)) switchWeapon(0);
   if (UI.actionMatches('secondaryWeapon', e.code)) switchWeapon(1);
   if (UI.actionMatches('melee', e.code)) tryMelee();
-  if (UI.actionMatches('lethal', e.code)) startCooking('lethal');     // pin out; leaves on release
+  if (UI.actionMatches('lethal', e.code)) {
+    // P43: a placed C4 fires on the same key; otherwise pin out as usual
+    if (!detonateRemoteCharges()) startCooking('lethal');
+  }
   if (UI.actionMatches('tactical', e.code)) startCooking('tactical'); // tactical (stun/smoke), same mechanics
   if (UI.actionMatches('adsToggle', e.code)) player.adsToggle = !player.adsToggle;
   if (UI.actionMatches('deployStreak', e.code)) deployKillstreak();
