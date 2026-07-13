@@ -244,6 +244,16 @@ const ATTACHMENTS = {
   foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
     mods:{ recoil:.8, bloom:.8 }, unlockLevel:18 },
+  // P57: quickdraw grip — snap-aim speed for a looser aimed cone, the
+  // inverse of the holo/ACOG direction. DELIBERATELY shares underbarrel
+  // with the foregrip: the one-pick-per-slot rule makes sustained-fire
+  // control vs first-shot speed a real choice (#P55-design §3). Same
+  // mount list as the foregrip. Stacks bounded with optics (reddot ×
+  // quickdraw = .68 adsTime, paying 15% aimed bloom). No unlockLevel
+  // yet: the doc suggested L17 — final slotting belongs to P78.
+  quickdraw: { id:'quickdraw', name:'QUICKDRAW GRIP', slot:'underbarrel',
+    cats:['Assault Rifle','SMG','LMG','Shotgun'],
+    mods:{ adsTime:.8, spreadAds:1.15 } },
   // Laser (#19c): its own slot (underbarrel is the foregrip's), trades
   // concealment for a tighter hip cone. Beam drawn from the muzzle in
   // buildViewModel; color is a per-class pick like the reticle color.
