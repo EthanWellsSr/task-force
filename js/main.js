@@ -1267,13 +1267,16 @@ function fxFire(at, ttl, size) {
   f.seed = Math.random() * 10;
   f.sp.visible = true;
 }
-function fxSmoke(at, ttl, size) {
+function fxSmoke(at, ttl, size, tint) {
   const s = FX.smokes.find(s => s.ttl <= 0) || FX.smokes[0];
   s.sp.position.copy(at);
   s.ttl = s.max = ttl;
   s.size = size;
   s.seed = Math.random() * 10;
   s.sp.material.rotation = Math.random() * Math.PI * 2;
+  // P62: optional tint (airstrike's red marker smoke) — sprites own their
+  // materials, and untinted callers reset to white so pool reuse is clean
+  s.sp.material.color.setHex(tint || 0xffffff);
   s.sp.visible = true;
 }
 function fxUpdate(dt) {
@@ -1477,6 +1480,11 @@ const KILLSTREAKS = {
     selectable: true, weaponName: null, // it jams — it never kills
     deploy() { deployCounterUav(); },
   },
+  airstrike: {
+    id: 'airstrike', name: 'PRECISION AIRSTRIKE', kills: 8, unlockLevel: 16, // #P60-design §3
+    selectable: true, weaponName: 'AIRSTRIKE', // kill-attribution tag
+    deploy() { deployAirstrike(); },
+  },
   napalm: {
     id: 'napalm', name: 'NAPALM STRIKE', kills: 10, unlockLevel: 1, // P12: starter streak
     selectable: true, weaponName: 'NAPALM',
@@ -1489,7 +1497,7 @@ const KILLSTREAKS = {
     deploy() { deployNuke(); },
   },
 };
-const KILLSTREAK_ORDER = ['cuav', 'uav', 'napalm', 'nuke']; // P61: cuav leads — ladder position 4 < 5
+const KILLSTREAK_ORDER = ['cuav', 'uav', 'airstrike', 'napalm', 'nuke']; // P61/P62: ladder order 4/5/8/10/25
 // Kill-source guard set, derived once (locked rule: killstreak kills do
 // not count toward streak progress — covers NAPALM today, AIRSTRIKE etc.
 // automatically the day their defs land with a weaponName)
@@ -1564,6 +1572,12 @@ function deployNapalm() {
 }
 
 function napalmImpact(d) {
+  // P62: per-drop overrides — airstrike bombs ride this exact pipeline
+  // (same cover rule, same y-band, same team-safety, same spawn-protect
+  // behavior via hurt()); only the numbers and the attribution differ
+  const radius = d.radius || NAPALM.radius;
+  const maxDmg = d.dmg || NAPALM.dmg, minDmg = d.minDmg || NAPALM.minDmg;
+  const weaponName = d.weaponName || 'NAPALM';
   _impactAt.set(d.x, d.y + 0.5, d.z);
   // flash + lingering flames
   fxFire(_impactAt, 0.3, 4.5);
@@ -1576,12 +1590,63 @@ function napalmImpact(d) {
   for (const b of G.bots) {
     if (!b.alive || b.team === player.team) continue; // team-safe
     const dist = Math.hypot(b.pos.x - d.x, b.pos.z - d.z);
-    if (dist > NAPALM.radius || Math.abs(b.pos.y - d.y) > 3.5) continue;
+    if (dist > radius || Math.abs(b.pos.y - d.y) > 3.5) continue;
     _burnAt.set(b.pos.x, b.pos.y + 1.2, b.pos.z);
     if (!losClear(_impactAt, _burnAt, G.colliders)) continue; // cover protects
-    const dmg = THREE.MathUtils.lerp(NAPALM.dmg, NAPALM.minDmg, dist / NAPALM.radius);
-    b.hurt(Math.round(dmg), player, 'NAPALM', false);
+    const dmg = THREE.MathUtils.lerp(maxDmg, minDmg, dist / radius);
+    b.hurt(Math.round(dmg), player, weaponName, false);
   }
+}
+
+// P62: precision airstrike — a facing-based strafing run (no map-click UI
+// exists; the aim ray IS the targeting). The camera ray's ground point,
+// clamped 8–30 m out horizontally (sky shots take the far clamp), anchors
+// a 5-bomb line along the player's HORIZONTAL facing — 3.5 m spacing,
+// centered on the anchor (−7 m … +7 m ≈ a 17 m carpet). A 1.4 s telegraph
+// marks the line with red smoke + a flare at the anchor under a jet-flyby
+// build, pings enemy bots' hearing at the anchor (they investigate — or
+// happen to leave; scripted fleeing is new AI, skipped per the doc), then
+// the bombs land in a 0.12 s sequence through the napalm pipeline with
+// 'AIRSTRIKE' attribution: killstreak-kill XP, and the P60
+// STREAK_WEAPON_NAMES guard keeps its kills out of streak progress.
+// Distinct from napalm by construction: one AIMED line landing almost at
+// once (threshold 8 buys control) vs 16 random canisters over 5 s (10
+// buys chaos). Counterplay: the telegraph, and interiors (LOS rule).
+const AIRSTRIKE = { bombs: 5, spacing: 3.5, radius: 5.5, dmg: 155, minDmg: 35, telegraph: 1.4 };
+function deployAirstrike() {
+  const dir = G.camera.getWorldDirection(_shotDir);
+  const fl = Math.hypot(dir.x, dir.z) || 1;
+  const fx = dir.x / fl, fz = dir.z / fl;
+  _dropProbe.set(player.pos.x, player.pos.y + eyeHeight(), player.pos.z);
+  const aim = rayWorld(_dropProbe, dir, 60, G.colliders);
+  const dist = aim
+    ? THREE.MathUtils.clamp(Math.hypot(aim.point.x - player.pos.x, aim.point.z - player.pos.z), 8, 30)
+    : 30; // aimed at the sky: the far clamp
+  const ax = player.pos.x + fx * dist, az = player.pos.z + fz * dist;
+  for (let i = 0; i < AIRSTRIKE.bombs; i++) {
+    const off = (i - (AIRSTRIKE.bombs - 1) / 2) * AIRSTRIKE.spacing;
+    const x = ax + fx * off, z = az + fz * off;
+    // land on whatever is under the sky at this point (roofs count)
+    _dropProbe.set(x, 40, z);
+    const ghit = rayWorld(_dropProbe, _dropDown, 40, G.colliders);
+    const y = ghit ? ghit.point.y : 0;
+    // the mark: red smoke along the line for the telegraph's life
+    _impactAt.set(x, y + 0.7, z);
+    fxSmoke(_impactAt, AIRSTRIKE.telegraph + 0.5, 1.7, 0xd8402a);
+    _napalmDrops.push({
+      x, y, z,
+      t: AIRSTRIKE.telegraph + i * 0.12, // the strafing sequence
+      fall: 0.35,
+      whistled: false,
+      radius: AIRSTRIKE.radius, dmg: AIRSTRIKE.dmg, minDmg: AIRSTRIKE.minDmg,
+      weaponName: 'AIRSTRIKE',
+    });
+    if (i === Math.floor(AIRSTRIKE.bombs / 2)) fxFire(_impactAt, AIRSTRIKE.telegraph, 1.1); // anchor flare
+  }
+  // the mark is loud intel — enemies in earshot come look (or leave)
+  _blastAt.set(ax, 0.4, az);
+  for (const b of G.bots) b.hearShot({ pos: _blastAt, team: player.team }, 25);
+  AudioSys.jetInbound();
 }
 
 function updateNapalm(dt) {
@@ -3172,7 +3237,9 @@ function registerKill(killer, victim, weaponName, headshot) {
       // kill (never a direct kill); melee/headshot bonuses stack on direct.
       if (weaponName === 'TACTICAL NUKE') {
         // no XP, no kill stats — by design
-      } else if (weaponName === 'NAPALM') {
+      } else if (STREAK_WEAPON_NAMES.has(weaponName)) {
+        // P62: any streak-attributed kill (NAPALM, AIRSTRIKE, future) is
+        // a killstreak kill — the nuke was already peeled off above
         Profile.onKillstreakKill();
         Profile.MatchXP.onKillstreakKill();
       } else {

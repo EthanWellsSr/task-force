@@ -571,6 +571,27 @@ const AudioSys = {
     });
   },
 
+  // P62: airstrike telegraph — a jet flyby building over the 1.4 s mark:
+  // bandpassed noise swept up-and-over (cheap doppler) + gain that peaks
+  // right as the first bomb lands, then tails off with the pass.
+  jetInbound() {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf; src.loop = true;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(280, t);
+    bp.frequency.exponentialRampToValueAtTime(1450, t + 1.35);
+    bp.frequency.exponentialRampToValueAtTime(480, t + 2.3);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.3, t + 1.35);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
+    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + 2.6);
+  },
+
   // P61: counter-UAV — a descending two-tone call (the UAV's rising call
   // inverted) + a low detuned saw drone that hums for the jam's life at
   // ~20% of the UAV-call volume. stopJammer kills a live drone early
