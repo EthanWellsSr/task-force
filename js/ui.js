@@ -745,6 +745,16 @@ const UI = {
     this.$('stunFlash').style.opacity = v;
   },
 
+  // P48: flashbang whiteout. Full white while the remaining blind is above
+  // 40% of its rolled duration (the "hold"), then a linear fade-out.
+  updateFlash(flashT, flashMaxT) {
+    const u = flashMaxT > 0 ? Math.max(0, flashT) / flashMaxT : 0;
+    const v = u <= 0 ? 0 : u > 0.4 ? 1 : u / 0.4;
+    if (v === this._flashV) return;
+    this._flashV = v;
+    this.$('flashWhite').style.opacity = v;
+  },
+
   // detonation whiteout: snap to full white, then fade to reveal the end screen
   nukeFlash() {
     const el = this.$('nukeFlash');

@@ -301,6 +301,11 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
   position:absolute; inset:0; background:#fff; opacity:0;
   pointer-events:none; z-index:40;
 }
+/* P48: flashbang whiteout — opaque (vs the stun's translucent pulse) */
+#flashWhite {
+  position:absolute; inset:0; background:#fff; opacity:0;
+  pointer-events:none; z-index:41;
+}
 #healthWrap {
   position:absolute; left:24px; bottom:26px; width:170px; height:8px;
   background:rgba(10,12,8,.7); border:1px solid rgba(255,255,255,.18);
