@@ -232,6 +232,15 @@ const ATTACHMENTS = {
   holo: { id:'holo', name:'HOLOGRAPHIC SIGHT', slot:'optic',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
     mods:{ adsTime:.92, spreadAds:.82 }, unlockLevel:7 },
+  // P54: ACOG — the magnified third optic. zoom composes multiplicatively
+  // in resolveWeaponDef like every other stat: AR/LMG 1.35 -> ~2.6, SMG
+  // 1.25 -> ~2.4, all deliberately under the zoom > 3 sniper-scope gates
+  // (no overlay/wheel). The trade: magnification + a tighter ADS cone for
+  // the slowest aim-up of the three optics. No shotguns (zoom is pointless
+  // inside a 15 m falloff) and no snipers (they carry real scopes).
+  acog: { id:'acog', name:'ACOG SIGHT', slot:'optic',
+    cats:['Assault Rifle','SMG','LMG'],
+    mods:{ zoom:1.9, adsTime:1.18, spreadAds:.7 } },
   foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
     mods:{ recoil:.8, bloom:.8 }, unlockLevel:18 },
@@ -283,7 +292,7 @@ function laserHex(id) {
 }
 
 // Short mod summary for the class editor rows ("ADS TIME -15% · ADS SPREAD -10%")
-const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', spreadHip:'HIP SPREAD', recoil:'RECOIL', bloom:'BLOOM' };
+const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', spreadHip:'HIP SPREAD', recoil:'RECOIL', bloom:'BLOOM', zoom:'ZOOM' };
 function attachmentDesc(att) {
   const parts = [];
   for (const stat in att.mods) {

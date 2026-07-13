@@ -333,6 +333,7 @@ const VM_RETICLE = {
   holoDot: 0.004,
   holoRingInner: 0.0085,
   holoRingOuter: 0.011,
+  acogHair: 0.0042, // P54: crosshair bar thickness (arms are 5x this)
 };
 
 // Red dot mount points (#9c): rail-top y + mount z per weapon key
@@ -860,7 +861,8 @@ function buildViewModel(w) {
   // (per-class pick, defaults red).
   g.userData.adsPos = VM_POS.ads.clone();
   const opticId = w.attachments && (w.attachments.includes('reddot') ? 'reddot'
-    : w.attachments.includes('holo') ? 'holo' : null);
+    : w.attachments.includes('holo') ? 'holo'
+    : w.attachments.includes('acog') ? 'acog' : null); // P54
   if (opticId) {
     for (const m of irons) m.visible = false;
     for (const m of opticObstructions) m.visible = false;
@@ -876,6 +878,29 @@ function buildViewModel(w) {
       const dot = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.reddot, VM_RETICLE.reddot, 0.004), glow());
       dot.position.set(0, retY, mnt.z);
       g.add(dot);
+    } else if (opticId === 'acog') {
+      // P54: ACOG — closed magnifier silhouette built as an open-eyeline
+      // frame (solid boxes would black out screen center at ADS): riser,
+      // four tube walls, a wider objective-bell collar up front. Crosshair
+      // reticle (two thin bars) sits on the eyepiece plane and tints with
+      // the same per-class reticle color as the dot/holo.
+      retY = mnt.y + 0.043;
+      part(0.03, 0.012, 0.03, black, 0, mnt.y + 0.017, mnt.z);        // riser
+      part(0.007, 0.042, 0.12, black, -0.0215, retY, mnt.z);          // tube walls
+      part(0.007, 0.042, 0.12, black, 0.0215, retY, mnt.z);
+      part(0.05, 0.007, 0.12, black, 0, retY + 0.0215, mnt.z);
+      part(0.05, 0.007, 0.12, black, 0, retY - 0.0215, mnt.z);
+      part(0.008, 0.056, 0.02, black, -0.028, retY, mnt.z - 0.068);   // objective bell collar
+      part(0.008, 0.056, 0.02, black, 0.028, retY, mnt.z - 0.068);
+      part(0.064, 0.008, 0.02, black, 0, retY + 0.028, mnt.z - 0.068);
+      part(0.064, 0.008, 0.02, black, 0, retY - 0.028, mnt.z - 0.068);
+      const hair = VM_RETICLE.acogHair;
+      const hbar = new THREE.Mesh(new THREE.BoxGeometry(hair * 5, hair, 0.003), glow());
+      hbar.position.set(0, retY, mnt.z);
+      g.add(hbar);
+      const vbar = new THREE.Mesh(new THREE.BoxGeometry(hair, hair * 5, 0.003), glow());
+      vbar.position.set(0, retY, mnt.z);
+      g.add(vbar);
     } else {
       // holo: wide flat open window frame with a circle-dot reticle
       retY = mnt.y + 0.046;
