@@ -75,6 +75,10 @@ const G = {
   scores: { tf: 0, sp: 0 },
   timeLeft: 600, time: 0,
   uavUntil: 0,
+  // P61: counter-UAV comms jam. jamTeam = the team the jam LANDED ON
+  // ('*' in FFA = everyone but the deployer, resolved via jamFrom since
+  // FFA teams are per-combatant). Read through commsJammed(ent).
+  jamUntil: 0, jamTeam: null, jamFrom: null,
   pointerLocked: false,
 };
 
@@ -1324,8 +1328,25 @@ function buildMinimapBg() {
     c.fillRect(x, y, (b.max.x - b.min.x) * mmScale, (b.max.z - b.min.z) * mmScale);
   }
 }
+let _jamTagShown = false; // P61: tag-line refresh fires on jam start/end transitions
 function drawMinimap() {
   if (!mmBg) return;
+  // P61: jammed comms — the victim's minimap is static: darkened collider
+  // print, per-frame speckle, NO dots (yours or theirs), no player arrow.
+  // PRECEDENCE, explicitly: the jam BEATS a running UAV (the counter in
+  // Counter-UAV) by suppressing its benefit rather than clearing
+  // uavUntil — a jam that ends mid-UAV hands the UAV back its remainder.
+  const jammed = commsJammed(player);
+  if (jammed !== _jamTagShown) { _jamTagShown = jammed; refreshStreakTag(); }
+  if (jammed) {
+    mmCtx.clearRect(0, 0, 150, 150);
+    mmCtx.globalAlpha = 0.4;
+    mmCtx.drawImage(mmBg, 0, 0);
+    mmCtx.globalAlpha = 1;
+    mmCtx.fillStyle = 'rgba(205,210,200,0.55)';
+    for (let i = 0; i < 70; i++) mmCtx.fillRect(Math.random() * 150, Math.random() * 150, 2, 1);
+    return;
+  }
   const uav = G.time < G.uavUntil;
   const half = Math.max(G.map.bounds.x, G.map.bounds.z) + 1;
   const toMap = (x, z) => [(x + half) * mmScale, (z + half) * mmScale];
@@ -1451,6 +1472,11 @@ const KILLSTREAKS = {
       AudioSys.uav();
     },
   },
+  cuav: {
+    id: 'cuav', name: 'COUNTER-UAV', kills: 4, unlockLevel: 11, // #P60-design §2: the cheapest slot — it protects, it can't kill
+    selectable: true, weaponName: null, // it jams — it never kills
+    deploy() { deployCounterUav(); },
+  },
   napalm: {
     id: 'napalm', name: 'NAPALM STRIKE', kills: 10, unlockLevel: 1, // P12: starter streak
     selectable: true, weaponName: 'NAPALM',
@@ -1463,7 +1489,7 @@ const KILLSTREAKS = {
     deploy() { deployNuke(); },
   },
 };
-const KILLSTREAK_ORDER = ['uav', 'napalm', 'nuke'];
+const KILLSTREAK_ORDER = ['cuav', 'uav', 'napalm', 'nuke']; // P61: cuav leads — ladder position 4 < 5
 // Kill-source guard set, derived once (locked rule: killstreak kills do
 // not count toward streak progress — covers NAPALM today, AIRSTRIKE etc.
 // automatically the day their defs land with a weaponName)
@@ -1475,6 +1501,34 @@ const STREAK_WEAPON_NAMES = new Set(
 // hardline exempts them by construction.
 function effKills(ks) {
   return ks.special ? ks.kills : Math.max(2, ks.kills - (player.perks.has('hardline') ? 1 : 0));
+}
+
+// P61: is this entity's comms jammed right now? jamTeam is the team the
+// jam LANDED ON; the FFA sentinel '*' means everyone but the deployer
+// (jamFrom), since FFA teams are per-combatant strings.
+function commsJammed(ent) {
+  if (G.time >= G.jamUntil) return false;
+  return G.jamTeam === '*' ? ent.team !== G.jamFrom : ent.team === G.jamTeam;
+}
+
+// P61: Counter-UAV — nonlethal 15 s comms jam against everyone who isn't
+// on the deployer's side. Layer (a), engine flag: the victim team's
+// minimap statics out and their UAV benefit dies for the duration
+// (scaffolding today — only the player HAS a minimap and bots don't
+// deploy streaks). Layer (b), the teeth: jammed bots lose hearShot intel
+// (guard in bots.js) — enemies stop converging on your gunfire for 15 s,
+// the push window a CUAV buys. Pure information war: no damage, no
+// blind, no slow.
+const CUAV_DUR = 15;
+function deployCounterUav() {
+  G.jamUntil = G.time + CUAV_DUR;
+  if (G.mode && G.mode.structure === 'teams') {
+    G.jamTeam = G.mode.teams.find(t => t !== player.team) || null;
+  } else {
+    G.jamTeam = '*'; // FFA: the jam lands on the whole lobby but you
+  }
+  G.jamFrom = player.team;
+  AudioSys.jammer(CUAV_DUR);
 }
 
 // ---- napalm strike (#7b): random bombardment across the map ----
@@ -3042,13 +3096,19 @@ function smokeDetonate(t) {
   for (const b of G.bots) b.hearShot({ pos: _blastAt, team: player.team }, 20);
 }
 
-// selector under the minimap: what's banked, what's selected, how to deploy
+// selector under the minimap: what's banked, what's selected, how to
+// deploy. P61: while your comms are jammed the line leads with the
+// warning (drawMinimap refreshes this on jam start/end transitions).
 function refreshStreakTag() {
+  const parts = [];
+  if (commsJammed(player)) parts.push('⚠ COMMS JAMMED');
   const b = player._bankedStreaks;
-  if (!b.length) { UI.setStreakTag(null); return; }
-  let txt = '▲ ' + b[player._streakSel].name + ' — [G]';
-  if (b.length > 1) txt += '  ' + (player._streakSel + 1) + '/' + b.length + ' [3]';
-  UI.setStreakTag(txt);
+  if (b.length) {
+    let txt = '▲ ' + b[player._streakSel].name + ' — [G]';
+    if (b.length > 1) txt += '  ' + (player._streakSel + 1) + '/' + b.length + ' [3]';
+    parts.push(txt);
+  }
+  UI.setStreakTag(parts.length ? parts.join('   ') : null);
 }
 
 function earnKillstreak(ks) {
@@ -3205,6 +3265,8 @@ function startMatch(mapId, modeId = 'tdm') {
   player._bankedStreaks = []; player._streakSel = 0; // locked: the bank dies at match start ONLY
   refreshStreakTag();
   G.uavUntil = 0; // G.time restarts at 0, so a stale value would be a free UAV
+  G.jamUntil = 0; G.jamTeam = null; G.jamFrom = null; // P61: same rationale — no jam carries across matches
+  AudioSys.stopJammer(); // ...and the drone dies with it
   _napalmDrops.length = 0; // no strikes carry across a rematch
   _throwables.length = 0;  // in-flight grenades die with the old scene
   _tomahawks.length = 0;   // #16c: flying axes + ground pickups die with it too
@@ -3227,6 +3289,7 @@ function startMatch(mapId, modeId = 'tdm') {
     api: {
       difficulty: UI.settings.difficulty,
       pickSpawn, getEnemies, registerKill, noteShot, audioPan, smokeBlocked,
+      commsJammed, // P61: hearShot's jam gate
       tracer: fxTracer,
       throwGrenade: spawnBotThrowable, // #16b: bot lobs a frag
       recordDamage,                    // #16d: log a damager for assists

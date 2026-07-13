@@ -571,6 +571,46 @@ const AudioSys = {
     });
   },
 
+  // P61: counter-UAV — a descending two-tone call (the UAV's rising call
+  // inverted) + a low detuned saw drone that hums for the jam's life at
+  // ~20% of the UAV-call volume. stopJammer kills a live drone early
+  // (match reset). Synth-only, no assets.
+  _jamStop: null,
+  jammer(dur = 15) {
+    if (!this.ensure()) return;
+    this.stopJammer();
+    const t = this.ctx.currentTime;
+    [880, 587].forEach((f, i) => {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine'; osc.frequency.value = f;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.14, t + i * 0.12);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.12 + 0.18);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t + i * 0.12); osc.stop(t + i * 0.12 + 0.22);
+    });
+    // the drone: two saws a hair apart beat against each other
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 240;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.028, t + 0.6);
+    g.gain.setValueAtTime(0.028, t + Math.max(0.7, dur - 0.8));
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    lp.connect(g); g.connect(this.master);
+    const oscs = [55, 55.8].map(f => {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth'; o.frequency.value = f;
+      o.connect(lp);
+      o.start(t); o.stop(t + dur + 0.1);
+      return o;
+    });
+    this._jamStop = () => { for (const o of oscs) { try { o.stop(); } catch (e) {} } };
+  },
+  stopJammer() {
+    if (this._jamStop) { this._jamStop(); this._jamStop = null; }
+  },
+
   matchEnd(win) {
     if (!this.ensure()) return;
     const t = this.ctx.currentTime;

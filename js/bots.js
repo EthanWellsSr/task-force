@@ -206,6 +206,10 @@ class Bot {
   // and go investigate. Walls muffle — a blocked line halves the radius.
   hearShot(shooter, radius) {
     if (!this.alive || shooter === this || shooter.team === this.team) return;
+    // P61: jammed comms cut the radio — no lastKnown intel from gunfire
+    // or explosions while the jam holds. Eyes still work (the vision
+    // loop) and getting shot still reveals the attacker (hurt()).
+    if (this.world.api.commsJammed && this.world.api.commsJammed(this)) return;
     const d = this.pos.distanceTo(shooter.pos);
     if (d > radius) return;
     if (d > radius * 0.5) {
