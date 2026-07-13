@@ -1880,6 +1880,21 @@ const THROWABLES = {
     color: 0x4a5346, throwSpeed: 15, throwUp: 3.2,
     detonate: smokeDetonate,
   },
+  // P49: decoy — the misinformation tactical. No blast at all: it lands,
+  // arms on its first rest (plants-style, no fuse — Infinity never burns),
+  // and for ~8 s emits jittered fake gunshots. Each emit pops a muffled
+  // shot sound and calls hearShot(radius 25) on the bots — hearShot's own
+  // guards do the rest: engaged bots (this.target set) never re-path off
+  // it, un-engaged enemies walk over to investigate a firefight that
+  // isn't there. Ends silently and despawns. Player-only; bots never
+  // throw tacticals. model: 'decoy' = stubby can + amber blink.
+  decoy: {
+    name: 'DECOY', slot: 'tactical',
+    count: 1, fuse: Infinity, radius: 0, dmg: 0, minDmg: 0,
+    decoy: true, decoyDur: 8, noCookOff: true, model: 'decoy',
+    color: 0x6a5c3a, throwSpeed: 15, throwUp: 3.2,
+    detonate: null, // never detonates — the emitter branch removes it
+  },
 };
 const GREN_R = 0.08, GREN_H = 0.16, GREN_BOUNCE = 0.42;
 const GREN_GRAVITY = 13;
@@ -1949,6 +1964,24 @@ function buildGrenadeMesh(def) {
       new THREE.MeshBasicMaterial({ color: 0xff2e1f }));
     light.position.y = 0.135;
     g.add(light);
+    return g;
+  }
+  if (def.model === 'decoy') {
+    // stubby can + amber status light (blinks while emitting) — smaller
+    // than the stun's cylinder so it reads as a gadget, not a grenade
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.11, 10),
+      new THREE.MeshLambertMaterial({ color: def.color }));
+    body.position.y = 0.055;
+    g.add(body);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.025, 10),
+      new THREE.MeshLambertMaterial({ color: 0x33382c }));
+    cap.position.y = 0.115;
+    g.add(cap);
+    const light = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 5),
+      new THREE.MeshBasicMaterial({ color: 0xffb03a }));
+    light.position.y = 0.14;
+    g.add(light);
+    g.userData.blinkLight = light;
     return g;
   }
   if (def.model === 'flashbang') {
@@ -2271,6 +2304,31 @@ function updateThrowables(dt) {
       t.mesh.position.copy(p);
       continue;
     }
+    // P49: an armed decoy skips physics — blink the amber light and emit
+    // jittered fake gunshots on a 0.7–1.2 s timer. Each emit is a muffled
+    // pop + a hearShot(25) broadcast; hearShot's own team/alive/!target
+    // guards make it enemy-only and never break target acquisition.
+    // Timer out: despawn silently (no detonate — there's nothing to blow).
+    if (t.decoyActive) {
+      const bl = t.mesh.userData.blinkLight;
+      if (bl) bl.visible = (G.time % 0.55) < 0.3;
+      t.decoyLeft -= dt;
+      if (t.decoyLeft <= 0) {
+        G.scene.remove(t.mesh);
+        _throwables.splice(i, 1);
+        continue;
+      }
+      t.decoyNext -= dt;
+      if (t.decoyNext <= 0) {
+        t.decoyNext = 0.7 + Math.random() * 0.5;
+        const owner = t.owner || player;
+        AudioSys.decoyShot(
+          Math.hypot(t.pos.x - player.pos.x, t.pos.z - player.pos.z), audioPan(t.pos));
+        _blastAt.copy(t.pos);
+        for (const b of G.bots) b.hearShot({ pos: _blastAt, team: owner.team }, 25);
+      }
+      continue;
+    }
     // P44: a planted claymore skips physics — blink the ready light, watch
     // the cone, and once tripped burn the short delay then fire
     if (t.planted) {
@@ -2304,6 +2362,18 @@ function updateThrowables(dt) {
     const step = stepThrowableMotion(p, v, dt, G.colliders);
     // P44: a claymore plants upright on its first floor rest, aimed along
     // the facing captured at placement
+    // P49: a decoy arms on its first rest — from here it's a static
+    // emitter (branch above). Short randomized lead-in before the first
+    // pop so back-to-back throws don't fire in lockstep.
+    if (t.def.decoy && (step & GREN_STEP_REST)) {
+      t.decoyActive = true;
+      t.decoyLeft = t.def.decoyDur;
+      t.decoyNext = 0.35 + Math.random() * 0.4;
+      v.set(0, 0, 0);
+      t.mesh.position.copy(p);
+      t.mesh.rotation.set(0, Math.random() * Math.PI * 2, 0);
+      continue;
+    }
     if (t.def.plants && (step & GREN_STEP_REST)) {
       t.planted = true;
       v.set(0, 0, 0);

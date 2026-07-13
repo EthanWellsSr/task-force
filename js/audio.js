@@ -264,6 +264,36 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 1.4);
   },
 
+  // P49: decoy grenade's fake gunshot — the AR crack recipe run muffled:
+  // band dropped to ~550 Hz (jittered per pop so no two reads identical),
+  // softer gain, duller thump. Reads as suppressed fire a block away.
+  decoyShot(dist = 0, pan = 0) {
+    if (!this.ensure()) return;
+    const atten = dist <= 0 ? 1 : Math.max(0.04, 1 - dist / 70);
+    const t = this.ctx.currentTime;
+    const out = this._dest(pan);
+    // muffled noise crack
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 480 + Math.random() * 180;
+    bp.Q.value = 0.8;
+    const g = this.ctx.createGain();
+    this._env(g, 0.3 * atten, 0.12);
+    src.connect(bp); bp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + 0.17);
+    // dull thump
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(105, t);
+    osc.frequency.exponentialRampToValueAtTime(42, t + 0.07);
+    const g2 = this.ctx.createGain();
+    this._env(g2, 0.22 * atten, 0.09);
+    osc.connect(g2); g2.connect(out);
+    osc.start(t); osc.stop(t + 0.12);
+  },
+
   // smoke grenade pop: soft thump + a hiss tail while the canister spews
   smokePop(dist = 0, pan = 0) {
     if (!this.ensure()) return;
