@@ -477,7 +477,7 @@ class Bot {
     this.flashT = 0.05;
 
     AudioSys.shot(w.model, this.pos.distanceTo(this.world.api.playerPos()),
-      this.world.api.audioPan(this.pos));
+      this.world.api.audioPan(this.pos), w.suppressed); // P55: scaffolding — bot defs carry no attachments today
     this.world.api.noteShot(this);
 
     if (hit) {

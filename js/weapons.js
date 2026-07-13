@@ -220,7 +220,7 @@ const UNLOCK_TABLE = [
 // mods = stat multipliers applied to the base def by resolveWeaponDef.
 // cats = weapon categories the attachment mounts on (null = all).
 // ============================================================
-const ATTACH_SLOTS = ['optic', 'underbarrel', 'laser', 'mag', 'camo']; // P56: 'mag' slot (editor rows + save hygiene pick it up from here)
+const ATTACH_SLOTS = ['optic', 'muzzle', 'underbarrel', 'laser', 'mag', 'camo']; // P55/P56: 'muzzle' + 'mag' slots (editor rows + save hygiene pick them up from here)
 
 const ATTACHMENTS = {
   reddot: { id:'reddot', name:'RED DOT SIGHT', slot:'optic',
@@ -241,6 +241,22 @@ const ATTACHMENTS = {
   acog: { id:'acog', name:'ACOG SIGHT', slot:'optic',
     cats:['Assault Rifle','SMG','LMG'],
     mods:{ zoom:1.9, adsTime:1.18, spreadAds:.7 } },
+  // P55: suppressor — quiet fire for a shorter falloff band. The teeth:
+  // bots' earshot on your shots drops 25 → ~9 m (noteShot ×0.35, composes
+  // with ninja) and the minimap fire-flash never writes. The price: the
+  // reserved rangeMult key (range is an [start, end] ARRAY the generic
+  // mods loop can't touch — resolveWeaponDef scales both ends explicitly)
+  // starts and ends damage falloff 25% earlier — untouched close, weaker
+  // far, no flat damage penalty. `suppressed: true` is copied onto the
+  // resolved def for the audio/noteShot/viewmodel branches. No shotguns
+  // (falloff IS their identity; a silent one-shot-room gun is degenerate),
+  // no snipers (a quiet one-shot-kill erases the positional trade). The
+  // doc's 'Pistol' cat maps to this sandbox's 'Handgun' + 'Machine
+  // Pistol' (the suppressed USP is the archetype — same call as P56).
+  // No unlockLevel yet: doc suggested L14 — final slotting is P78's.
+  suppressor: { id:'suppressor', name:'SUPPRESSOR', slot:'muzzle',
+    cats:['Assault Rifle','SMG','LMG','Handgun','Machine Pistol'],
+    mods:{ rangeMult:.75 }, suppressed:true },
   foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
     mods:{ recoil:.8, bloom:.8 }, unlockLevel:18 },
@@ -315,7 +331,7 @@ function laserHex(id) {
 }
 
 // Short mod summary for the class editor rows ("ADS TIME -15% · ADS SPREAD -10%")
-const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', spreadHip:'HIP SPREAD', recoil:'RECOIL', bloom:'BLOOM', zoom:'ZOOM', mag:'MAG', reload:'RELOAD' }; // P56: mag-slot labels
+const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', spreadHip:'HIP SPREAD', recoil:'RECOIL', bloom:'BLOOM', zoom:'ZOOM', mag:'MAG', reload:'RELOAD', rangeMult:'RANGE' }; // P55/P56 labels
 function attachmentDesc(att) {
   const parts = [];
   for (const stat in att.mods) {
@@ -342,7 +358,14 @@ function resolveWeaponDef(key, attIds, dotColor, laserColor) {
   def.laserColor = laserHex(laserColor);   // ...and the laser beam/dot with this
   for (const id of ids) {
     const mods = ATTACHMENTS[id].mods;
-    for (const stat in mods) def[stat] *= mods[stat];
+    for (const stat in mods) {
+      // P55: range is an [falloffStart, falloffEnd] ARRAY — the reserved
+      // rangeMult key scales both ends explicitly (the scalar loop below
+      // would just NaN a nonexistent def.rangeMult field)
+      if (stat === 'rangeMult') { def.range[0] *= mods[stat]; def.range[1] *= mods[stat]; continue; }
+      def[stat] *= mods[stat];
+    }
+    if (ATTACHMENTS[id].suppressed) def.suppressed = true; // P55: rides the resolved def for audio/AI/viewmodel
   }
   // P56: mag is a round count — an odd base ×1.5 lands on .5 (Deagle
   // 7 → 10.5), so a modified mag rounds to NEAREST (Math.round: 10.5 →

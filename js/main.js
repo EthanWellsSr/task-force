@@ -1042,15 +1042,26 @@ function buildViewModel(w) {
   // can offset from it and snap back
   g.userData.armSupport = arm(sup[0], sup[1], sup[2] || 'cup', -1, -0.38, 0.68);
   g.userData.armSupport.userData.rest = g.userData.armSupport.position.clone();
+  // P55: suppressor — one dark tube hung off the muzzle, aligned by the
+  // same per-model `len` every recipe already declares (so AR/SMG/pistol
+  // alignment is free). The flash quad mounts past it and HALVES —
+  // suppressed shots flash small.
+  let muzzleZ = -len, fSize = flashSize;
+  if (w.attachments && w.attachments.includes('suppressor')) {
+    cyl(0.027, 0.22, 0x17191c, 0, 0.005, -len - 0.1);  // the can
+    cyl(0.017, 0.02, 0x0d0e10, 0, 0.005, -len - 0.205); // dark bore cap
+    muzzleZ = -len - 0.21;
+    fSize = flashSize * 0.5;
+  }
   // muzzle flash quad
   const flash = new THREE.Mesh(
-    new THREE.PlaneGeometry(flashSize, flashSize),
+    new THREE.PlaneGeometry(fSize, fSize),
     new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide }));
-  flash.position.set(0, 0.005, -len);
+  flash.position.set(0, 0.005, muzzleZ);
   flash.visible = false;
   g.add(flash);
   g.userData.flash = flash;
-  g.userData.muzzleLocal = new THREE.Vector3(0, 0, -len);
+  g.userData.muzzleLocal = new THREE.Vector3(0, 0, muzzleZ);
   g.position.copy(VM_POS.hip);
   vmGun = g;
   vmRoot.add(g);
@@ -1383,11 +1394,23 @@ function getEnemies(team) {
 }
 
 function noteShot(ent) {
-  ent.lastShotTime = G.time;
+  // P55: the firing def — resolved (attachment-modified) for the player,
+  // the base weapon for bots (bots don't mount attachments today, so the
+  // suppressed branch is live scaffolding on their side)
+  const def = ent.isPlayer ? curW().def : ent.weapon;
+  const suppressed = !!(def && def.suppressed);
+  // P55: a suppressed shot never writes lastShotTime — no 1.8 s red-dot
+  // flash on the enemy minimap (player-only scaffolding today: only bots
+  // are drawn as enemy dots, and bots don't run suppressors — but the
+  // hook is the hook)
+  if (!suppressed) ent.lastShotTime = G.time;
   // gunfire is loud: enemy bots within earshot learn the shooter's position
   // (Bot.hearShot halves the radius through walls). Ninja fires quieter.
   let earshot = 25;
   if (ent.isPlayer && ent.perks.has('ninja')) earshot *= 0.6;
+  // P55: suppressed fire barely carries — ×0.35 (25 → ~9 m), MULTIPLICATIVE
+  // with ninja (→ ~5 m) like every other modifier in this codebase
+  if (suppressed) earshot *= 0.35;
   for (const b of G.bots) b.hearShot(ent, earshot);
 }
 
@@ -3839,7 +3862,7 @@ function firePlayerShot(w) {
   player.spawnProtectT = 0; // #18a: firing ends spawn invuln immediately
   w.mag--;
   noteShot(player);
-  AudioSys.shot(def.model, 0);
+  AudioSys.shot(def.model, 0, 0, def.suppressed); // P55: suppressed defs report the quiet voice
 
   // muzzle flash
   muzzleLight.intensity = 1.4;

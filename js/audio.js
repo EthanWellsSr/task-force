@@ -57,7 +57,9 @@ const AudioSys = {
 
   // type: 'ar' | 'smg' | 'lmg' | 'sniper' | 'pistol' | 'shotgun'
   // pan: -1 (left) .. 1 (right) from the listener's perspective
-  shot(type, dist = 0, pan = 0) {
+  // P55: suppressed — the crack drops into a flat low "pat": gain ×0.4,
+  // band pulled to ~480 Hz, decay ×0.7, and NO thump oscillator at all.
+  shot(type, dist = 0, pan = 0, suppressed = false) {
     if (!this.ensure()) return;
     if (dist > 0 && !this._allowShot()) return;
     const atten = dist <= 0 ? 1 : Math.max(0.04, 1 - dist / 85);
@@ -72,15 +74,19 @@ const AudioSys = {
 
     const t = this.ctx.currentTime;
     const out = this._dest(pan);
-    // noise crack
+    // noise crack (a suppressed one is quieter, duller, shorter)
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     const bp = this.ctx.createBiquadFilter();
-    bp.type = 'bandpass'; bp.frequency.value = cfg.freq; bp.Q.value = 0.6;
+    bp.type = 'bandpass';
+    bp.frequency.value = suppressed ? 480 : cfg.freq;
+    bp.Q.value = 0.6;
     const g = this.ctx.createGain();
-    this._env(g, cfg.gain * atten, cfg.decay);
+    const decay = cfg.decay * (suppressed ? 0.7 : 1);
+    this._env(g, cfg.gain * (suppressed ? 0.4 : 1) * atten, decay);
     src.connect(bp); bp.connect(g); g.connect(out);
-    src.start(t); src.stop(t + cfg.decay + 0.05);
+    src.start(t); src.stop(t + decay + 0.05);
+    if (suppressed) return; // no thump — the "pat" is the whole report
     // low thump
     const osc = this.ctx.createOscillator();
     osc.type = 'triangle';
