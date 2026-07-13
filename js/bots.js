@@ -167,6 +167,7 @@ class Bot {
     this._stepT = 0;
     this.stunT = 0; // stun grenade: frozen while > 0
     this.dazeT = 0; // ...and accuracy stays blown until this runs out
+    this.blindT = 0; // P48 flashbang: whiteout — perceiving nothing while > 0
     this.spawnProtectT = 0; // #18a: spawn invuln window, set on spawn()
   }
 
@@ -192,7 +193,7 @@ class Bot {
     this.mesh.position.copy(this.pos);
     this.lastPos.copy(this.pos);
     this.stuckT = 0;
-    this.stunT = 0; this.dazeT = 0; // death clears the stars
+    this.stunT = 0; this.dazeT = 0; this.blindT = 0; // death clears the stars (and the whiteout)
     this.spawnProtectT = 3; // #18a: 3 s spawn invuln, cancelled by firing
     // #16b: one frag per life, with a short arm delay so a bot doesn't lob
     // off the spawn instantly
@@ -225,6 +226,17 @@ class Bot {
   stun(dur) {
     if (!this.alive) return;
     this.stunT = Math.max(this.stunT, dur);
+    this.dazeT = Math.max(this.dazeT, dur + 2);
+  }
+
+  // P48: a flashbang got them: the world is white. blindT gates the
+  // perception scan — no fresh acquisitions, canSee forced false — so an
+  // engaged bot keeps its target but falls back to spraying blind at
+  // lastKnown; accuracy stays blown (dazeT) while they blink it off.
+  // Movement and turning stay whole: flash denies information, not legs.
+  flash(dur) {
+    if (!this.alive) return;
+    this.blindT = Math.max(this.blindT, dur);
     this.dazeT = Math.max(this.dazeT, dur + 2);
   }
 
@@ -366,6 +378,11 @@ class Bot {
   }
 
   _scanForTarget() {
+    // P48: flashed — perceive nothing. Keep the current target (the
+    // engagement survives the blink) but canSee goes false, which routes
+    // the combat block to blind-spraying at lastKnown. lostT doesn't
+    // grow here: the loss clock starts when the eyes come back.
+    if (this.blindT > 0) { this.canSee = false; return; }
     const enemies = this.world.api.getEnemies(this.team);
     let best = null, bestD = Infinity;
     const eye = new THREE.Vector3(this.pos.x, this.pos.y + 1.6, this.pos.z);
@@ -411,12 +428,18 @@ class Bot {
     const t = this.target;
     if (!t || !t.alive) return;
     this.spawnProtectT = 0; // #18a: firing ends this bot's spawn invuln
-    const dist = this.pos.distanceTo(t.pos);
+    // P48: a blinded bot shoots at where it LAST SAW the target, not at
+    // the live position — every aim/LOS/hit computation below anchors on
+    // `tp`. A hit can only land if the target actually stayed near that
+    // spot (checked after the roll); otherwise the burst is pure spray.
+    const blindAim = this.blindT > 0 && this.lastKnown ? this.lastKnown : null;
+    const tp = blindAim || t.pos;
+    const dist = this.pos.distanceTo(tp);
     const muzzle = new THREE.Vector3(this.pos.x, this.pos.y + 1.45, this.pos.z);
 
     // hard wall check per shot — a blocked line of fire can never damage;
     // smoke counts (a target lost in smoke gets sprayed at, never hit)
-    const chestCheck = new THREE.Vector3(t.pos.x, t.pos.y + 1.2, t.pos.z);
+    const chestCheck = new THREE.Vector3(tp.x, tp.y + 1.2, tp.z);
     const blocked = !losClear(muzzle, chestCheck, this.world.colliders) ||
       this.world.api.smokeBlocked(muzzle, chestCheck);
 
@@ -428,7 +451,8 @@ class Bot {
     else if (t.crouched) chance *= 0.85;
     if (w.model === 'sniper') chance *= 1.25;
     if (this.dazeT > 0) chance *= 0.25; // stun aftermath: can barely aim
-    const hit = !blocked && Math.random() < chance;
+    const hit = !blocked && Math.random() < chance &&
+      (!blindAim || t.pos.distanceTo(blindAim) < 2); // P48: moved off the spot = unhittable while blind
 
     // damage with falloff
     const fall = THREE.MathUtils.clamp((dist - w.range[0]) / (w.range[1] - w.range[0]), 0, 1);
@@ -438,8 +462,8 @@ class Bot {
     if (headshot) dmg *= w.head;
 
     // tracer: to the chest if hit, offset if missed — high tiers scatter
-    // tight, so even their misses crack close
-    const aim = new THREE.Vector3(t.pos.x, t.pos.y + 1.2, t.pos.z);
+    // tight, so even their misses crack close (blind spray anchors on tp)
+    const aim = new THREE.Vector3(tp.x, tp.y + 1.2, tp.z);
     if (!hit) {
       const sc = this.skill.scatter;
       aim.x += (Math.random() - 0.5) * 2.4 * sc;
@@ -505,6 +529,7 @@ class Bot {
       return;
     }
     if (this.dazeT > 0) this.dazeT -= dt;
+    if (this.blindT > 0) this.blindT -= dt; // P48: blinking the flash off
 
     // ---- perception (staggered)
     this.scanT -= dt;
@@ -520,7 +545,10 @@ class Bot {
 
     if (this.target && this.target.alive) {
       // ---- combat: face target, strafe, fire bursts
-      const dx = this.target.pos.x - this.pos.x, dz = this.target.pos.z - this.pos.z;
+      // P48: blinded, the bot can't track — it faces (and sprays at) the
+      // target's LAST KNOWN spot instead of its live position
+      const anchor = this.blindT > 0 && this.lastKnown ? this.lastKnown : this.target.pos;
+      const dx = anchor.x - this.pos.x, dz = anchor.z - this.pos.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
       wantYaw = Math.atan2(dx, dz);
       this._updateVeteranTactic(dt, dist);
@@ -566,8 +594,11 @@ class Bot {
         if (dist > pushDist) { moveX += Math.sin(wantYaw) * 0.5; moveZ += Math.cos(wantYaw) * 0.5; }
       }
       // firing — only while the target is actually visible (canSee is
-      // refreshed by the perception scan; _fireShot re-verifies per shot)
-      if (this.reactT <= 0 && this.reloadT <= 0 && this.canSee) {
+      // refreshed by the perception scan; _fireShot re-verifies per shot).
+      // P48: a BLINDED bot keeps shooting — blind, at lastKnown (_fireShot
+      // re-anchors); suppressive spray is the flash's designed output.
+      if (this.reactT <= 0 && this.reloadT <= 0 &&
+          (this.canSee || (this.blindT > 0 && this.lastKnown))) {
         this.shotT -= dt;
         if (this.burstLeft <= 0) {
           this.burstPause -= dt;

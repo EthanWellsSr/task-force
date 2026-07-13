@@ -264,6 +264,49 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 1.4);
   },
 
+  // P48: flashbang pop — harder and brighter than the stun's crack:
+  // higher band, more gain, plus a split-second 2.6 kHz blip. No baked-in
+  // ring — the ring (flashRing) belongs only to whoever got flashed.
+  flashPop(dist = 0, pan = 0) {
+    if (!this.ensure()) return;
+    const atten = dist <= 0 ? 1 : Math.max(0.05, 1 - dist / 65);
+    const t = this.ctx.currentTime;
+    const out = this._dest(pan);
+    // crack
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 2100;
+    const g = this.ctx.createGain();
+    this._env(g, 0.9 * atten, 0.11);
+    src.connect(hp); hp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + 0.14);
+    // blip
+    const osc = this.ctx.createOscillator();
+    osc.type = 'square'; osc.frequency.value = 2600;
+    const g2 = this.ctx.createGain();
+    this._env(g2, 0.12 * atten, 0.05);
+    osc.connect(g2); g2.connect(out);
+    osc.start(t); osc.stop(t + 0.08);
+  },
+
+  // P48: the flashed PLAYER's ear-ring — a pure high sine that holds
+  // while the whiteout holds, then dies with it. In your head, not in
+  // the world: no distance, no pan, straight to master.
+  flashRing(dur = 3) {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine'; osc.frequency.value = 3700;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.15, t + 0.04);
+    g.gain.setValueAtTime(0.15, t + Math.max(0.1, dur * 0.35));
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + dur + 0.1);
+  },
+
   // P51: snapshot pop — a sonar chirp: two quick rising sine pips a
   // fourth apart with a short ring-off. Reads "scanner", not "weapon" —
   // deliberately unlike every bang in the kit so victims can learn it.

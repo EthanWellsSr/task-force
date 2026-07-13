@@ -276,6 +276,7 @@ const player = {
   equip: 'frag', equipLeft: 0, equipTac: 'stun', equipTacLeft: 0,
   throwT: 0, cooking: null, cookKind: null, cookSlot: null,
   stunT: 0, stunMax: 1,
+  flashT: 0, flashMaxT: 1, // P48: whiteout timer + its applied duration
 };
 
 const keys = {};
@@ -1910,6 +1911,23 @@ const THROWABLES = {
     color: 0x3e6a6e, throwSpeed: 15, throwUp: 3.2,
     detonate: snapDetonate,
   },
+  // P48: flashbang — blinds instead of freezes (the stun distinction:
+  // stun = crowd control, see-but-can't-act; flash = denial of
+  // information, act-but-can't-see). Same LOS'd blastFactor rule as the
+  // stun (radius 9), duration lerp(flashMax..flashMin) by proximity,
+  // then FACING-GATED: eyes on the bang take it all, looking away halves
+  // it, and smoke between bang and victim blocks it outright (smoke
+  // counters flash). Victims keep full movement and look speed — the
+  // punishment is whiteout + accuracy, not legs. noCookOff like the
+  // stun: real flashbangs don't cook. model: 'ninebang' = brighter
+  // twin-band cylinder so it reads apart from the stun in flight.
+  flashbang: {
+    name: 'FLASHBANG', slot: 'tactical',
+    count: 1, fuse: 1.6, radius: 9, dmg: 0, minDmg: 0,
+    flashMax: 3.5, flashMin: 0.8, noCookOff: true, model: 'ninebang',
+    color: 0x878e96, throwSpeed: 17, throwUp: 3.0,
+    detonate: flashDetonate,
+  },
 };
 const GREN_R = 0.08, GREN_H = 0.16, GREN_BOUNCE = 0.42;
 const GREN_GRAVITY = 13;
@@ -1997,6 +2015,25 @@ function buildGrenadeMesh(def) {
     light.position.y = 0.14;
     g.add(light);
     g.userData.blinkLight = light;
+    return g;
+  }
+  if (def.model === 'ninebang') {
+    // P48: brighter steel cylinder with TWIN dark vent bands — twin bands
+    // vs the stun's single light one is the in-flight tell
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.17, 10),
+      new THREE.MeshLambertMaterial({ color: def.color }));
+    body.position.y = 0.085;
+    g.add(body);
+    for (const y of [0.06, 0.115]) {
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.051, 0.051, 0.028, 10),
+        new THREE.MeshLambertMaterial({ color: 0x2b3036 }));
+      band.position.y = y;
+      g.add(band);
+    }
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 8),
+      new THREE.MeshLambertMaterial({ color: 0x1f2429 }));
+    cap.position.y = 0.19;
+    g.add(cap);
     return g;
   }
   if (def.model === 'flashbang') {
@@ -2823,6 +2860,60 @@ function stunPlayer(dur) {
   player.stunMax = dur;
 }
 
+// P48: flashbang pop — blinds instead of freezes. Same LOS'd blastFactor
+// rule as the stun (COD-style: teammates and the thrower eat it too),
+// with two extra gates the stun doesn't have: smoke between bang and
+// victim's eyes blocks it outright (smoke counters flash), and FACING
+// scales it — dot(aimDir, toBang) > 0.2 takes the full proximity-lerped
+// duration, looking away halves it. Movement and look speed stay whole;
+// the whole punishment is vision (blindT/flashT) + accuracy (dazeT).
+const FLASH_FACING_DOT = 0.2;
+function flashDetonate(t) {
+  const def = t.def, p = t.pos;
+  _blastAt.set(p.x, p.y + 0.4, p.z);
+  fxSpark(_blastAt, false, 6.5); // hard white pop, bigger than the stun's
+  AudioSys.flashPop(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(_blastAt));
+  const flashDur = (f, facingDot) =>
+    THREE.MathUtils.lerp(def.flashMax, def.flashMin, f) * (facingDot > FLASH_FACING_DOT ? 1 : 0.5);
+  for (const b of G.bots) {
+    if (!b.alive) continue; // teammates get flashed too — your own fault
+    const f = blastFactor(def, p, b.pos);
+    if (f < 0) continue;
+    _blastAt.set(p.x, p.y + 0.4, p.z); // blastFactor reuses the scratch
+    _victimAt.set(b.pos.x, b.pos.y + 1.6, b.pos.z);
+    if (smokeBlocked(_victimAt, _blastAt)) continue; // pre-smoke counters it
+    const dx = p.x - b.pos.x, dz = p.z - b.pos.z, d = Math.hypot(dx, dz) || 1;
+    // bot forward = (sin yaw, cos yaw), same convention as spawn()'s yaw
+    b.flash(flashDur(f, (Math.sin(b.yaw) * dx + Math.cos(b.yaw) * dz) / d));
+  }
+  if (player.alive) {
+    const f = blastFactor(def, p, player.pos);
+    if (f >= 0) {
+      _blastAt.set(p.x, p.y + 0.4, p.z);
+      _victimAt.set(player.pos.x, player.pos.y + eyeHeight(), player.pos.z);
+      if (!smokeBlocked(_victimAt, _blastAt)) {
+        const dir = G.camera.getWorldDirection(_shotDir);
+        const dx = p.x - player.pos.x, dz = p.z - player.pos.z, d = Math.hypot(dx, dz) || 1;
+        flashPlayer(flashDur(f, (dir.x * dx + dir.z * dz) / d));
+      }
+    }
+  }
+  // the bang is loud — enemies within earshot investigate the spot
+  _blastAt.set(p.x, p.y + 0.4, p.z);
+  for (const b of G.bots) b.hearShot({ pos: _blastAt, team: player.team }, 30);
+}
+
+// P48: player whiteout — flashMaxT remembers the applied duration so the
+// overlay (UI lane's half) can shape hold-then-fade as a fraction of it.
+// Look and move speed untouched, unlike the stun. The ear-ring lives and
+// dies with the same duration.
+function flashPlayer(dur) {
+  if (dur <= player.flashT) return;
+  player.flashT = dur;
+  player.flashMaxT = dur;
+  AudioSys.flashRing(dur);
+}
+
 // smoke (#6): detonation spawns a lingering cloud that blocks sight lines
 // both ways. Blocking is a segment-vs-sphere test (smokeBlocked) run by
 // the vision checks — bot target acquisition, bot line of fire, and the
@@ -3044,6 +3135,8 @@ function startMatch(mapId, modeId = 'tdm') {
   _smokeClouds.length = 0; // active smoke too (sprites rebuild with the pools)
   player.stunT = 0;        // a rematch shakes the stars off
   UI.stunOverlay(0);
+  player.flashT = 0;       // P48: and blinks the whiteout off
+  UI.updateFlash && UI.updateFlash(0, 1);
   _nukeT = -1;             // nor an in-flight nuke countdown
   _cine = null;            // cinematic props die with the old scene
   UI.setNukeCountdown(null);
@@ -3127,6 +3220,7 @@ function deploy() {
   player.equipTacLeft = player.equipTac ? THROWABLES[player.equipTac].count : 0;
   player.throwT = 0; player.cooking = null; player.cookKind = null; player.cookSlot = null;
   player.stunT = 0;
+  player.flashT = 0; // P48: death blinks the whiteout off
   player.recentDamagers.length = 0; // #16d: fresh life, no carried-over damagers
   player.adsAmt = 0; player.adsToggle = false; player.bloom = 0;
   player.hp = 100;
@@ -3643,6 +3737,7 @@ function updatePlayer(dt) {
   if (player.meleeT > 0) player.meleeT -= dt;
   if (player.throwT > 0) player.throwT -= dt;
   if (player.stunT > 0) player.stunT -= dt;
+  if (player.flashT > 0) player.flashT -= dt; // P48
   if (player.cooking !== null && !THROWABLES[player.cookKind].noCookOff) {
     player.cooking -= dt;
     if (player.cooking <= 0) { // cooked too long: it goes off in hand
@@ -4098,6 +4193,12 @@ function loop() {
     // (UI gates the DOM write, so this only costs while stunned)
     UI.stunOverlay(player.alive && player.stunT > 0
       ? Math.min(1, 1.3 * player.stunT / player.stunMax) : 0);
+    // P48: flash whiteout — the #flashWhite overlay + opacity shaping is
+    // the UI lane's half. Contract: UI.updateFlash(flashT, flashMaxT)
+    // every frame (raw seconds; 0 when unflashed/dead so it self-clears);
+    // suggested shape: opaque white while flashT/flashMaxT > 0.4 (the
+    // ~60% hold), then fade to 0. Guarded so mechanics ship first.
+    UI.updateFlash && UI.updateFlash(player.alive ? Math.max(0, player.flashT) : 0, player.flashMaxT);
   } else if (G.state === 'nukecine') {
     // nuke cinematic: the world freezes, the camera belongs to the show
     fxUpdate(dt);
