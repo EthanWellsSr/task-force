@@ -825,6 +825,13 @@ const UI = {
     this._hmT = setTimeout(() => hm.classList.add('hidden'), kill ? 160 : 90);
   },
 
+  showInvulnerableHit() {
+    const el = this.$('invulnMarker');
+    el.classList.remove('hidden');
+    clearTimeout(this._invulnT);
+    this._invulnT = setTimeout(() => el.classList.add('hidden'), 120);
+  },
+
   // killstreak announce banner at the top of the screen — earned
   // ("UAV READY — PRESS [G]") and deployed ("UAV ONLINE") both flow through it
   showStreakBanner(text) {

@@ -4198,7 +4198,7 @@ function firePlayerShot(w) {
 
   const spread = currentSpread();
   const pellets = def.pellets || 1;
-  let anyHit = false, anyKill = false, killCount = 0;
+  let anyHit = false, anyKill = false, protectedHit = false, killCount = 0;
   // #18f: high-zoom snipers punch through stacked bodies at full damage
   // (classic COD collateral); marksman/low-zoom guns stop at the first body
   const penetrates = def.zoom > 3;
@@ -4248,11 +4248,13 @@ function firePlayerShot(w) {
       if (v.head) dmg *= def.head;
       if (player.perks.has('stopping')) dmg *= 1.25;
       const wasAlive = v.bot.alive;
-      v.bot.hurt(Math.round(dmg), player, def.name, v.head);
+      const damaged = v.bot.hurt(Math.round(dmg), player, def.name, v.head);
       _sparkPt.copy(_shotOrigin).addScaledVector(_shotDir, v.dist);
       fxSpark(_sparkPt, true);
-      anyHit = true;
-      if (wasAlive && !v.bot.alive) { anyKill = true; killCount++; }
+      if (damaged) {
+        anyHit = true;
+        if (wasAlive && !v.bot.alive) { anyKill = true; killCount++; }
+      } else protectedHit = true;
     }
     if (victims.length === 0 && wall) fxSpark(end, false);
   }
@@ -4260,6 +4262,8 @@ function firePlayerShot(w) {
   if (anyHit) {
     UI.showHitmarker(anyKill);
     if (!anyKill) AudioSys.hit(false);
+  } else if (protectedHit) {
+    UI.showInvulnerableHit();
   }
   // #18f: a single penetrating shot that drops two or more enemies is a
   // collateral — a cheap flourish over the normal killfeed/streak callouts

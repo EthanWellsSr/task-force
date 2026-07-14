@@ -250,8 +250,8 @@ class Bot {
   }
 
   hurt(dmg, attacker, weaponName, headshot, bypassProtect) {
-    if (!this.alive) return;
-    if (this.spawnProtectT > 0 && !bypassProtect) return; // #18a spawn invuln
+    if (!this.alive) return false;
+    if (this.spawnProtectT > 0 && !bypassProtect) return false; // #18a spawn invuln
     this.hp -= dmg;
     this.world.api.recordDamage(this, attacker); // #16d: assist tracking
     // getting shot reveals the attacker
@@ -267,6 +267,7 @@ class Bot {
       this.deathAnimT = 2.2;
       this.world.api.registerKill(attacker, this, weaponName, headshot);
     }
+    return true;
   }
 
   _pickNewPath() {
