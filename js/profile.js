@@ -185,6 +185,25 @@ const Profile = {
     killstreakKill: 50, nukeBonus: 1000, matchComplete: 100, matchWin: 250,
   },
 
+  XP_DIFFICULTY_MULTIPLIERS: {
+    recruit: 0.65,
+    regular: 1.0,
+    hardened: 1.2,
+    veteran: 1.5,
+  },
+
+  _matchDifficulty: 'regular',
+  _matchXpMultiplier: 1,
+
+  setMatchDifficulty(difficulty) {
+    this._matchDifficulty = difficulty || 'regular';
+    this._matchXpMultiplier = this.XP_DIFFICULTY_MULTIPLIERS[this._matchDifficulty] || 1;
+  },
+
+  scaledMatchXp(xp) {
+    return Math.round(xp * (this._matchXpMultiplier || 1));
+  },
+
   // Match-scoped XP by earn category (values are XP, not counts —
   // this is the end-screen breakdown). Resets at match start /
   // rematch / map change via reset()/Profile.resetMatch(). Nothing
@@ -202,7 +221,11 @@ const Profile = {
       this.matchComplete = 0; this.matchWin = 0; this.total = 0;
     },
 
-    _add(field, xp) { this[field] += xp; this.total += xp; },
+    _add(field, xp) {
+      const scaled = Profile.scaledMatchXp(xp);
+      this[field] += scaled;
+      this.total += scaled;
+    },
 
     onDirectKill()     { this._add('directKills',     Profile.XP_EARN.directKill); },
     // Killstreak kills are their own breakdown line — never directKills.
@@ -277,6 +300,7 @@ const Profile = {
     this.MatchWeaponXP.reset();
     this.MatchStats.reset();
     this._matchCommitted = false;
+    this.setMatchDifficulty('regular');
   },
 
   // Generic immediate lifetime bump: load -> add -> save, one
@@ -349,6 +373,8 @@ const Profile = {
     return {
       xp: this.MatchXP.snapshot(),
       weaponXp: weaponEarned,
+      difficulty: this._matchDifficulty,
+      xpMultiplier: this._matchXpMultiplier,
       stats: this.MatchStats.snapshot(),
       oldLevel,
       newLevel: p.level,

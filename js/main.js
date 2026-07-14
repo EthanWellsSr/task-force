@@ -3274,7 +3274,7 @@ function addWeaponCategoryXpForKill(weaponName, headshot) {
   let xp = Profile.XP_EARN.directKill;
   if (headshot) xp += Profile.XP_EARN.headshotBonus;
   if (weaponName === 'TOMAHAWK') xp += Profile.XP_EARN.meleeBonus;
-  Profile.MatchWeaponXP.add(def.cat, xp);
+  Profile.MatchWeaponXP.add(def.cat, Profile.scaledMatchXp(xp));
 }
 
 function registerKill(killer, victim, weaponName, headshot) {
@@ -3363,6 +3363,7 @@ function registerKill(killer, victim, weaponName, headshot) {
 
 function startMatch(mapId, modeId = 'tdm') {
   Profile.onMatchStart(); // P5: matchesPlayed++ and resets MatchXP/MatchStats
+  Profile.setMatchDifficulty(UI.settings.difficulty);
   G.mapId = mapId;
   G.modeId = modeById(modeId).id;
   G.mode = modeById(G.modeId);
