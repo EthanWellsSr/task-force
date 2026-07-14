@@ -291,10 +291,10 @@ const ATTACHMENTS = {
     mods:{ mag:1.5, reload:1.15 } },
   // P58: cosmetic-only camo reward ladder. These ride the existing camo
   // attachment slot/save path and have no stat modifiers or lock enforcement.
-  camoDesert:   { id:'camoDesert',   name:'DESERT CAMO',   slot:'camo', cats:null, mods:{}, unlockLevel:1,  desc:'TAN FIELD PATTERN' },
-  camoWoodland: { id:'camoWoodland', name:'WOODLAND CAMO', slot:'camo', cats:null, mods:{}, unlockLevel:8,  desc:'GREEN FIELD PATTERN' },
-  camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:null, mods:{}, unlockLevel:15, desc:'GRAY DIGITAL PATTERN' },
-  camoGold:     { id:'camoGold',     name:'GOLD CAMO',     slot:'camo', cats:null, mods:{}, unlockLevel:20, desc:'ASPIRATIONAL GOLD FINISH' },
+  camoDesert:   { id:'camoDesert',   name:'DESERT CAMO',   slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:1,  desc:'TAN FIELD PATTERN' },
+  camoWoodland: { id:'camoWoodland', name:'WOODLAND CAMO', slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:8,  desc:'GREEN FIELD PATTERN' },
+  camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:15, desc:'GRAY DIGITAL PATTERN' },
+  camoGold:     { id:'camoGold',     name:'GOLD CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:20, desc:'ASPIRATIONAL GOLD FINISH' },
 };
 
 function attachmentAllowed(att, def) {
@@ -380,6 +380,18 @@ function resolveWeaponDef(key, attIds, dotColor, laserColor) {
 // attachments field instead of being dropped; unknown ids, ids the weapon's
 // category can't mount, and duplicate slot-category picks are pruned
 // (weapon swaps in the editor route back through here too).
+const DEFAULT_KILLSTREAK_IDS = ['uav', 'carepackage', 'napalm'];
+
+function streakSlotLimit(c) {
+  return c && Array.isArray(c.perks) && c.perks.includes('arsenal') ? 4 : 3;
+}
+
+function selectableKillstreakIds() {
+  if (typeof KILLSTREAK_ORDER === 'undefined' || typeof KILLSTREAKS === 'undefined')
+    return DEFAULT_KILLSTREAK_IDS.slice();
+  return KILLSTREAK_ORDER.filter(id => KILLSTREAKS[id] && KILLSTREAKS[id].selectable);
+}
+
 function normalizeClass(c) {
   if (!c.attachments || typeof c.attachments !== 'object') c.attachments = {};
   for (const slot of ['primary', 'secondary']) {
@@ -404,6 +416,19 @@ function normalizeClass(c) {
   // an always-on third slot). Junk values fall back too.
   if (!['frag', 'semtex', 'c4', 'claymore', 'throwingknife', 'none'].includes(c.lethal)) c.lethal = 'frag'; // P42-P45: legal lethals
   if (!['stun', 'smoke', 'decoy', 'snapshot', 'flashbang', 'none'].includes(c.tactical)) c.tactical = 'stun'; // P48/P49/P51: legal tacticals
+
+  // P67/P69: killstreak selection lives on each class. Old saves receive a
+  // three-streak default; ARSENAL classes may carry four. Special streaks
+  // (Nuke) are never selectable here and are appended at spawn by main.js.
+  const legalStreaks = selectableKillstreakIds();
+  const selected = Array.isArray(c.killstreaks) ? c.killstreaks : DEFAULT_KILLSTREAK_IDS;
+  const seenStreaks = new Set();
+  c.killstreaks = selected.filter(id => {
+    if (!legalStreaks.includes(id) || seenStreaks.has(id)) return false;
+    seenStreaks.add(id);
+    return true;
+  }).slice(0, streakSlotLimit(c));
+  if (!c.killstreaks.length) c.killstreaks = DEFAULT_KILLSTREAK_IDS.filter(id => legalStreaks.includes(id)).slice(0, streakSlotLimit(c));
   return c;
 }
 
@@ -446,11 +471,11 @@ function perkById(id) {
 
 // Default classes
 const DEFAULT_CLASSES = [
-  { name:'CINDERLINE',  primary:'m4a1',         secondary:'usp',    perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  attachments:{ primary:[], secondary:[] } },
-  { name:'IRONWAKE',    primary:'famas',        secondary:'g18',    perks:['marathon','lightweight','ninja'],  lethal:'frag', tactical:'smoke', attachments:{ primary:[], secondary:[] } },
-  { name:'ASHRUNNER',   primary:'rpd',          secondary:'deagle', perks:['scavenger','stopping','steadyaim'],lethal:'frag', tactical:'stun',  attachments:{ primary:[], secondary:[] } },
-  { name:'RAVENFALL',   primary:'intervention', secondary:'usp',    perks:['soh','coldblooded','ninja'],       lethal:'frag', tactical:'smoke', attachments:{ primary:[], secondary:[] } },
-  { name:'DUSTKNIFE',   primary:'ump45',        secondary:'spas12', perks:['marathon','lightweight','commando'],lethal:'frag', tactical:'stun',  attachments:{ primary:[], secondary:[] } },
+  { name:'CINDERLINE',  primary:'m4a1',         secondary:'usp',    perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'IRONWAKE',    primary:'famas',        secondary:'g18',    perks:['marathon','lightweight','ninja'],  lethal:'frag', tactical:'smoke', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'ASHRUNNER',   primary:'rpd',          secondary:'deagle', perks:['scavenger','stopping','steadyaim'],lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'RAVENFALL',   primary:'intervention', secondary:'usp',    perks:['soh','coldblooded','ninja'],       lethal:'frag', tactical:'smoke', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'DUSTKNIFE',   primary:'ump45',        secondary:'spas12', perks:['marathon','lightweight','commando'],lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
 ];
 
 // Loadout pool bots draw from. #16b: each carries a `lethal` throwable pick

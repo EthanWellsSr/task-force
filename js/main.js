@@ -223,6 +223,7 @@ function addModeKillScore(killer, victim, weaponName) {
   const mode = G.mode || MODES.tdm;
   if (!killer || killer.team === victim.team) return;
   if (mode.scoreSource === 'gunLadder') {
+    if (STREAK_WEAPON_NAMES.has(weaponName || '')) return; // P66: streak kills never advance Gun Game tiers
     advanceGunGame(killer, victim, weaponName || '');
   } else if (mode.scoreSource === 'teamKills' || mode.scoreSource === 'playerKills') {
     G.scores[killer.team] = (G.scores[killer.team] || 0) + 1;
@@ -1562,8 +1563,11 @@ function deployCarePackage() {
     return 'CARE PACKAGE EMPTY';
   }
   const open = pool.filter(ks => !player._bankedStreaks.some(b => b.id === ks.id));
-  const rollPool = open.length ? open : pool;
-  const reward = rollPool[Math.floor(Math.random() * rollPool.length)];
+  if (!open.length) {
+    AudioSys.carePackage && AudioSys.carePackage();
+    return 'CARE PACKAGE: ALL REWARDS BANKED';
+  }
+  const reward = open[Math.floor(Math.random() * open.length)];
   bankKillstreak(reward, false);
   AudioSys.carePackage && AudioSys.carePackage();
   return 'CARE PACKAGE: ' + reward.name + ' READY';
@@ -3438,12 +3442,14 @@ function deploy() {
   if (player.respawnT > 0) return;
   const cls = UI.classes[UI.selectedClass];
   player.perks = new Set(cls.perks);
-  // P60: the streak loadout is computed AT SPAWN and nowhere else (P71's
-  // "selection applies on respawn only" falls out of that). Until P67
-  // stores streak ids on the class, everyone runs every selectable streak
-  // (today that's the uav+napalm starter pair — behavior unchanged);
-  // special streaks (nuke) ALWAYS arm, appended after — never a slot.
-  player.equippedStreakIds = KILLSTREAK_ORDER.filter(id => KILLSTREAKS[id].selectable);
+  // P67/P71: the streak loadout is computed AT SPAWN and nowhere else. The
+  // class editor may change UI.classes while the player is alive, but already
+  // banked rewards and this life's equipped ids remain untouched until deploy.
+  normalizeClass(cls);
+  player.equippedStreakIds = (cls.killstreaks || [])
+    .filter(id => KILLSTREAKS[id] && KILLSTREAKS[id].selectable)
+    .slice(0, streakSlotLimit(cls));
+  if (!player.equippedStreakIds.length) player.equippedStreakIds = DEFAULT_KILLSTREAK_IDS.slice(0, streakSlotLimit(cls));
   for (const id of KILLSTREAK_ORDER) if (KILLSTREAKS[id].special) player.equippedStreakIds.push(id);
   const mkState = slot => {
     // resolved def (base + attachment mods) — every curW().def consumer

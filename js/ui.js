@@ -110,9 +110,10 @@ const UI = {
     try {
       const c = JSON.parse(localStorage.getItem('tf_classes'));
       // normalizeClass migrates pre-attachment saves (bare weapon keys) in place
-      if (Array.isArray(c) && c.length === 5) { this.classes = c.map(normalizeClass); return; }
+      if (Array.isArray(c) && c.length === 5) { this.classes = c.map(normalizeClass); this.saveClasses(); return; }
     } catch (e) {}
     this.classes = DEFAULT_CLASSES.map(c => normalizeClass(JSON.parse(JSON.stringify(c))));
+    this.saveClasses();
   },
   saveClasses() { localStorage.setItem('tf_classes', JSON.stringify(this.classes)); },
 
@@ -351,6 +352,13 @@ const UI = {
     return parts.length ? parts.join(' / ') : '';
   },
 
+  classStreakLine(c) {
+    normalizeClass(c);
+    return (c.killstreaks || [])
+      .map(id => KILLSTREAKS[id] ? KILLSTREAKS[id].name : id)
+      .join(' / ');
+  },
+
   renderClassSlots() {
     const wrap = this.$('classSlots');
     wrap.innerHTML = '';
@@ -358,8 +366,10 @@ const UI = {
       const div = document.createElement('div');
       div.className = 'class-slot' + (i === this.editIdx ? ' active' : '');
       const camoLine = this.classCamoLine(c);
+      const streakLine = this.classStreakLine(c);
       div.innerHTML = `<div class="cs-name">${c.name}</div>
         <div class="cs-detail">${WEAPONS[c.primary].name} + ${WEAPONS[c.secondary].name}</div>
+        ${streakLine ? `<div class="cs-streaks">${streakLine}</div>` : ''}
         ${camoLine ? `<div class="cs-camo">${camoLine}</div>` : ''}`;
       div.onclick = () => { AudioSys.uiClick(); this.editIdx = i; this.renderClassEditor(); };
       wrap.appendChild(div);
@@ -488,7 +498,7 @@ const UI = {
         const div = document.createElement('div');
         div.className = 'perk-item' + (c.perks[tier - 1] === p.id ? ' selected' : '');
         div.innerHTML = `<span>${p.name}${lockChip(p)}</span><span class="p-desc">${p.desc}</span>`;
-        div.onclick = () => { AudioSys.uiClick(); c.perks[tier - 1] = p.id; this.saveClasses(); this.renderClassEditor(); };
+        div.onclick = () => { AudioSys.uiClick(); c.perks[tier - 1] = p.id; normalizeClass(c); this.saveClasses(); this.renderClassEditor(); };
         wrap.appendChild(div);
       });
     });
@@ -512,6 +522,37 @@ const UI = {
     };
     mkThrowList('lethalList', 'lethal', 'lethal');
     mkThrowList('tacticalList', 'tactical', 'tactical');
+
+    // P68/P69: compact killstreak selector. Three slots by default; ARSENAL
+    // permits four. Locked-level chips are informational until gate enforcement.
+    const streakWrap = this.$('streakList');
+    streakWrap.innerHTML = '';
+    const slotMax = streakSlotLimit(c);
+    this.$('streakLabel').textContent = 'KILLSTREAKS (' + (c.killstreaks || []).length + '/' + slotMax + ')';
+    for (const id of KILLSTREAK_ORDER) {
+      const ks = KILLSTREAKS[id];
+      if (!ks || !ks.selectable) continue;
+      const selected = (c.killstreaks || []).includes(id);
+      const kills = Math.max(2, ks.kills - (c.perks.includes('hardline') ? 1 : 0));
+      const div = document.createElement('div');
+      div.className = 'weapon-item streak-item' + (selected ? ' selected' : '');
+      div.innerHTML = `<span>${ks.name}${lockChip(ks)}</span><span class="w-cat">${kills} KILLS</span>`;
+      div.onclick = () => {
+        AudioSys.uiClick();
+        normalizeClass(c);
+        const cur = c.killstreaks || [];
+        const idx = cur.indexOf(id);
+        if (idx >= 0) {
+          if (cur.length > 1) cur.splice(idx, 1);
+        } else {
+          if (cur.length >= slotMax) cur.shift();
+          cur.push(id);
+        }
+        normalizeClass(c);
+        this.saveClasses(); this.renderClassEditor();
+      };
+      streakWrap.appendChild(div);
+    }
   },
 
   renderWeaponStats(key) {
@@ -545,10 +586,12 @@ const UI = {
       const eq = [c.lethal, c.tactical].filter(k => k && k !== 'none' && THROWABLES[k])
         .map(k => THROWABLES[k].name).join(' / ') || 'NO EQUIPMENT';
       const camos = this.classCamoLine(c) || 'NO CAMO';
+      const streaks = this.classStreakLine(c) || 'NO STREAKS';
       div.innerHTML = `<div class="sc-name">${c.name}</div>
         <div class="sc-weap">${WEAPONS[c.primary].name} + ${WEAPONS[c.secondary].name}</div>
         <div class="sc-perks">${perkNames}</div>
         <div class="sc-perks">${eq}</div>
+        <div class="sc-streaks">${streaks}</div>
         <div class="sc-camos">${camos}</div>`;
       div.onclick = () => { AudioSys.uiClick(); this.selectedClass = i; this.renderSpawnScreen(deathInfo); };
       wrap.appendChild(div);
