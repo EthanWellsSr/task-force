@@ -4101,7 +4101,8 @@ function currentSpread() {
   hip *= 1 + Math.min(1, player.speedNow / 6) * 0.6;
   if (!player.onGround) hip *= 2.2;
   let spread = THREE.MathUtils.lerp(hip, w.spreadAds, player.adsAmt);
-  spread += player.bloom * (1 - player.adsAmt * 0.65);
+  const hipBloomScale = THREE.MathUtils.lerp(1.75, 1, player.adsAmt);
+  spread += player.bloom * (1 - player.adsAmt * 0.65) * hipBloomScale;
   return spread;
 }
 
