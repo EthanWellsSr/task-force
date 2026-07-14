@@ -336,14 +336,31 @@ const UI = {
   },
 
   // ---------- create-a-class ----------
+  classCamo(c, slot) {
+    const ids = (c.attachments && c.attachments[slot]) || [];
+    const id = ids.find(id => ATTACHMENTS[id] && ATTACHMENTS[id].slot === 'camo');
+    return id ? ATTACHMENTS[id] : null;
+  },
+
+  classCamoLine(c) {
+    const primary = this.classCamo(c, 'primary');
+    const secondary = this.classCamo(c, 'secondary');
+    const parts = [];
+    if (primary) parts.push('P: ' + primary.name);
+    if (secondary) parts.push('S: ' + secondary.name);
+    return parts.length ? parts.join(' / ') : '';
+  },
+
   renderClassSlots() {
     const wrap = this.$('classSlots');
     wrap.innerHTML = '';
     this.classes.forEach((c, i) => {
       const div = document.createElement('div');
       div.className = 'class-slot' + (i === this.editIdx ? ' active' : '');
+      const camoLine = this.classCamoLine(c);
       div.innerHTML = `<div class="cs-name">${c.name}</div>
-        <div class="cs-detail">${WEAPONS[c.primary].name} + ${WEAPONS[c.secondary].name}</div>`;
+        <div class="cs-detail">${WEAPONS[c.primary].name} + ${WEAPONS[c.secondary].name}</div>
+        ${camoLine ? `<div class="cs-camo">${camoLine}</div>` : ''}`;
       div.onclick = () => { AudioSys.uiClick(); this.editIdx = i; this.renderClassEditor(); };
       wrap.appendChild(div);
     });
@@ -360,6 +377,7 @@ const UI = {
     const lockChip = def =>
       unlockLevelOf(def) > 1
         ? `<span class="w-lock" title="UNLOCKS AT LEVEL ${unlockLevelOf(def)}">LVL ${unlockLevelOf(def)}</span>` : '';
+    const rewardLabel = def => unlockLevelOf(def) > 1 ? 'LVL ' + unlockLevelOf(def) + ' REWARD' : 'STARTER';
     const mkWeaponList = (elId, slot, selectedKey, onPick) => {
       const wrap = this.$(elId);
       wrap.innerHTML = '';
@@ -397,8 +415,10 @@ const UI = {
         wrap.appendChild(head);
         for (const a of opts) {
           const div = document.createElement('div');
-          div.className = 'weapon-item' + (picked.includes(a.id) ? ' selected' : '');
-          div.innerHTML = `<span>${a.name}${lockChip(a)}</span><span class="w-cat">${attachmentDesc(a)}</span>`;
+          const isCamo = a.slot === 'camo';
+          div.className = 'weapon-item attach-item' + (isCamo ? ' camo-item' : '') + (picked.includes(a.id) ? ' selected' : '');
+          const desc = isCamo ? rewardLabel(a) + ' · ' + attachmentDesc(a) : attachmentDesc(a);
+          div.innerHTML = `<span class="attach-name">${a.name}${lockChip(a)}</span><span class="w-cat">${desc}</span>`;
           div.onclick = () => {
             AudioSys.uiClick();
             const i = picked.indexOf(a.id);
@@ -502,6 +522,10 @@ const UI = {
     const w = slot ? resolveWeaponDef(key, c.attachments[slot]) : WEAPONS[key];
     const wrap = this.$('weaponStats');
     let html = `<div style="font-weight:700;letter-spacing:1px;margin-bottom:8px">${w.name} <span style="color:#6a7060;font-size:9px">${w.cat} &middot; ${fireModeLabel(w)} &middot; ${w.mag} RND MAG</span></div>`;
+    if (slot) {
+      const camo = this.classCamo(c, slot);
+      html += `<div class="weapon-camo-note">CAMO: ${camo ? camo.name + ' - ' + attachmentDesc(camo) : 'NONE'}</div>`;
+    }
     for (const [label, val] of weaponStatBars(w)) {
       html += `<div class="stat-row"><div class="s-label">${label}</div><div class="stat-bar"><div style="width:${Math.round(val * 100)}%"></div></div></div>`;
     }
@@ -520,10 +544,12 @@ const UI = {
       // #16a: equipment line — lethal + tactical picks (skip NONE slots)
       const eq = [c.lethal, c.tactical].filter(k => k && k !== 'none' && THROWABLES[k])
         .map(k => THROWABLES[k].name).join(' / ') || 'NO EQUIPMENT';
+      const camos = this.classCamoLine(c) || 'NO CAMO';
       div.innerHTML = `<div class="sc-name">${c.name}</div>
         <div class="sc-weap">${WEAPONS[c.primary].name} + ${WEAPONS[c.secondary].name}</div>
         <div class="sc-perks">${perkNames}</div>
-        <div class="sc-perks">${eq}</div>`;
+        <div class="sc-perks">${eq}</div>
+        <div class="sc-camos">${camos}</div>`;
       div.onclick = () => { AudioSys.uiClick(); this.selectedClass = i; this.renderSpawnScreen(deathInfo); };
       wrap.appendChild(div);
     });

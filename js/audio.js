@@ -571,6 +571,30 @@ const AudioSys = {
     });
   },
 
+  // Care Package claimed: short radio chirp plus a low confirmation thunk.
+  carePackage() {
+    if (!this.ensure()) return;
+    const t = this.ctx.currentTime;
+    [740, 980, 740].forEach((f, i) => {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'square'; osc.frequency.value = f;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.11, t + i * 0.07);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.08);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t + i * 0.07); osc.stop(t + i * 0.07 + 0.1);
+    });
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(150, t + 0.22);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.36);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.16, t + 0.22);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t + 0.22); osc.stop(t + 0.42);
+  },
+
   // P62: airstrike telegraph — a jet flyby building over the 1.4 s mark:
   // bandpassed noise swept up-and-over (cheap doppler) + gain that peaks
   // right as the first bomb lands, then tails off with the pass.

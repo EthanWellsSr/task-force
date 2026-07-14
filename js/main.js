@@ -1480,6 +1480,11 @@ const KILLSTREAKS = {
     selectable: true, weaponName: null, // it jams — it never kills
     deploy() { deployCounterUav(); },
   },
+  carepackage: {
+    id: 'carepackage', name: 'CARE PACKAGE', kills: 6, unlockLevel: 4, // P63: no crate physics; it immediately banks an existing reward
+    selectable: true, weaponName: null, // it grants another streak — it never kills
+    deploy() { return deployCarePackage(); },
+  },
   airstrike: {
     id: 'airstrike', name: 'PRECISION AIRSTRIKE', kills: 8, unlockLevel: 16, // #P60-design §3
     selectable: true, weaponName: 'AIRSTRIKE', // kill-attribution tag
@@ -1497,7 +1502,7 @@ const KILLSTREAKS = {
     deploy() { deployNuke(); },
   },
 };
-const KILLSTREAK_ORDER = ['cuav', 'uav', 'airstrike', 'napalm', 'nuke']; // P61/P62: ladder order 4/5/8/10/25
+const KILLSTREAK_ORDER = ['cuav', 'uav', 'carepackage', 'airstrike', 'napalm', 'nuke']; // P61-P63: ladder order 4/5/6/8/10/25
 // Kill-source guard set, derived once (locked rule: killstreak kills do
 // not count toward streak progress — covers NAPALM today, AIRSTRIKE etc.
 // automatically the day their defs land with a weaponName)
@@ -1537,6 +1542,31 @@ function deployCounterUav() {
   }
   G.jamFrom = player.team;
   AudioSys.jammer(CUAV_DUR);
+}
+
+// P63: Care Package — intentionally no crate/entity physics. Calling it
+// immediately banks one existing non-special reward, excluding itself so
+// packages cannot chain into more packages. Lethal rewards still carry
+// their normal weaponName when deployed, so STREAK_WEAPON_NAMES keeps their
+// kills from feeding streak progress.
+function carePackageRewardPool() {
+  return KILLSTREAK_ORDER
+    .map(id => KILLSTREAKS[id])
+    .filter(ks => ks && ks.selectable && !ks.special && ks.id !== 'carepackage');
+}
+
+function deployCarePackage() {
+  const pool = carePackageRewardPool();
+  if (!pool.length) {
+    AudioSys.carePackage && AudioSys.carePackage();
+    return 'CARE PACKAGE EMPTY';
+  }
+  const open = pool.filter(ks => !player._bankedStreaks.some(b => b.id === ks.id));
+  const rollPool = open.length ? open : pool;
+  const reward = rollPool[Math.floor(Math.random() * rollPool.length)];
+  bankKillstreak(reward, false);
+  AudioSys.carePackage && AudioSys.carePackage();
+  return 'CARE PACKAGE: ' + reward.name + ' READY';
 }
 
 // ---- napalm strike (#7b): random bombardment across the map ----
@@ -3176,12 +3206,18 @@ function refreshStreakTag() {
   UI.setStreakTag(parts.length ? parts.join('   ') : null);
 }
 
-function earnKillstreak(ks) {
+function bankKillstreak(ks, announce = true) {
   player._bankedStreaks.push(ks);
   player._streakSel = player._bankedStreaks.length - 1; // select the newest
-  UI.showStreakBanner(ks.name + ' READY — PRESS [G]');
-  AudioSys.streakReady();
+  if (announce) {
+    UI.showStreakBanner(ks.name + ' READY — PRESS [G]');
+    AudioSys.streakReady();
+  }
   refreshStreakTag();
+}
+
+function earnKillstreak(ks) {
+  bankKillstreak(ks);
 }
 
 function cycleKillstreak() {
@@ -3195,8 +3231,8 @@ function deployKillstreak() {
   if (!b.length) return;
   const ks = b.splice(player._streakSel, 1)[0];
   if (player._streakSel >= b.length) player._streakSel = 0;
-  ks.deploy();
-  UI.showStreakBanner(ks.name + ' ONLINE');
+  const msg = ks.deploy();
+  UI.showStreakBanner(typeof msg === 'string' ? msg : ks.name + ' ONLINE');
   refreshStreakTag();
 }
 

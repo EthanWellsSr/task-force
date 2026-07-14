@@ -212,7 +212,7 @@ const UNLOCK_TABLE = [
   { level: 17, id: 'barrett',     name: 'BARRETT M82',        future: false },
   { level: 18, id: 'foregrip',    name: 'FOREGRIP',           future: false },
   { level: 19, id: null,          name: 'KILLSTREAK PERK',    future: true }, // 4th-slot or cheaper-streak Tier 1 perk (P38/P39)
-  { level: 20, id: 'camoGold',    name: 'GOLD',               future: false },
+  { level: 20, id: 'camoGold',    name: 'GOLD CAMO',          future: false },
 ];
 
 // ============================================================
@@ -289,10 +289,12 @@ const ATTACHMENTS = {
   extmags: { id:'extmags', name:'EXTENDED MAGS', slot:'mag',
     cats:['Assault Rifle','SMG','LMG','Handgun','Machine Pistol','Shotgun'],
     mods:{ mag:1.5, reload:1.15 } },
-  camoDesert:   { id:'camoDesert',   name:'DESERT CAMO',   slot:'camo', cats:null, mods:{} },
-  camoWoodland: { id:'camoWoodland', name:'WOODLAND CAMO', slot:'camo', cats:null, mods:{} },
-  camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:null, mods:{} },
-  camoGold:     { id:'camoGold',     name:'GOLD',          slot:'camo', cats:null, mods:{}, unlockLevel:20 },
+  // P58: cosmetic-only camo reward ladder. These ride the existing camo
+  // attachment slot/save path and have no stat modifiers or lock enforcement.
+  camoDesert:   { id:'camoDesert',   name:'DESERT CAMO',   slot:'camo', cats:null, mods:{}, unlockLevel:1,  desc:'TAN FIELD PATTERN' },
+  camoWoodland: { id:'camoWoodland', name:'WOODLAND CAMO', slot:'camo', cats:null, mods:{}, unlockLevel:8,  desc:'GREEN FIELD PATTERN' },
+  camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:null, mods:{}, unlockLevel:15, desc:'GRAY DIGITAL PATTERN' },
+  camoGold:     { id:'camoGold',     name:'GOLD CAMO',     slot:'camo', cats:null, mods:{}, unlockLevel:20, desc:'ASPIRATIONAL GOLD FINISH' },
 };
 
 function attachmentAllowed(att, def) {
@@ -338,7 +340,7 @@ function attachmentDesc(att) {
     const pct = Math.round((att.mods[stat] - 1) * 100);
     parts.push((ATTACH_STAT_LABELS[stat] || stat.toUpperCase()) + ' ' + (pct > 0 ? '+' : '') + pct + '%');
   }
-  return parts.length ? parts.join(' · ') : 'COSMETIC';
+  return parts.length ? parts.join(' · ') : (att.desc || 'COSMETIC');
 }
 
 // Single source of resolved weapon stats: base def + attachment modifiers.
