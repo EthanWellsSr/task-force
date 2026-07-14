@@ -18,6 +18,27 @@ const FFA_PALETTE = [
   { uniform: 0x706348, vest: 0x473e2f, helmet: 0x5a503b, band: 0xf0d06a, skin: 0xd0aa88 },
 ];
 
+const BOT_MOVE = {
+  standHeight: 1.7,
+  crouchHeight: 1.25,
+  proneHeight: 0.65,
+  standHit: 1.85,
+  crouchHit: 1.35,
+  proneHit: 0.72,
+  sprintMult: 1.35,
+  crouchMult: 0.58,
+  proneMult: 0.35,
+};
+
+function entityChestY(ent) {
+  if (ent && typeof ent.bodyHeight === 'function') return ent.pos.y + Math.max(0.38, ent.bodyHeight() * 0.68);
+  if (ent && typeof ent.proneAmt === 'number') {
+    const h = THREE.MathUtils.lerp(THREE.MathUtils.lerp(1.75, 1.25, ent.crouchAmt || 0), 0.6, ent.proneAmt || 0);
+    return ent.pos.y + Math.max(0.35, h * 0.68);
+  }
+  return ent.pos.y + (ent && ent.prone ? 0.45 : ent && ent.crouched ? 0.9 : 1.2);
+}
+
 function teamColors(team) {
   if (TEAM_COLORS[team]) return TEAM_COLORS[team];
   let h = 0;
@@ -52,12 +73,14 @@ function makeNameSprite(name, color) {
 function buildSoldierMesh(team, name, showTag) {
   const c = Object.assign({}, teamColors(team), { helmet: helmetColorForTeam(team) });
   const g = new THREE.Group();
+  const body = new THREE.Group();
+  g.add(body);
   const mat = col => new THREE.MeshLambertMaterial({ color: col });
   const part = (w, h, d, col, x, y, z) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(col));
     m.position.set(x, y, z);
     m.castShadow = true;
-    g.add(m);
+    body.add(m);
     return m;
   };
   // legs pivot at hip
@@ -67,7 +90,7 @@ function buildSoldierMesh(team, name, showTag) {
     const m = new THREE.Mesh(geo, mat(c.vest));
     m.position.set(x, 0.75, 0);
     m.castShadow = true;
-    g.add(m);
+    body.add(m);
     return m;
   };
   const legL = mkLeg(-0.16), legR = mkLeg(0.16);
@@ -84,9 +107,9 @@ function buildSoldierMesh(team, name, showTag) {
     new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
   flash.position.set(0, 1.3, 1.05);
   flash.visible = false;
-  g.add(flash);
+  body.add(flash);
   if (showTag) g.add(makeNameSprite(name, '#7ab4f0'));
-  g.userData = { legL, legR, gun, flash };
+  g.userData = { body, legL, legR, gun, flash };
   return g;
 }
 
@@ -132,6 +155,11 @@ class Bot {
     this.recentDamagers = []; // #16d: enemy hits this life (assist source)
     this.speedNow = 0;
     this.crouched = false;
+    this.prone = false;
+    this.sprinting = false;
+    this.crouchAmt = 0;
+    this.proneAmt = 0;
+    this.stanceT = 0;
 
     const lo = BOT_LOADOUTS[Math.floor(Math.random() * BOT_LOADOUTS.length)];
     this.weapon = WEAPONS[lo.primary];
@@ -176,6 +204,84 @@ class Bot {
     this.spawnProtectT = 0; // #18a: spawn invuln window, set on spawn()
   }
 
+  bodyHeight() {
+    return THREE.MathUtils.lerp(
+      THREE.MathUtils.lerp(BOT_MOVE.standHeight, BOT_MOVE.crouchHeight, this.crouchAmt),
+      BOT_MOVE.proneHeight,
+      this.proneAmt);
+  }
+
+  hitHeight() {
+    return THREE.MathUtils.lerp(
+      THREE.MathUtils.lerp(BOT_MOVE.standHit, BOT_MOVE.crouchHit, this.crouchAmt),
+      BOT_MOVE.proneHit,
+      this.proneAmt);
+  }
+
+  _canUseHeight(height) {
+    return typeof _fitsAt !== 'function' || _fitsAt(this.pos, this.pos.y, 0.38, height, this.world.colliders);
+  }
+
+  _setMovementAbility(kind) {
+    if (kind === 'prone') {
+      this.prone = true;
+      this.crouched = false;
+      this.sprinting = false;
+    } else if (kind === 'crouch') {
+      if (!this._canUseHeight(BOT_MOVE.crouchHeight)) return;
+      this.prone = false;
+      this.crouched = true;
+      this.sprinting = false;
+    } else {
+      if (!this._canUseHeight(BOT_MOVE.standHeight)) return;
+      this.prone = false;
+      this.crouched = false;
+      this.sprinting = kind === 'sprint';
+    }
+  }
+
+  _updateMovementAbility(dt, moveLen, dist) {
+    this.stanceT -= dt;
+    let next = 'stand';
+    const moving = moveLen > 0.25;
+    if (this.target && this.target.alive) {
+      const visibleCombat = this.canSee || (this.blindT > 0 && this.lastKnown);
+      if (!visibleCombat && this.lastKnown && moving) next = 'sprint';
+      else if (this.reloadT > 0.35 || this.tacticKind === 'cover') next = 'crouch';
+      else if (visibleCombat && dist > 16 && !moving &&
+               (this.weapon.model === 'sniper' || this.weapon.model === 'lmg')) next = 'prone';
+      else if (visibleCombat && !moving && dist > 8) next = 'crouch';
+      else next = 'stand';
+    } else if (this.lastKnown && moving) {
+      next = 'sprint';
+    }
+    if (next !== 'sprint' && this.sprinting) this.sprinting = false;
+    if (this.stanceT <= 0 || next === 'sprint' || this.prone || this.crouched) {
+      this._setMovementAbility(next);
+      this.stanceT = next === 'prone' ? 1.1 : next === 'crouch' ? 0.7 : 0.35;
+    }
+  }
+
+  _updatePose(dt) {
+    const cWant = this.crouched ? 1 : 0;
+    const pWant = this.prone ? 1 : 0;
+    this.crouchAmt += (cWant - this.crouchAmt) * Math.min(1, dt * 10);
+    this.proneAmt += (pWant - this.proneAmt) * Math.min(1, dt * 8);
+    const body = this.mesh.userData.body;
+    if (body) {
+      const yScale = THREE.MathUtils.lerp(THREE.MathUtils.lerp(1, 0.73, this.crouchAmt), 0.36, this.proneAmt);
+      const zScale = THREE.MathUtils.lerp(1, 1.35, this.proneAmt);
+      body.scale.set(1, yScale, zScale);
+    }
+    this.mesh.userData.botPose = {
+      crouched: this.crouched,
+      prone: this.prone,
+      sprinting: this.sprinting,
+      bodyHeight: this.bodyHeight(),
+      hitHeight: this.hitHeight(),
+    };
+  }
+
   spawn() {
     const p = this.world.api.pickSpawn(this.team);
     this.pos.copy(p);
@@ -183,6 +289,8 @@ class Bot {
     this.yaw = Math.atan2(-p.x, -p.z);
     this.velY = 0;
     this.onGround = true;
+    this.crouched = false; this.prone = false; this.sprinting = false;
+    this.crouchAmt = 0; this.proneAmt = 0; this.stanceT = 0;
     this.hp = 100;
     this.alive = true;
     this._looted = false; // #6: fresh corpse can be looted again by SCAVENGER
@@ -219,7 +327,7 @@ class Bot {
     if (d > radius) return;
     if (d > radius * 0.5) {
       const ear = new THREE.Vector3(this.pos.x, this.pos.y + 1.6, this.pos.z);
-      const src = new THREE.Vector3(shooter.pos.x, shooter.pos.y + 1.2, shooter.pos.z);
+      const src = new THREE.Vector3(shooter.pos.x, entityChestY(shooter), shooter.pos.z);
       if (!losClear(ear, src, this.world.colliders)) return;
     }
     // re-path only toward a genuinely new position — automatics call this
@@ -410,7 +518,7 @@ class Bot {
       if (diff > Math.PI) diff = Math.PI * 2 - diff;
       const isKnown = this.lastKnown && e.pos.distanceTo(this.lastKnown) < 6;
       if (d > 4 && diff > 1.05 && !isKnown) continue;
-      chest.set(e.pos.x, e.pos.y + 1.2, e.pos.z);
+      chest.set(e.pos.x, entityChestY(e), e.pos.z);
       if (!losClear(eye, chest, this.world.colliders)) continue;
       if (this.world.api.smokeBlocked(eye, chest)) continue; // smoke is opaque
       if (d < bestD) { bestD = d; best = e; }
@@ -449,7 +557,7 @@ class Bot {
 
     // hard wall check per shot — a blocked line of fire can never damage;
     // smoke counts (a target lost in smoke gets sprayed at, never hit)
-    const chestCheck = new THREE.Vector3(tp.x, tp.y + 1.2, tp.z);
+    const chestCheck = new THREE.Vector3(tp.x, entityChestY(t), tp.z);
     const blocked = !losClear(muzzle, chestCheck, this.world.colliders) ||
       this.world.api.smokeBlocked(muzzle, chestCheck);
 
@@ -462,7 +570,7 @@ class Bot {
       if (t.speedNow > 4) chance *= this.skill.movePen;
       if (this.dazeT > 0) chance *= 0.2;
       const hit = Math.random() < chance && (!blindAim || t.pos.distanceTo(blindAim) < 1.5);
-      const aim = new THREE.Vector3(tp.x, tp.y + 1.15, tp.z);
+      const aim = new THREE.Vector3(tp.x, entityChestY(t), tp.z);
       if (!hit) {
         aim.x += (Math.random() - 0.5) * 2.2;
         aim.y += (Math.random() - 0.25) * 1.2;
@@ -503,7 +611,7 @@ class Bot {
 
     // tracer: to the chest if hit, offset if missed — high tiers scatter
     // tight, so even their misses crack close (blind spray anchors on tp)
-    const aim = new THREE.Vector3(tp.x, tp.y + 1.2, tp.z);
+    const aim = new THREE.Vector3(tp.x, entityChestY(t), tp.z);
     if (!hit) {
       const sc = this.skill.scatter;
       aim.x += (Math.random() - 0.5) * 2.4 * sc;
@@ -558,7 +666,8 @@ class Bot {
     if (this.stunT > 0) {
       this.stunT -= dt;
       this.velY -= 13 * dt;
-      this.onGround = moveEntity(this.pos, 0.38, 1.7, 0, this.velY * dt, 0,
+      this._updatePose(dt);
+      this.onGround = moveEntity(this.pos, 0.38, this.bodyHeight(), 0, this.velY * dt, 0,
         this.world.colliders, 0);
       if (this.onGround && this.velY < 0) this.velY = 0;
       this.speedNow = 0;
@@ -582,6 +691,7 @@ class Bot {
 
     const w = this.weapon;
     let moveX = 0, moveZ = 0, wantYaw = this.yaw;
+    let targetDist = Infinity;
 
     if (this.target && this.target.alive) {
       // ---- combat: face target, strafe, fire bursts
@@ -590,6 +700,7 @@ class Bot {
       const anchor = this.blindT > 0 && this.lastKnown ? this.lastKnown : this.target.pos;
       const dx = anchor.x - this.pos.x, dz = anchor.z - this.pos.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
+      targetDist = dist;
       wantYaw = Math.atan2(dx, dz);
       this._updateVeteranTactic(dt, dist);
       // ---- grenade throw (#16b): lob a frag to flush a target holding
@@ -689,8 +800,13 @@ class Bot {
 
     // ---- move with collisions (same physics as the player: gravity +
     // step-up so bots climb stairs and low ledges, and fall off edges)
-    const speed = 4.6;
     const len = Math.sqrt(moveX * moveX + moveZ * moveZ);
+    this._updateMovementAbility(dt, len, targetDist);
+    this._updatePose(dt);
+    let speed = 4.6;
+    if (this.sprinting && this.onGround) speed *= BOT_MOVE.sprintMult;
+    else if (this.proneAmt > 0.5) speed *= BOT_MOVE.proneMult;
+    else if (this.crouchAmt > 0.5) speed *= BOT_MOVE.crouchMult;
     this.speedNow = len * speed;
     let sx = 0, sz = 0;
     if (len > 0.01) {
@@ -699,7 +815,7 @@ class Bot {
       sz = (moveZ / len) * speed * Math.min(1, len) * dt;
     }
     this.velY -= 13 * dt;
-    this.onGround = moveEntity(this.pos, 0.38, 1.7, sx, this.velY * dt, sz,
+    this.onGround = moveEntity(this.pos, 0.38, this.bodyHeight(), sx, this.velY * dt, sz,
       this.world.colliders, this.onGround ? 0.55 : 0);
     if (this.onGround && this.velY < 0) this.velY = 0;
     if (len > 0.01) {
@@ -718,8 +834,8 @@ class Bot {
     if (this.team !== this.world.api.playerTeam && this.onGround && this.speedNow > 0.5) {
       this._stepT -= dt;
       if (this._stepT <= 0) {
-        this._stepT = this.speedNow > 3.5 ? 0.38 : 0.5;
-        AudioSys.footstep(this.speedNow > 3.5,
+        this._stepT = this.sprinting ? 0.33 : this.speedNow > 3.5 ? 0.38 : 0.55;
+        AudioSys.footstep(this.sprinting || this.speedNow > 3.5,
           this.pos.distanceTo(this.world.api.playerPos()),
           this.world.api.audioPan(this.pos));
       }
@@ -730,7 +846,7 @@ class Bot {
     this.mesh.rotation.set(0, this.yaw, 0);
     if (this.speedNow > 0.5) {
       this.walkPhase += dt * 9;
-      const s = Math.sin(this.walkPhase) * 0.55;
+      const s = Math.sin(this.walkPhase) * (this.sprinting ? 0.75 : this.proneAmt > 0.5 ? 0.25 : 0.55);
       ud.legL.rotation.x = s;
       ud.legR.rotation.x = -s;
     } else {

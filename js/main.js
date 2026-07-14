@@ -4319,10 +4319,13 @@ function firePlayerShot(w) {
     _collatHits.length = 0;
     for (const b of G.bots) {
       if (!b.alive || b.team === player.team) continue;
+      const hitH = typeof b.hitHeight === 'function' ? b.hitHeight() : 1.85;
+      const headH = THREE.MathUtils.lerp(0.4, 0.22, b.proneAmt || 0);
+      const bodyTop = b.pos.y + Math.max(0.35, hitH - headH);
       _bodyBox.min.set(b.pos.x - 0.36, b.pos.y, b.pos.z - 0.36);
-      _bodyBox.max.set(b.pos.x + 0.36, b.pos.y + 1.44, b.pos.z + 0.36);
-      _headBox.min.set(b.pos.x - 0.2, b.pos.y + 1.44, b.pos.z - 0.2);
-      _headBox.max.set(b.pos.x + 0.2, b.pos.y + 1.85, b.pos.z + 0.2);
+      _bodyBox.max.set(b.pos.x + 0.36, bodyTop, b.pos.z + 0.36);
+      _headBox.min.set(b.pos.x - 0.2, bodyTop, b.pos.z - 0.2);
+      _headBox.max.set(b.pos.x + 0.2, b.pos.y + hitH, b.pos.z + 0.2);
       _ray.origin.copy(_shotOrigin); _ray.direction.copy(_shotDir);
       let d = Infinity, head = false;
       const hHit = _ray.intersectBox(_headBox, _hitVec);
