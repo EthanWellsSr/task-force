@@ -4124,9 +4124,9 @@ function firePlayerShot(w) {
   const spread = currentSpread();
   const pellets = def.pellets || 1;
   let anyHit = false, anyKill = false, killCount = 0;
-  // #18f: snipers punch through unlimited stacked bodies at full damage
-  // (classic COD collateral); every other gun stops at the first body
-  const penetrates = def.zoom > 3 || def.cat === 'Sniper Rifle';
+  // #18f: high-zoom snipers punch through stacked bodies at full damage
+  // (classic COD collateral); marksman/low-zoom guns stop at the first body
+  const penetrates = def.zoom > 3;
   _shotOrigin.copy(G.camera.position);
 
   for (let p = 0; p < pellets; p++) {
