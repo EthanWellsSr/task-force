@@ -314,11 +314,12 @@ const ATTACHMENTS = {
     mods:{ zoom:1.9, adsTime:1.18, spreadAds:.7 }, unlockLevel:9 },
   // P55: suppressor — quiet fire for a shorter falloff band. The teeth:
   // bots' earshot on your shots drops 25 → ~9 m (noteShot ×0.35, composes
-  // with ninja) and the minimap fire-flash never writes. The price: the
-  // reserved rangeMult key (range is an [start, end] ARRAY the generic
-  // mods loop can't touch — resolveWeaponDef scales both ends explicitly)
-  // starts and ends damage falloff 25% earlier — untouched close, weaker
-  // far, no flat damage penalty. `suppressed: true` is copied onto the
+  // with ninja) and the minimap fire-flash never writes. The trade:
+  // quieter, softer recoil, but the reserved rangeMult key (range is an
+  // [start, end] ARRAY the generic mods loop can't touch —
+  // resolveWeaponDef scales both ends explicitly) starts and ends damage
+  // falloff 25% earlier — untouched close, weaker far, no flat damage
+  // penalty. `suppressed: true` is copied onto the
   // resolved def for the audio/noteShot/viewmodel branches. No shotguns
   // (falloff IS their identity; a silent one-shot-room gun is degenerate),
   // no snipers (a quiet one-shot-kill erases the positional trade). The
@@ -326,7 +327,7 @@ const ATTACHMENTS = {
   // Pistol' (the suppressed USP is the archetype — same call as P56).
   suppressor: { id:'suppressor', name:'SUPPRESSOR', slot:'muzzle',
     cats:['Assault Rifle','SMG','LMG','Handgun','Machine Pistol'],
-    mods:{ rangeMult:.75 }, suppressed:true, unlockLevel:10 },
+    mods:{ rangeMult:.75, recoil:.9 }, suppressed:true, unlockLevel:10 },
   foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
     mods:{ recoil:.8, bloom:.8 }, unlockLevel:3 },
