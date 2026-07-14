@@ -596,6 +596,47 @@ async function run() {
       DEBUG.player.tier = 11;
       setPlayerGunGameWeapon();
       const lockedTierWeapon = DEBUG.curW().def.key;
+      const edgeTarget = DEBUG.G.bots.find(b => b.team !== DEBUG.player.team);
+      if (!edgeTarget.alive) edgeTarget.spawn();
+      DEBUG.player.tier = 4;
+      G.scores[DEBUG.player.team] = 5;
+      setPlayerGunGameWeapon();
+      edgeTarget.tier = 5;
+      G.scores[edgeTarget.team] = 6;
+      setBotGunGameWeapon(edgeTarget);
+      edgeTarget.spawnProtectT = 0;
+      edgeTarget.hp = 100;
+      edgeTarget.hurt(9999, DEBUG.player, 'KNIFE', false, true);
+      const gunGameHumiliation = {
+        playerTier: DEBUG.player.tier,
+        playerScore: G.scores[DEBUG.player.team],
+        victimTier: edgeTarget.tier,
+        victimScore: G.scores[edgeTarget.team],
+        victimWeapon: edgeTarget.weapon.key,
+      };
+      if (!edgeTarget.alive) edgeTarget.spawn();
+      DEBUG.player.tier = 7;
+      G.scores[DEBUG.player.team] = 8;
+      setPlayerGunGameWeapon();
+      edgeTarget.tier = 8;
+      G.scores[edgeTarget.team] = 9;
+      setBotGunGameWeapon(edgeTarget);
+      edgeTarget.spawnProtectT = 0;
+      edgeTarget.hp = 100;
+      const beforeGunGameStreakKill = {
+        playerTier: DEBUG.player.tier,
+        playerScore: G.scores[DEBUG.player.team],
+        victimTier: edgeTarget.tier,
+        victimScore: G.scores[edgeTarget.team],
+      };
+      edgeTarget.hurt(9999, DEBUG.player, 'NAPALM', false, true);
+      const gunGameStreakKill = {
+        before: beforeGunGameStreakKill,
+        playerTier: DEBUG.player.tier,
+        playerScore: G.scores[DEBUG.player.team],
+        victimTier: edgeTarget.tier,
+        victimScore: G.scores[edgeTarget.team],
+      };
       DEBUG.player.tier = 999;
       const ggTarget = DEBUG.G.bots.find(b => b.team !== DEBUG.player.team);
       if (!ggTarget.alive) ggTarget.spawn();
@@ -606,6 +647,8 @@ async function run() {
         complete: DEBUG.player._gunGameComplete,
         lockedTierWeapon,
         ladderChecks,
+        gunGameHumiliation,
+        gunGameStreakKill,
         score: JSON.parse(JSON.stringify(DEBUG.G.scores)),
         commit: clone(DEBUG.G.lastCommit),
         profile: Profile.load(),
@@ -857,6 +900,14 @@ async function run() {
     assert.strictEqual(modes.gunGameXp.state, 'end', 'Gun Game final kill should end the match');
     assert.strictEqual(modes.gunGameXp.complete, true, 'Gun Game final kill should mark player complete');
     assert.strictEqual(modes.gunGameXp.lockedTierWeapon, 'scar', 'Gun Game should force locked ladder weapons at Level 1');
+    assert.strictEqual(modes.gunGameXp.gunGameHumiliation.playerTier, 5, 'Gun Game knife kill should still advance the killer');
+    assert.strictEqual(modes.gunGameXp.gunGameHumiliation.playerScore, 6, 'Gun Game knife kill should update killer score');
+    assert.strictEqual(modes.gunGameXp.gunGameHumiliation.victimTier, 4, 'Gun Game knife kill should demote the victim');
+    assert.strictEqual(modes.gunGameXp.gunGameHumiliation.victimScore, 5, 'Gun Game knife kill should update victim score after demotion');
+    assert.strictEqual(modes.gunGameXp.gunGameStreakKill.playerTier, modes.gunGameXp.gunGameStreakKill.before.playerTier, 'Gun Game streak kill should not advance player tier');
+    assert.strictEqual(modes.gunGameXp.gunGameStreakKill.playerScore, modes.gunGameXp.gunGameStreakKill.before.playerScore, 'Gun Game streak kill should not change player score');
+    assert.strictEqual(modes.gunGameXp.gunGameStreakKill.victimTier, modes.gunGameXp.gunGameStreakKill.before.victimTier, 'Gun Game streak kill should not demote victim tier');
+    assert.strictEqual(modes.gunGameXp.gunGameStreakKill.victimScore, modes.gunGameXp.gunGameStreakKill.before.victimScore, 'Gun Game streak kill should not change victim score');
     for (const check of modes.gunGameXp.ladderChecks) {
       assert.strictEqual(check.playerWeapon, check.expected, `player tier ${check.tier} should force ${check.expected}`);
       assert.ok(check.hudWeapon.length > 0, `player tier ${check.tier} should render a HUD weapon name`);
@@ -869,7 +920,7 @@ async function run() {
       assert.strictEqual(check.botGrenLeft, 0, `bot tier ${check.tier} should clear grenade count`);
     }
     assert.ok(modes.gunGameXp.commit && modes.gunGameXp.commit.xp.total > 0, 'Gun Game should commit XP');
-    assert.strictEqual(modes.gunGameXp.profile.stats.kills, 1, 'Gun Game should persist lifetime kill');
+    assert.strictEqual(modes.gunGameXp.profile.stats.kills, 2, 'Gun Game should persist lifetime direct kills');
     assert.strictEqual(modes.gunGameXp.profile.stats.totalXpEarned, modes.gunGameXp.commit.xp.total, 'Gun Game should persist earned XP');
     for (const row of modes.equipmentDeploy) {
       assert.strictEqual(row.equip, row.lethal, `${row.lethal}/${row.tactical} should deploy lethal`);
