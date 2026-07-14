@@ -17,6 +17,10 @@ const Profile = {
   KEY: 'tf_profile',
   VERSION: 1,
   LEVEL_CAP: 20,
+  WEAPON_CATEGORIES: [
+    'Assault Rifle', 'SMG', 'LMG', 'Shotgun', 'Sniper Rifle',
+    'Handgun', 'Machine Pistol', 'Melee',
+  ],
 
   // Grounded arcade ranks, index 0 = Level 1. Spec pins SERGEANT
   // at Level 7 and the ladder tops out at COMMANDER (Level 20).
@@ -60,8 +64,15 @@ const Profile = {
       level: 1,
       xp: 0,
       prestige: 0,
+      weaponXp: this.defaultWeaponXp(),
       stats: this.defaultStats(),
     };
+  },
+
+  defaultWeaponXp() {
+    const xp = {};
+    for (const cat of this.WEAPON_CATEGORIES) xp[cat] = 0;
+    return xp;
   },
 
   // Coerce anything (bad JSON output, missing fields, wrong types,
@@ -73,6 +84,8 @@ const Profile = {
     p.xp = this._int(raw.xp, 0, 0);
     p.level = this.levelFromTotalXp(p.xp);
     p.prestige = this._int(raw.prestige, 0, 0);
+    if (raw.weaponXp && typeof raw.weaponXp === 'object')
+      for (const cat of this.WEAPON_CATEGORIES) p.weaponXp[cat] = this._int(raw.weaponXp[cat], 0, 0);
     const s = raw.stats;
     if (s && typeof s === 'object')
       for (const k in p.stats) p.stats[k] = this._int(s[k], 0, 0);
@@ -151,6 +164,18 @@ const Profile = {
     return this.RANK_NAMES[level - 1];
   },
 
+  weaponCategoryLevel(cat, profile) {
+    const p = profile || this.load();
+    return this.levelFromTotalXp(p.weaponXp && p.weaponXp[cat] ? p.weaponXp[cat] : 0);
+  },
+
+  addMaxWeaponXp(profile) {
+    const p = profile || this.load();
+    if (!p.weaponXp) p.weaponXp = this.defaultWeaponXp();
+    for (const cat of this.WEAPON_CATEGORIES) p.weaponXp[cat] = this.xpThreshold(this.LEVEL_CAP);
+    return p;
+  },
+
   // ---------- P3: match-local XP accumulator ----------
 
   // First-pass earn table (progression plan, "XP earn table").
@@ -202,6 +227,23 @@ const Profile = {
     },
   },
 
+  MatchWeaponXP: {
+    byCategory: {},
+
+    reset() {
+      this.byCategory = {};
+    },
+
+    add(cat, xp) {
+      if (!cat || !(xp > 0)) return;
+      this.byCategory[cat] = (this.byCategory[cat] || 0) + Math.floor(xp);
+    },
+
+    snapshot() {
+      return Object.assign({}, this.byCategory);
+    },
+  },
+
   // ---------- P5: match deltas + immediate lifetime stats ----------
 
   // Match-local stat deltas for the end-screen recap (these are
@@ -232,6 +274,7 @@ const Profile = {
 
   resetMatch() {
     this.MatchXP.reset();
+    this.MatchWeaponXP.reset();
     this.MatchStats.reset();
     this._matchCommitted = false;
   },
@@ -290,17 +333,27 @@ const Profile = {
     if (result === 'win') this.MatchXP.onMatchWin();
     this.onMatchResult(result);
     const earned = this.MatchXP.total;
+    const weaponEarned = this.MatchWeaponXP.snapshot();
     const p = this.load();
     const oldLevel = p.level;
+    const oldWeaponLevels = {};
+    for (const cat of this.WEAPON_CATEGORIES) oldWeaponLevels[cat] = this.weaponCategoryLevel(cat, p);
     p.xp += earned;
+    if (!p.weaponXp) p.weaponXp = this.defaultWeaponXp();
+    for (const cat in weaponEarned) p.weaponXp[cat] = (p.weaponXp[cat] || 0) + weaponEarned[cat];
     p.stats.totalXpEarned += earned;
     p.level = this.levelFromTotalXp(p.xp);
     this.save(p);
+    const newWeaponLevels = {};
+    for (const cat of this.WEAPON_CATEGORIES) newWeaponLevels[cat] = this.weaponCategoryLevel(cat, p);
     return {
       xp: this.MatchXP.snapshot(),
+      weaponXp: weaponEarned,
       stats: this.MatchStats.snapshot(),
       oldLevel,
       newLevel: p.level,
+      oldWeaponLevels,
+      newWeaponLevels,
       leveledUp: p.level > oldLevel,
       totalXp: p.xp,
       progress: this.progressToNext(p.xp),

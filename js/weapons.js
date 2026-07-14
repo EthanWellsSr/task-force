@@ -217,7 +217,16 @@ function currentProfileLevel() {
   }
 }
 
+function currentWeaponCategoryLevel(cat) {
+  try {
+    return Profile.weaponCategoryLevel(cat);
+  } catch (e) {
+    return 1;
+  }
+}
+
 function isUnlocked(def, level = currentProfileLevel()) {
+  if (def && def.categoryUnlockRank) return def.categoryUnlockRank <= currentWeaponCategoryLevel(def.cat);
   return unlockLevelOf(def) <= level;
 }
 

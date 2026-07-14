@@ -178,6 +178,7 @@ const UI = {
       const p = Profile.load();
       p.xp = Profile.xpThreshold(Profile.LEVEL_CAP);
       p.level = Profile.LEVEL_CAP;
+      Profile.addMaxWeaponXp(p);
       Profile.save(p);
     });
     this.$('devResetProfile').onclick = () => apply('RESET your profile? Level, XP, and lifetime stats are wiped. This cannot be undone.', () => {

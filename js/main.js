@@ -3263,6 +3263,20 @@ function recordDamage(victim, attacker) {
   else victim.recentDamagers.push({ attacker, t: G.time });
 }
 
+function weaponDefForKillName(weaponName) {
+  for (const key in WEAPONS) if (WEAPONS[key].name === weaponName) return WEAPONS[key];
+  return null;
+}
+
+function addWeaponCategoryXpForKill(weaponName, headshot) {
+  const def = weaponDefForKillName(weaponName);
+  if (!def || !def.cat) return;
+  let xp = Profile.XP_EARN.directKill;
+  if (headshot) xp += Profile.XP_EARN.headshotBonus;
+  if (weaponName === 'TOMAHAWK') xp += Profile.XP_EARN.meleeBonus;
+  Profile.MatchWeaponXP.add(def.cat, xp);
+}
+
 function registerKill(killer, victim, weaponName, headshot) {
   if (killer && killer.team !== victim.team) {
     // #16d: everyone who damaged the victim this engagement (within the
@@ -3301,6 +3315,7 @@ function registerKill(killer, victim, weaponName, headshot) {
           Profile.onMeleeKill();  // P45: knife kills count as melee bonus
           Profile.MatchXP.onMeleeKill();
         }
+        addWeaponCategoryXpForKill(weaponName, headshot);
       }
       // kill streak tracking (resets if more than 4 s between kills)
       const STREAK_WINDOW = 4.0;
