@@ -42,6 +42,12 @@ for (const loadout of data.botLoadouts) {
   assert.ok(loadout.lethal === null || loadout.lethal === 'frag', `bot lethal ${loadout.lethal} should be supported`);
 }
 
+const gatedBotPrimaries = data.botLoadouts
+  .map(loadout => loadout.primary)
+  .filter(id => data.weapons[id] && data.weapons[id].unlockLevel > 1);
+assert.ok(gatedBotPrimaries.includes('scar'), 'bot pool should keep gated weapons independent of player unlock gates');
+assert.ok(gatedBotPrimaries.includes('p90'), 'bot pool should keep late-game weapons available to AI');
+
 const unlockRefs = {
   weapon: id => !!data.weapons[id],
   attachment: id => !!data.attachments[id],

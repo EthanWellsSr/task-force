@@ -99,6 +99,24 @@ async function run() {
       Profile.reset();
       UI.loadClasses();
       UI.renderProfileBadge();
+      const perkDef = id => Object.values(PERKS).flat().find(perk => perk.id === id);
+      const unlockTableRows = UNLOCK_TABLE.map(row => {
+        const def =
+          row.pool === 'weapon' ? WEAPONS[row.id] :
+          row.pool === 'attachment' || row.pool === 'camo' ? ATTACHMENTS[row.id] :
+          row.pool === 'perk' ? perkDef(row.id) :
+          row.pool === 'throwable' ? THROWABLES[row.id] :
+          row.pool === 'killstreak' ? KILLSTREAKS[row.id] :
+          null;
+        return {
+          id: row.id,
+          name: row.name,
+          pool: row.pool,
+          level: row.level,
+          exists: !!def,
+          unlockLevel: def ? unlockLevelOf(def) : null,
+        };
+      });
       const fresh = {
         badge: text('menuBadge'),
         profile: Profile.load(),
@@ -176,12 +194,31 @@ async function run() {
       UI.renderClassEditor();
       const lockedScar = [...document.querySelectorAll('#primaryList .weapon-item.locked')]
         .find(el => el.textContent.includes('FN SCAR-H'));
+      const lockedRedDot = [...document.querySelectorAll('#primaryAttach .attach-item.locked')]
+        .find(el => el.textContent.includes('RED DOT SIGHT'));
+      const lockedGold = [...document.querySelectorAll('#primaryAttach .attach-item.locked')]
+        .find(el => el.textContent.includes('GOLD CAMO'));
+      const lockedHardline = [...document.querySelectorAll('#perk1List .perk-item.locked')]
+        .find(el => el.textContent.includes('HARDLINE'));
+      const lockedSemtex = [...document.querySelectorAll('#lethalList .weapon-item.locked')]
+        .find(el => el.textContent.includes('SEMTEX'));
+      const lockedSmoke = [...document.querySelectorAll('#tacticalList .weapon-item.locked')]
+        .find(el => el.textContent.includes('SMOKE'));
+      const lockedCuav = [...document.querySelectorAll('#streakList .weapon-item.locked')]
+        .find(el => el.textContent.includes('COUNTER-UAV'));
       const level1PrimaryBefore = UI.classes[0].primary;
+      const level1BeforeLockedClicks = JSON.parse(JSON.stringify(UI.classes[0]));
       if (lockedScar) lockedScar.click();
+      for (const el of [lockedRedDot, lockedGold, lockedHardline, lockedSemtex, lockedSmoke, lockedCuav]) {
+        if (el) el.click();
+      }
       const level1Editor = {
         primaryBefore: level1PrimaryBefore,
         primaryAfterLockedClick: UI.classes[0].primary,
+        classAfterLockedClicks: JSON.parse(JSON.stringify(UI.classes[0])),
+        classBeforeLockedClicks: level1BeforeLockedClicks,
         lockedPrimaryCount: document.querySelectorAll('#primaryList .weapon-item.locked').length,
+        lockedAttachmentCount: document.querySelectorAll('#primaryAttach .attach-item.locked, #secondaryAttach .attach-item.locked').length,
         lockedPerkCount: document.querySelectorAll('#perk1List .perk-item.locked, #perk2List .perk-item.locked, #perk3List .perk-item.locked').length,
         lockedEquipmentCount: document.querySelectorAll('#lethalList .weapon-item.locked, #tacticalList .weapon-item.locked').length,
         lockedStreakCount: document.querySelectorAll('#streakList .weapon-item.locked').length,
@@ -224,6 +261,55 @@ async function run() {
       MAIN.quitMatch();
       const maxClass = JSON.parse(JSON.stringify(UI.classes[0]));
       const maxRender = { editorText, spawnText };
+      const attachmentClass = sanitizeClassForLevel({
+        name:'ATTACH',
+        primary:'m4a1',
+        secondary:'usp',
+        perks:['soh','stopping','steadyaim'],
+        lethal:'frag',
+        tactical:'stun',
+        killstreaks:['uav','carepackage','napalm'],
+        attachments:{
+          primary:['acog','suppressor','extmags','quickdraw','laser','camoDigital'],
+          secondary:[],
+          primaryDotColor:'cyan',
+          primaryLaserColor:'blue',
+        },
+      });
+      UI.classes[UI.selectedClass] = attachmentClass;
+      UI.saveClasses();
+      UI.loadClasses();
+      UI.renderClassEditor();
+      const attachmentEditorText = document.getElementById('classScreen').textContent;
+      MAIN.startMatch('rust', 'tdm');
+      MAIN.deploy();
+      const attachDef = DEBUG.curW().def;
+      const baseM4 = WEAPONS.m4a1;
+      const attachmentMatrix = {
+        saved: JSON.parse(JSON.stringify(UI.classes[UI.selectedClass].attachments)),
+        editorText: attachmentEditorText,
+        deployed: {
+          attachments: attachDef.attachments.slice(),
+          zoom: attachDef.zoom,
+          suppressed: !!attachDef.suppressed,
+          mag: attachDef.mag,
+          reload: attachDef.reload,
+          adsTime: attachDef.adsTime,
+          spreadAds: attachDef.spreadAds,
+          spreadHip: attachDef.spreadHip,
+          reticleColor: attachDef.reticleColor,
+          laserColor: attachDef.laserColor,
+        },
+        base: {
+          zoom: baseM4.zoom,
+          mag: baseM4.mag,
+          reload: baseM4.reload,
+          adsTime: baseM4.adsTime,
+          spreadAds: baseM4.spreadAds,
+          spreadHip: baseM4.spreadHip,
+        },
+      };
+      MAIN.quitMatch();
       const perkDeploy = [];
       const perkCases = [
         ['marathon', 'stopping', 'steadyaim'],
@@ -293,11 +379,16 @@ async function run() {
       const bankAfterMatchReset = DEBUG.player._bankedStreaks.map(s => s.id);
       const selectorPersistence = { selectorThree, selectorFour, bankAfterClassEdit, bankAfterMatchReset };
 
-      return { fresh, near, nearEnd, multiEnd, capEnd, corruptedClass, level1Editor, maxClass, maxRender, deployedMaxClass, perkDeploy, selectorPersistence };
+      return { fresh, unlockTableRows, near, nearEnd, multiEnd, capEnd, corruptedClass, level1Editor, maxClass, maxRender, deployedMaxClass, attachmentMatrix, perkDeploy, selectorPersistence };
     });
 
     assert.ok(progression.fresh.badge.includes('LVL 1'), 'fresh profile badge should show Level 1');
     assert.strictEqual(progression.fresh.profile.level, 1, 'fresh profile should be Level 1');
+    assert.deepStrictEqual(progression.unlockTableRows.map(row => row.level), Array.from({ length: 19 }, (_, i) => i + 2), 'unlock table should render one reward for every Level 2-20');
+    for (const row of progression.unlockTableRows) {
+      assert.strictEqual(row.exists, true, `${row.name} should resolve from the ${row.pool} registry`);
+      assert.strictEqual(row.unlockLevel, row.level, `${row.name} registry metadata should match final unlock table level`);
+    }
     assert.ok(progression.near.badge.includes('499 / 500 XP'), 'near-level tool should land 1 XP below Level 2');
     assert.ok(progression.nearEnd.levelText.includes('LVL 1') && progression.nearEnd.levelText.includes('LVL 2'), 'near-level payout should level up');
     assert.ok(progression.nearEnd.unlocks.some(t => t.includes('RED DOT SIGHT')), 'near-level payout should show Red Dot unlock');
@@ -310,7 +401,9 @@ async function run() {
     assert.strictEqual(progression.corruptedClass.primary, 'm4a1', 'bad primary should migrate to starter primary');
     assert.strictEqual(progression.corruptedClass.secondary, 'usp', 'bad secondary should migrate to starter secondary');
     assert.strictEqual(progression.level1Editor.primaryAfterLockedClick, progression.level1Editor.primaryBefore, 'Level 1 locked primary click should be inert');
+    assert.deepStrictEqual(progression.level1Editor.classAfterLockedClicks, progression.level1Editor.classBeforeLockedClicks, 'Level 1 locked picker clicks should not mutate the class');
     assert.ok(progression.level1Editor.lockedPrimaryCount > 0, 'Level 1 editor should render locked weapons');
+    assert.ok(progression.level1Editor.lockedAttachmentCount > 0, 'Level 1 editor should render locked attachments/camos');
     assert.ok(progression.level1Editor.lockedPerkCount > 0, 'Level 1 editor should render locked perks');
     assert.ok(progression.level1Editor.lockedEquipmentCount > 0, 'Level 1 editor should render locked equipment');
     assert.ok(progression.level1Editor.lockedStreakCount > 0, 'Level 1 editor should render locked streaks');
@@ -330,6 +423,21 @@ async function run() {
     assert.strictEqual(progression.deployedMaxClass.equipTac, 'smoke', 'max class should deploy Smoke');
     for (const id of ['cuav', 'airstrike', 'napalm', 'nuke'])
       assert.ok(progression.deployedMaxClass.streaks.includes(id), `max class should deploy ${id} streak`);
+    for (const id of ['acog', 'suppressor', 'extmags', 'quickdraw', 'laser', 'camoDigital'])
+      assert.ok(progression.attachmentMatrix.saved.primary.includes(id), `${id} should save/load on the primary`);
+    for (const label of ['ACOG SIGHT', 'SUPPRESSOR', 'EXTENDED MAGS', 'QUICKDRAW GRIP', 'LASER SIGHT', 'DIGITAL CAMO'])
+      assert.ok(progression.attachmentMatrix.editorText.includes(label), `${label} should render in the attachment editor`);
+    for (const id of ['acog', 'suppressor', 'extmags', 'quickdraw', 'laser', 'camoDigital'])
+      assert.ok(progression.attachmentMatrix.deployed.attachments.includes(id), `${id} should deploy on the resolved primary`);
+    assert.ok(progression.attachmentMatrix.deployed.zoom > progression.attachmentMatrix.base.zoom, 'ACOG should increase deployed zoom');
+    assert.strictEqual(progression.attachmentMatrix.deployed.suppressed, true, 'suppressor should deploy suppressed state');
+    assert.ok(progression.attachmentMatrix.deployed.mag > progression.attachmentMatrix.base.mag, 'extended mags should increase deployed magazine');
+    assert.ok(progression.attachmentMatrix.deployed.reload > progression.attachmentMatrix.base.reload, 'extended mags should increase deployed reload time');
+    assert.ok(progression.attachmentMatrix.deployed.adsTime < progression.attachmentMatrix.base.adsTime, 'quickdraw should keep combined deployed ADS faster than base');
+    assert.ok(progression.attachmentMatrix.deployed.spreadAds < progression.attachmentMatrix.base.spreadAds, 'ACOG should keep combined deployed ADS spread tighter than base');
+    assert.ok(progression.attachmentMatrix.deployed.spreadHip < progression.attachmentMatrix.base.spreadHip, 'laser should tighten deployed hip spread');
+    assert.strictEqual(progression.attachmentMatrix.deployed.reticleColor, 0x25dcff, 'reticle color should persist into resolved weapon');
+    assert.strictEqual(progression.attachmentMatrix.deployed.laserColor, 0x3a86ff, 'laser color should persist into resolved weapon');
     for (const row of progression.perkDeploy) {
       assert.deepStrictEqual(row.saved, row.perks, `${row.perks.join('/')} should save/load`);
       assert.deepStrictEqual(row.deployed, row.perks, `${row.perks.join('/')} should deploy`);
@@ -386,6 +494,41 @@ async function run() {
       DEBUG.G.state = 'paused';
       MAIN.quitMatch();
       const afterPausedQuit = Profile.load().stats.quits;
+      Profile.reset();
+      const originalBotLoadouts = BOT_LOADOUTS.slice();
+      let botGate;
+      try {
+        BOT_LOADOUTS.splice(0, BOT_LOADOUTS.length, { primary:'p90', secondary:'deagle', lethal:'frag' });
+        MAIN.startMatch('rust', 'tdm');
+        botGate = {
+          playerLevel: Profile.load().level,
+          p90UnlockedForPlayer: isUnlocked(WEAPONS.p90, Profile.load().level),
+          botWeapons: DEBUG.G.bots.map(b => b.weapon.key),
+        };
+        MAIN.quitMatch();
+      } finally {
+        BOT_LOADOUTS.splice(0, BOT_LOADOUTS.length, ...originalBotLoadouts);
+      }
+      Profile.reset();
+      UI.settings.scoreLimit = 30;
+      UI.settings.timeLimit = 300;
+      MAIN.startMatch('rust', 'tdm');
+      MAIN.deploy();
+      const quitTarget = DEBUG.G.bots.find(b => b.team !== DEBUG.player.team);
+      if (!quitTarget.alive) quitTarget.spawn();
+      quitTarget.spawnProtectT = 0;
+      quitTarget.hurt(9999, DEBUG.player, DEBUG.curW().def.name, false, true);
+      const quitBeforeExit = {
+        state: DEBUG.G.state,
+        matchXp: Profile.MatchXP.snapshot(),
+        matchStats: Profile.MatchStats.snapshot(),
+        profile: Profile.load(),
+      };
+      MAIN.quitMatch();
+      const quitNoXp = {
+        beforeExit: quitBeforeExit,
+        afterExit: Profile.load(),
+      };
       const xpModes = [];
       for (const mode of ['tdm', 'ffa']) {
         Profile.reset();
@@ -610,6 +753,37 @@ async function run() {
       DEBUG.player._streakSel = 0;
       deployKillstreak();
       const carePackageDeploy = { banked: DEBUG.player._bankedStreaks.map(s => s.id) };
+      DEBUG.player._bankedStreaks = [KILLSTREAKS.airstrike];
+      DEBUG.player._streakSel = 0;
+      deployKillstreak();
+      const airstrikeDeploy = {
+        drops: _napalmDrops.map(d => ({ weaponName: d.weaponName, radius: d.radius, dmg: d.dmg })),
+        banked: DEBUG.player._bankedStreaks.map(s => s.id),
+      };
+      _napalmDrops.length = 0;
+      DEBUG.player._bankedStreaks = [KILLSTREAKS.napalm];
+      DEBUG.player._streakSel = 0;
+      deployKillstreak();
+      const napalmDeploy = {
+        drops: _napalmDrops.map(d => ({ weaponName: d.weaponName || 'NAPALM', radius: d.radius || NAPALM.radius, dmg: d.dmg || NAPALM.dmg })),
+        banked: DEBUG.player._bankedStreaks.map(s => s.id),
+      };
+      _napalmDrops.length = 0;
+      const beforeNukeDeploy = {
+        nukeT: DEBUG.nukeT(),
+        stats: Profile.MatchStats.snapshot(),
+        xp: Profile.MatchXP.snapshot(),
+      };
+      DEBUG.player._bankedStreaks = [KILLSTREAKS.nuke];
+      DEBUG.player._streakSel = 0;
+      deployKillstreak();
+      const nukeDeploy = {
+        nukeT: DEBUG.nukeT(),
+        stats: Profile.MatchStats.snapshot(),
+        xp: Profile.MatchXP.snapshot(),
+        banked: DEBUG.player._bankedStreaks.map(s => s.id),
+        before: beforeNukeDeploy,
+      };
       const beforeStreakWeaponKill = {
         streakKills: DEBUG.player._streakKills,
         directKills: Profile.MatchStats.kills,
@@ -634,12 +808,15 @@ async function run() {
         uavDeploy,
         cuavDeploy,
         carePackageDeploy,
+        airstrikeDeploy,
+        napalmDeploy,
+        nukeDeploy,
         beforeStreakWeaponKill,
         afterStreakWeaponKill,
       };
       MAIN.quitMatch();
 
-      return { snapshots, stats: Profile.load().stats, afterLiveQuits, afterPausedQuit, xpModes, gunGameXp, equipmentDeploy, equipmentEffects, killstreakMatrix };
+      return { snapshots, botGate, stats: Profile.load().stats, afterLiveQuits, afterPausedQuit, quitNoXp, xpModes, gunGameXp, equipmentDeploy, equipmentEffects, killstreakMatrix };
     });
 
     const byMode = Object.fromEntries(modes.snapshots.map(s => [s.mode, s]));
@@ -658,8 +835,19 @@ async function run() {
     assert.deepStrictEqual(byMode.gungame.equippedStreakIds, [], 'Gun Game should clear class streaks');
     assert.strictEqual(byMode.gungame.equip, null, 'Gun Game should clear lethal equipment');
     assert.strictEqual(byMode.gungame.equipTac, null, 'Gun Game should clear tactical equipment');
+    assert.strictEqual(modes.botGate.playerLevel, 1, 'bot gate regression should run against a fresh Level 1 profile');
+    assert.strictEqual(modes.botGate.p90UnlockedForPlayer, false, 'P90 should be locked for the Level 1 player');
+    assert.ok(modes.botGate.botWeapons.length > 0, 'bot gate regression should spawn bots');
+    assert.ok(modes.botGate.botWeapons.every(id => id === 'p90'), 'bots should be able to spawn with player-locked weapons');
     assert.strictEqual(modes.afterLiveQuits, 3, 'live quits should increment quit stat');
     assert.strictEqual(modes.afterPausedQuit, 4, 'paused quit should increment quit stat');
+    assert.strictEqual(modes.quitNoXp.beforeExit.state, 'playing', 'quit regression kill should not end the match before exit');
+    assert.strictEqual(modes.quitNoXp.beforeExit.matchXp.directKills, 100, 'quit regression should earn match-local direct-kill XP before exit');
+    assert.strictEqual(modes.quitNoXp.beforeExit.matchStats.kills, 1, 'quit regression should record match-local kill before exit');
+    assert.strictEqual(modes.quitNoXp.beforeExit.profile.stats.kills, 1, 'quit regression should persist lifetime kill immediately');
+    assert.strictEqual(modes.quitNoXp.afterExit.stats.quits, 1, 'quit regression should persist one quit');
+    assert.strictEqual(modes.quitNoXp.afterExit.xp, 0, 'quit regression should not commit profile XP');
+    assert.strictEqual(modes.quitNoXp.afterExit.stats.totalXpEarned, 0, 'quit regression should not commit total earned XP');
     for (const result of modes.xpModes) {
       assert.strictEqual(result.state, 'end', `${result.mode} should end at score limit`);
       assert.ok(result.commit && result.commit.xp.total > 0, `${result.mode} should commit XP`);
@@ -709,6 +897,16 @@ async function run() {
     assert.deepStrictEqual(modes.killstreakMatrix.cuavDeploy.banked, [], 'Counter-UAV deploy should consume banked streak');
     assert.strictEqual(modes.killstreakMatrix.carePackageDeploy.banked.length, 1, 'Care Package should bank one reward');
     assert.ok(['cuav', 'uav', 'airstrike', 'napalm'].includes(modes.killstreakMatrix.carePackageDeploy.banked[0]), 'Care Package reward should be a non-special non-package streak');
+    assert.strictEqual(modes.killstreakMatrix.airstrikeDeploy.drops.length, 5, 'Airstrike should queue five precision drops');
+    assert.ok(modes.killstreakMatrix.airstrikeDeploy.drops.every(d => d.weaponName === 'AIRSTRIKE'), 'Airstrike drops should carry AIRSTRIKE attribution');
+    assert.deepStrictEqual(modes.killstreakMatrix.airstrikeDeploy.banked, [], 'Airstrike deploy should consume banked streak');
+    assert.strictEqual(modes.killstreakMatrix.napalmDeploy.drops.length, 16, 'Napalm should queue sixteen bombardment drops');
+    assert.ok(modes.killstreakMatrix.napalmDeploy.drops.every(d => d.weaponName === 'NAPALM'), 'Napalm drops should carry NAPALM attribution');
+    assert.deepStrictEqual(modes.killstreakMatrix.napalmDeploy.banked, [], 'Napalm deploy should consume banked streak');
+    assert.ok(modes.killstreakMatrix.nukeDeploy.nukeT > modes.killstreakMatrix.nukeDeploy.before.nukeT, 'Nuke deploy should start the countdown');
+    assert.strictEqual(modes.killstreakMatrix.nukeDeploy.stats.nukesCalled, modes.killstreakMatrix.nukeDeploy.before.stats.nukesCalled + 1, 'Nuke deploy should increment nuke stat');
+    assert.strictEqual(modes.killstreakMatrix.nukeDeploy.xp.nukeBonus, modes.killstreakMatrix.nukeDeploy.before.xp.nukeBonus + 1000, 'Nuke deploy should award nuke bonus XP');
+    assert.deepStrictEqual(modes.killstreakMatrix.nukeDeploy.banked, [], 'Nuke deploy should consume banked streak');
     assert.strictEqual(modes.killstreakMatrix.afterStreakWeaponKill.streakKills, modes.killstreakMatrix.beforeStreakWeaponKill.streakKills, 'streak weapon kills should not feed streak progress');
     assert.strictEqual(modes.killstreakMatrix.afterStreakWeaponKill.directKills, modes.killstreakMatrix.beforeStreakWeaponKill.directKills, 'streak weapon kills should not count as direct kills');
     assert.strictEqual(modes.killstreakMatrix.afterStreakWeaponKill.killstreakKills, modes.killstreakMatrix.beforeStreakWeaponKill.killstreakKills + 1, 'streak weapon kills should count as killstreak kills');
