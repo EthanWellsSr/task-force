@@ -187,6 +187,7 @@ async function run() {
     assert.strictEqual(progression.corruptedClass.secondary, 'usp', 'bad secondary should migrate to starter secondary');
 
     const modes = await page.evaluate(async () => {
+      const clone = value => value === undefined ? null : JSON.parse(JSON.stringify(value));
       window.localStorage.clear();
       Profile.reset();
       UI.loadClasses();
@@ -225,7 +226,90 @@ async function run() {
       DEBUG.G.state = 'paused';
       MAIN.quitMatch();
       const afterPausedQuit = Profile.load().stats.quits;
-      return { snapshots, stats: Profile.load().stats, afterLiveQuits, afterPausedQuit };
+      const xpModes = [];
+      for (const mode of ['tdm', 'ffa']) {
+        Profile.reset();
+        UI.settings.scoreLimit = 1;
+        UI.settings.timeLimit = 300;
+        MAIN.startMatch('rust', mode);
+        MAIN.deploy();
+        const target = DEBUG.G.bots.find(b => b.team !== DEBUG.player.team);
+        if (!target.alive) target.spawn();
+        target.spawnProtectT = 0;
+        target.hurt(9999, DEBUG.player, DEBUG.curW().def.name, true, true);
+        xpModes.push({
+          mode,
+          state: DEBUG.G.state,
+          score: clone(DEBUG.G.scores),
+          commit: clone(DEBUG.G.lastCommit),
+          profile: Profile.load(),
+        });
+        MAIN.quitMatch();
+      }
+
+      Profile.reset();
+      UI.classes[UI.selectedClass] = sanitizeClassForLevel({
+        name:'LOCKED',
+        primary:'barrett',
+        secondary:'deagle',
+        perks:['hardline','coldblooded','ninja'],
+        lethal:'semtex',
+        tactical:'smoke',
+        killstreaks:['cuav','airstrike'],
+        attachments:{ primary:['camoGold'], secondary:['camoGold'] },
+      });
+      UI.settings.scoreLimit = 30;
+      MAIN.startMatch('rust', 'gungame');
+      MAIN.deploy();
+      const expectedLadder = ['m9', 'usp', 'deagle', 'g18', 'spas12', 'r870', 'aa12', 'mac10',
+        'vector', 'ump45', 'm4a1', 'scar', 'fal', 'm60', 'intervention', 'tomahawk'];
+      const ladderChecks = [];
+      const ladderBot = DEBUG.G.bots.find(b => b.team !== DEBUG.player.team);
+      if (!ladderBot.alive) ladderBot.spawn();
+      for (let tier = 0; tier < expectedLadder.length; tier++) {
+        DEBUG.player.tier = tier;
+        setPlayerGunGameWeapon();
+        UI.updateHud(DEBUG.player, DEBUG.curW().def, DEBUG.curW());
+        const beforeSwitch = DEBUG.player.cur;
+        DEBUG.switchWeapon(1);
+        ladderBot.tier = tier;
+        ladderBot.lethal = 'frag';
+        ladderBot.grenLeft = 1;
+        setBotGunGameWeapon(ladderBot);
+        ladderChecks.push({
+          tier,
+          expected: expectedLadder[tier],
+          playerWeapon: DEBUG.curW().def.key,
+          hudWeapon: document.getElementById('weaponName').textContent,
+          hudMag: document.getElementById('ammoMag').textContent,
+          hudReserve: document.getElementById('ammoReserve').textContent,
+          beforeSwitch,
+          afterSwitch: DEBUG.player.cur,
+          botWeapon: ladderBot.weapon.key,
+          botLethal: ladderBot.lethal,
+          botGrenLeft: ladderBot.grenLeft,
+        });
+      }
+      DEBUG.player.tier = 11;
+      setPlayerGunGameWeapon();
+      const lockedTierWeapon = DEBUG.curW().def.key;
+      DEBUG.player.tier = 999;
+      const ggTarget = DEBUG.G.bots.find(b => b.team !== DEBUG.player.team);
+      if (!ggTarget.alive) ggTarget.spawn();
+      ggTarget.spawnProtectT = 0;
+      ggTarget.hurt(9999, DEBUG.player, 'TOMAHAWK', false, true);
+      const gunGameXp = {
+        state: DEBUG.G.state,
+        complete: DEBUG.player._gunGameComplete,
+        lockedTierWeapon,
+        ladderChecks,
+        score: JSON.parse(JSON.stringify(DEBUG.G.scores)),
+        commit: clone(DEBUG.G.lastCommit),
+        profile: Profile.load(),
+      };
+      MAIN.quitMatch();
+
+      return { snapshots, stats: Profile.load().stats, afterLiveQuits, afterPausedQuit, xpModes, gunGameXp };
     });
 
     const byMode = Object.fromEntries(modes.snapshots.map(s => [s.mode, s]));
@@ -246,6 +330,29 @@ async function run() {
     assert.strictEqual(byMode.gungame.equipTac, null, 'Gun Game should clear tactical equipment');
     assert.strictEqual(modes.afterLiveQuits, 3, 'live quits should increment quit stat');
     assert.strictEqual(modes.afterPausedQuit, 4, 'paused quit should increment quit stat');
+    for (const result of modes.xpModes) {
+      assert.strictEqual(result.state, 'end', `${result.mode} should end at score limit`);
+      assert.ok(result.commit && result.commit.xp.total > 0, `${result.mode} should commit XP`);
+      assert.strictEqual(result.profile.stats.kills, 1, `${result.mode} should persist lifetime kill`);
+      assert.strictEqual(result.profile.stats.totalXpEarned, result.commit.xp.total, `${result.mode} should persist earned XP`);
+    }
+    assert.strictEqual(modes.gunGameXp.state, 'end', 'Gun Game final kill should end the match');
+    assert.strictEqual(modes.gunGameXp.complete, true, 'Gun Game final kill should mark player complete');
+    assert.strictEqual(modes.gunGameXp.lockedTierWeapon, 'scar', 'Gun Game should force locked ladder weapons at Level 1');
+    for (const check of modes.gunGameXp.ladderChecks) {
+      assert.strictEqual(check.playerWeapon, check.expected, `player tier ${check.tier} should force ${check.expected}`);
+      assert.ok(check.hudWeapon.length > 0, `player tier ${check.tier} should render a HUD weapon name`);
+      assert.ok(Number(check.hudMag) >= 0, `player tier ${check.tier} should render current ammo`);
+      assert.ok(Number(check.hudReserve) >= 0, `player tier ${check.tier} should render reserve ammo`);
+      assert.strictEqual(check.beforeSwitch, 0, `player tier ${check.tier} should start on slot 0`);
+      assert.strictEqual(check.afterSwitch, 0, `player tier ${check.tier} should lock weapon switching`);
+      assert.strictEqual(check.botWeapon, check.expected, `bot tier ${check.tier} should force ${check.expected}`);
+      assert.strictEqual(check.botLethal, null, `bot tier ${check.tier} should clear lethal`);
+      assert.strictEqual(check.botGrenLeft, 0, `bot tier ${check.tier} should clear grenade count`);
+    }
+    assert.ok(modes.gunGameXp.commit && modes.gunGameXp.commit.xp.total > 0, 'Gun Game should commit XP');
+    assert.strictEqual(modes.gunGameXp.profile.stats.kills, 1, 'Gun Game should persist lifetime kill');
+    assert.strictEqual(modes.gunGameXp.profile.stats.totalXpEarned, modes.gunGameXp.commit.xp.total, 'Gun Game should persist earned XP');
     assert.deepStrictEqual(errors, [], 'browser smoke should have no app console/page errors');
   } finally {
     await browser.close();
