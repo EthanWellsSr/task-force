@@ -224,8 +224,40 @@ async function run() {
       MAIN.quitMatch();
       const maxClass = JSON.parse(JSON.stringify(UI.classes[0]));
       const maxRender = { editorText, spawnText };
+      const perkDeploy = [];
+      const perkCases = [
+        ['marathon', 'stopping', 'steadyaim'],
+        ['soh', 'lightweight', 'commando'],
+        ['scavenger', 'coldblooded', 'ninja'],
+        ['arsenal', 'stopping', 'steadyaim'],
+        ['hardline', 'stopping', 'steadyaim'],
+      ];
+      for (const perks of perkCases) {
+        UI.classes[UI.selectedClass] = sanitizeClassForLevel({
+          name:'PERKS',
+          primary:'m4a1',
+          secondary:'usp',
+          perks,
+          lethal:'frag',
+          tactical:'stun',
+          killstreaks:['cuav','uav','airstrike','napalm'],
+          attachments:{ primary:[], secondary:[] },
+        });
+        UI.saveClasses();
+        UI.loadClasses();
+        MAIN.startMatch('rust', 'tdm');
+        MAIN.deploy();
+        perkDeploy.push({
+          perks,
+          saved: UI.classes[UI.selectedClass].perks.slice(),
+          savedStreaks: UI.classes[UI.selectedClass].killstreaks.slice(),
+          deployed: [...DEBUG.player.perks],
+          deployedStreaks: DEBUG.player.equippedStreakIds.slice(),
+        });
+        MAIN.quitMatch();
+      }
 
-      return { fresh, near, nearEnd, multiEnd, capEnd, corruptedClass, level1Editor, maxClass, maxRender, deployedMaxClass };
+      return { fresh, near, nearEnd, multiEnd, capEnd, corruptedClass, level1Editor, maxClass, maxRender, deployedMaxClass, perkDeploy };
     });
 
     assert.ok(progression.fresh.badge.includes('LVL 1'), 'fresh profile badge should show Level 1');
@@ -262,6 +294,17 @@ async function run() {
     assert.strictEqual(progression.deployedMaxClass.equipTac, 'smoke', 'max class should deploy Smoke');
     for (const id of ['cuav', 'airstrike', 'napalm', 'nuke'])
       assert.ok(progression.deployedMaxClass.streaks.includes(id), `max class should deploy ${id} streak`);
+    for (const row of progression.perkDeploy) {
+      assert.deepStrictEqual(row.saved, row.perks, `${row.perks.join('/')} should save/load`);
+      assert.deepStrictEqual(row.deployed, row.perks, `${row.perks.join('/')} should deploy`);
+      if (row.perks.includes('arsenal')) {
+        assert.strictEqual(row.savedStreaks.length, 4, 'Arsenal should save four selected streaks');
+        assert.strictEqual(row.deployedStreaks.filter(id => id !== 'nuke').length, 4, 'Arsenal should deploy four selected streaks plus special nuke');
+      } else {
+        assert.strictEqual(row.savedStreaks.length, 3, `${row.perks[0]} should save three selected streaks`);
+        assert.strictEqual(row.deployedStreaks.filter(id => id !== 'nuke').length, 3, `${row.perks[0]} should deploy three selected streaks plus special nuke`);
+      }
+    }
 
     const modes = await page.evaluate(async () => {
       const clone = value => value === undefined ? null : JSON.parse(JSON.stringify(value));
