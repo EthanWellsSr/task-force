@@ -467,8 +467,8 @@ function normalizeClass(c) {
 
 function sanitizeClassForLevel(c, level = currentProfileLevel()) {
   normalizeClass(c);
-  if (!isUnlocked(WEAPONS[c.primary], level)) c.primary = firstUnlockedWeapon('primary', level, WEAPONS[c.primary] && WEAPONS[c.primary].cat);
-  if (!isUnlocked(WEAPONS[c.secondary], level)) c.secondary = firstUnlockedWeapon('secondary', level, WEAPONS[c.secondary] && WEAPONS[c.secondary].cat);
+  if (!WEAPONS[c.primary] || !isUnlocked(WEAPONS[c.primary], level)) c.primary = firstUnlockedWeapon('primary', level, WEAPONS[c.primary] && WEAPONS[c.primary].cat);
+  if (!WEAPONS[c.secondary] || !isUnlocked(WEAPONS[c.secondary], level)) c.secondary = firstUnlockedWeapon('secondary', level, WEAPONS[c.secondary] && WEAPONS[c.secondary].cat);
 
   for (const slot of ['primary', 'secondary']) {
     const def = WEAPONS[c[slot]];

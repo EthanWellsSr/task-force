@@ -70,8 +70,8 @@ const Profile = {
   normalize(raw) {
     const p = this.defaultProfile();
     if (!raw || typeof raw !== 'object') return p;
-    p.level = this._int(raw.level, 1, 1, this.LEVEL_CAP);
     p.xp = this._int(raw.xp, 0, 0);
+    p.level = this.levelFromTotalXp(p.xp);
     p.prestige = this._int(raw.prestige, 0, 0);
     const s = raw.stats;
     if (s && typeof s === 'object')
@@ -346,7 +346,7 @@ const Profile = {
     ok(d.version === 1 && d.level === 1 && d.xp === 0 && d.prestige === 0, 'null -> default');
     ok(Object.keys(d.stats).length === 12, 'stats has 12 fields');
     const n = this.normalize({ level: 99, xp: -5, prestige: 'x', stats: { kills: '7', wins: 3.9 }, junk: 1 });
-    ok(n.level === 20 && n.xp === 0 && n.prestige === 0, 'clamps/coerces bad fields');
+    ok(n.level === 1 && n.xp === 0 && n.prestige === 0, 'clamps/coerces bad fields');
     ok(n.stats.kills === 0 && n.stats.wins === 3 && !('junk' in n), 'stat coercion, junk dropped');
 
     // P3: match XP accumulator (earn table + category isolation)
@@ -433,7 +433,7 @@ const Profile = {
     this.onMatchStart();
     mx.onNukeCalled();                             // 1000 +100 complete +250 win = 1350
     res = this.commitMatch('win');
-    ok(res.oldLevel === 4 && res.newLevel === 20 && res.totalXp === 53350, 'clamps at L20');
+    ok(res.oldLevel === 19 && res.newLevel === 20 && res.totalXp === 53350, 'clamps at L20');
     ok(res.progress.level === 20 && res.progress.current === 0 && res.progress.needed === 0, 'cap progress');
     ok(this.load().stats.totalXpEarned === 4200, 'totalXpEarned counts commits only, not raw xp');
     // put the real profile back

@@ -161,6 +161,13 @@ const UI = {
       p.stats.totalXpEarned += 500;
       Profile.save(p);
     });
+    this.$('devNearLevel').onclick = () => apply('Set profile to 1 XP before the next level?', () => {
+      const p = Profile.load();
+      const nextLevel = Math.min(Profile.LEVEL_CAP, p.level + 1);
+      p.xp = nextLevel > p.level ? Math.max(0, Profile.xpThreshold(nextLevel) - 1) : Profile.xpThreshold(Profile.LEVEL_CAP);
+      p.level = Profile.levelFromTotalXp(p.xp);
+      Profile.save(p);
+    });
     this.$('devSetL10').onclick = () => apply('Set profile to Level 10? (XP jumps to the L10 threshold)', () => {
       const p = Profile.load();
       p.xp = Profile.xpThreshold(10);

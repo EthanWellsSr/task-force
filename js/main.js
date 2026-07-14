@@ -3591,7 +3591,7 @@ function finishMatch(win) {
 function quitMatch() {
   // P5/P10: only a live match counts as a quit — this same button is the
   // end screen's "menu", where the match already committed via finishMatch.
-  if (G.state === 'playing' || G.state === 'dead') Profile.onQuit();
+  if (G.state === 'playing' || G.state === 'dead' || G.state === 'paused') Profile.onQuit();
   G.state = 'menu';
   document.exitPointerLock && document.exitPointerLock();
   UI.show('menu');
