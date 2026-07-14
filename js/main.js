@@ -3231,6 +3231,7 @@ function cycleKillstreak() {
 }
 
 function deployKillstreak() {
+  if (isGunGameMode()) return; // P75-P77: Gun Game is a forced-loadout mode, no class streaks
   const b = player._bankedStreaks;
   if (!b.length) return;
   const ks = b.splice(player._streakSel, 1)[0];
@@ -3441,16 +3442,23 @@ function startMatch(mapId, modeId = 'tdm') {
 function deploy() {
   if (player.respawnT > 0) return;
   const cls = UI.classes[UI.selectedClass];
-  player.perks = new Set(cls.perks);
-  // P67/P71: the streak loadout is computed AT SPAWN and nowhere else. The
-  // class editor may change UI.classes while the player is alive, but already
-  // banked rewards and this life's equipped ids remain untouched until deploy.
   normalizeClass(cls);
-  player.equippedStreakIds = (cls.killstreaks || [])
-    .filter(id => KILLSTREAKS[id] && KILLSTREAKS[id].selectable)
-    .slice(0, streakSlotLimit(cls));
-  if (!player.equippedStreakIds.length) player.equippedStreakIds = DEFAULT_KILLSTREAK_IDS.slice(0, streakSlotLimit(cls));
-  for (const id of KILLSTREAK_ORDER) if (KILLSTREAKS[id].special) player.equippedStreakIds.push(id);
+  if (isGunGameMode()) {
+    // P75-P77: Gun Game owns the whole loadout. Custom-class perks and
+    // streak selections must not leak into forced ladder tiers.
+    player.perks = new Set();
+    player.equippedStreakIds = [];
+  } else {
+    player.perks = new Set(cls.perks);
+    // P67/P71: the streak loadout is computed AT SPAWN and nowhere else. The
+    // class editor may change UI.classes while the player is alive, but already
+    // banked rewards and this life's equipped ids remain untouched until deploy.
+    player.equippedStreakIds = (cls.killstreaks || [])
+      .filter(id => KILLSTREAKS[id] && KILLSTREAKS[id].selectable)
+      .slice(0, streakSlotLimit(cls));
+    if (!player.equippedStreakIds.length) player.equippedStreakIds = DEFAULT_KILLSTREAK_IDS.slice(0, streakSlotLimit(cls));
+    for (const id of KILLSTREAK_ORDER) if (KILLSTREAKS[id].special) player.equippedStreakIds.push(id);
+  }
   const mkState = slot => {
     // resolved def (base + attachment mods) — every curW().def consumer
     // (fire path, startReload, HUD, viewmodel) reads modified stats from here

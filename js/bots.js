@@ -447,6 +447,36 @@ class Bot {
     const blocked = !losClear(muzzle, chestCheck, this.world.colliders) ||
       this.world.api.smokeBlocked(muzzle, chestCheck);
 
+    // P76: Gun Game's final tomahawk tier is a close-range thrown weapon,
+    // not a generic hitscan firearm. Bots must push in and make a risky,
+    // readable throw instead of sniping with the axe definition.
+    if (w.throwWeapon) {
+      if (dist > 11 || blocked) return;
+      let chance = this.skill.acc * THREE.MathUtils.clamp(1.15 - dist / 13, 0.08, 0.65);
+      if (t.speedNow > 4) chance *= this.skill.movePen;
+      if (this.dazeT > 0) chance *= 0.2;
+      const hit = Math.random() < chance && (!blindAim || t.pos.distanceTo(blindAim) < 1.5);
+      const aim = new THREE.Vector3(tp.x, tp.y + 1.15, tp.z);
+      if (!hit) {
+        aim.x += (Math.random() - 0.5) * 2.2;
+        aim.y += (Math.random() - 0.25) * 1.2;
+        aim.z += (Math.random() - 0.5) * 2.2;
+      }
+      this.world.api.tracer(muzzle, aim);
+      AudioSys.throwWhoosh();
+      if (hit) {
+        if (t.isPlayer) this.world.api.playerDamage(150, this, w.name, false);
+        else t.hurt(150, this, w.name, false);
+      }
+      this.magLeft--;
+      if (this.magLeft <= 0) {
+        this.reloadT = w.reload;
+        this.magLeft = w.mag;
+        this.burstLeft = 0;
+      }
+      return;
+    }
+
     // skill roll — falloff distance, moving-target penalty, headshot rate
     // and the damage multiplier all come off the tier (see BOT_SKILL)
     let chance = this.skill.acc * THREE.MathUtils.clamp(1.55 - dist / this.skill.fall, 0.25, 1.2);
@@ -594,7 +624,7 @@ class Bot {
         moveX = px * this.strafeDir * 0.55;
         moveZ = pz * this.strafeDir * 0.55;
         // shotgun bots push in to their falloff range instead of plinking
-        const pushDist = w.pellets ? 10 : 26;
+        const pushDist = w.throwWeapon ? 8 : w.pellets ? 10 : 26;
         if (dist > pushDist) { moveX += Math.sin(wantYaw) * 0.5; moveZ += Math.cos(wantYaw) * 0.5; }
       }
       // firing — only while the target is actually visible (canSee is
