@@ -25,6 +25,11 @@ function teamColors(team) {
   return FFA_PALETTE[h % FFA_PALETTE.length];
 }
 
+function helmetColorForTeam(team) {
+  if (typeof player !== 'undefined' && player.team && team === player.team) return 0x2468d8;
+  return 0xc83232;
+}
+
 function makeNameSprite(name, color) {
   const cv = document.createElement('canvas');
   cv.width = 256; cv.height = 48;
@@ -45,7 +50,7 @@ function makeNameSprite(name, color) {
 
 // Blocky soldier, origin at feet, facing +Z
 function buildSoldierMesh(team, name, showTag) {
-  const c = teamColors(team);
+  const c = Object.assign({}, teamColors(team), { helmet: helmetColorForTeam(team) });
   const g = new THREE.Group();
   const mat = col => new THREE.MeshLambertMaterial({ color: col });
   const part = (w, h, d, col, x, y, z) => {
