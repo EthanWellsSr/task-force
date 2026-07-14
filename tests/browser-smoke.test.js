@@ -342,6 +342,66 @@ async function run() {
         });
         MAIN.quitMatch();
       }
+      function deployRuntimePerkClass(perks) {
+        UI.classes[UI.selectedClass] = sanitizeClassForLevel({
+          name:'PERKRUN',
+          primary:'m4a1',
+          secondary:'usp',
+          perks,
+          lethal:'frag',
+          tactical:'stun',
+          killstreaks:['uav','carepackage','napalm'],
+          attachments:{ primary:[], secondary:[] },
+        });
+        MAIN.startMatch('rust', 'tdm');
+        MAIN.deploy();
+      }
+      deployRuntimePerkClass(['marathon','stopping','steadyaim']);
+      DEBUG.curW().mag = 0;
+      startReload();
+      const normalReloadT = DEBUG.player.reloadT;
+      MAIN.quitMatch();
+      deployRuntimePerkClass(['soh','stopping','steadyaim']);
+      DEBUG.curW().mag = 0;
+      startReload();
+      const sohReloadT = DEBUG.player.reloadT;
+      MAIN.quitMatch();
+      function placeMeleeTarget(dist) {
+        const bot = DEBUG.G.bots.find(b => b.team !== DEBUG.player.team);
+        if (!bot.alive) bot.spawn();
+        DEBUG.player.yaw = 0;
+        DEBUG.player.meleeT = 0;
+        bot.pos.copy(DEBUG.player.pos).add(new THREE.Vector3(0, 0, -dist));
+        bot.hp = 100;
+        bot.alive = true;
+        bot.spawnProtectT = 0;
+        return bot;
+      }
+      deployRuntimePerkClass(['soh','stopping','steadyaim']);
+      let meleeTarget = placeMeleeTarget(2.6);
+      tryMelee();
+      const noCommandoKilled = !meleeTarget.alive;
+      MAIN.quitMatch();
+      deployRuntimePerkClass(['soh','lightweight','commando']);
+      meleeTarget = placeMeleeTarget(2.6);
+      tryMelee();
+      const commandoKilled = !meleeTarget.alive;
+      MAIN.quitMatch();
+      deployRuntimePerkClass(['scavenger','stopping','steadyaim']);
+      const scavTarget = DEBUG.G.bots.find(b => b.team !== DEBUG.player.team);
+      scavTarget.alive = false;
+      scavTarget._looted = false;
+      scavTarget.pos.copy(DEBUG.player.pos).add(new THREE.Vector3(0.4, 0, 0));
+      DEBUG.player.weapons[0].reserve = 0;
+      DEBUG.player.weapons[1].reserve = 0;
+      updateScavenger();
+      const scavenger = {
+        primaryReserve: DEBUG.player.weapons[0].reserve,
+        secondaryReserve: DEBUG.player.weapons[1].reserve,
+        looted: scavTarget._looted,
+      };
+      MAIN.quitMatch();
+      const perkRuntime = { normalReloadT, sohReloadT, noCommandoKilled, commandoKilled, scavenger };
       UI.classes[UI.selectedClass] = sanitizeClassForLevel({
         name:'STREAK3',
         primary:'m4a1',
@@ -379,7 +439,7 @@ async function run() {
       const bankAfterMatchReset = DEBUG.player._bankedStreaks.map(s => s.id);
       const selectorPersistence = { selectorThree, selectorFour, bankAfterClassEdit, bankAfterMatchReset };
 
-      return { fresh, unlockTableRows, near, nearEnd, multiEnd, capEnd, corruptedClass, level1Editor, maxClass, maxRender, deployedMaxClass, attachmentMatrix, perkDeploy, selectorPersistence };
+      return { fresh, unlockTableRows, near, nearEnd, multiEnd, capEnd, corruptedClass, level1Editor, maxClass, maxRender, deployedMaxClass, attachmentMatrix, perkDeploy, perkRuntime, selectorPersistence };
     });
 
     assert.ok(progression.fresh.badge.includes('LVL 1'), 'fresh profile badge should show Level 1');
@@ -449,6 +509,12 @@ async function run() {
         assert.strictEqual(row.deployedStreaks.filter(id => id !== 'nuke').length, 3, `${row.perks[0]} should deploy three selected streaks plus special nuke`);
       }
     }
+    assert.ok(progression.perkRuntime.sohReloadT < progression.perkRuntime.normalReloadT, 'Sleight of Hand should shorten reload time');
+    assert.strictEqual(progression.perkRuntime.noCommandoKilled, false, 'base melee should not kill past normal range');
+    assert.strictEqual(progression.perkRuntime.commandoKilled, true, 'Commando should extend melee kill range');
+    assert.ok(progression.perkRuntime.scavenger.primaryReserve > 0, 'Scavenger should refill primary reserve from a nearby body');
+    assert.ok(progression.perkRuntime.scavenger.secondaryReserve > 0, 'Scavenger should refill secondary reserve from a nearby body');
+    assert.strictEqual(progression.perkRuntime.scavenger.looted, true, 'Scavenger should mark the body looted');
     assert.deepStrictEqual(progression.selectorPersistence.selectorThree, ['cuav', 'uav', 'carepackage'], 'non-Arsenal classes should persist only three streaks');
     assert.deepStrictEqual(progression.selectorPersistence.selectorFour, ['cuav', 'uav', 'carepackage', 'airstrike'], 'Arsenal classes should persist four streaks');
     assert.deepStrictEqual(progression.selectorPersistence.bankAfterClassEdit, ['uav'], 'editing class streaks while alive should preserve banked streaks');
