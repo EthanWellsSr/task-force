@@ -351,7 +351,8 @@ const VM_RETICLE = {
   holoDot: 0.004,
   holoRingInner: 0.0085,
   holoRingOuter: 0.011,
-  acogHair: 0.0042, // P54: crosshair bar thickness (arms are 5x this)
+  acogHair: 0.0024,
+  acogArm: 0.012,
 };
 
 // Red dot mount points (#9c): rail-top y + mount z per weapon key
@@ -923,10 +924,11 @@ function buildViewModel(w) {
       part(0.064, 0.008, 0.02, black, 0, retY + 0.028, mnt.z - 0.068);
       part(0.064, 0.008, 0.02, black, 0, retY - 0.028, mnt.z - 0.068);
       const hair = VM_RETICLE.acogHair;
-      const hbar = new THREE.Mesh(new THREE.BoxGeometry(hair * 5, hair, 0.003), glow());
+      const arm = VM_RETICLE.acogArm;
+      const hbar = new THREE.Mesh(new THREE.BoxGeometry(arm, hair, 0.003), glow());
       hbar.position.set(0, retY, mnt.z);
       g.add(hbar);
-      const vbar = new THREE.Mesh(new THREE.BoxGeometry(hair, hair * 5, 0.003), glow());
+      const vbar = new THREE.Mesh(new THREE.BoxGeometry(hair, arm, 0.003), glow());
       vbar.position.set(0, retY, mnt.z);
       g.add(vbar);
     } else {
