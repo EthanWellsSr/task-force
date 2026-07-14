@@ -1555,32 +1555,127 @@ function deployCounterUav() {
   AudioSys.jammer(CUAV_DUR);
 }
 
-// P63: Care Package — intentionally no crate/entity physics. Calling it
-// immediately banks one existing non-special reward, excluding itself so
-// packages cannot chain into more packages. Lethal rewards still carry
-// their normal weaponName when deployed, so STREAK_WEAPON_NAMES keeps their
-// kills from feeding streak progress.
+const CARE_PACKAGE_REWARDS = [
+  { kind: 'ammo', name: 'AMMO RESUPPLY', weight: 40 },
+  { kind: 'streak', id: 'uav', name: 'UAV', weight: 24 },
+  { kind: 'streak', id: 'cuav', name: 'COUNTER-UAV', weight: 18 },
+  { kind: 'streak', id: 'airstrike', name: 'PRECISION AIRSTRIKE', weight: 10 },
+  { kind: 'streak', id: 'napalm', name: 'NAPALM STRIKE', weight: 6 },
+];
+const _carePackages = [];
+
 function carePackageRewardPool() {
-  return KILLSTREAK_ORDER
-    .map(id => KILLSTREAKS[id])
-    .filter(ks => ks && ks.selectable && !ks.special && ks.id !== 'carepackage');
+  return CARE_PACKAGE_REWARDS.filter(r => r.kind === 'ammo' || (KILLSTREAKS[r.id] && !KILLSTREAKS[r.id].special && r.id !== 'carepackage'));
+}
+
+function chooseCarePackageReward(rand = Math.random()) {
+  const pool = carePackageRewardPool();
+  const total = pool.reduce((sum, r) => sum + r.weight, 0);
+  let pick = rand * total;
+  for (const reward of pool) {
+    pick -= reward.weight;
+    if (pick <= 0) return reward;
+  }
+  return pool[pool.length - 1] || { kind: 'ammo', name: 'AMMO RESUPPLY', weight: 1 };
+}
+
+function carePkgBox(w, h, d, color, x, y, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
+  m.position.set(x || 0, y || 0, z || 0);
+  m.castShadow = true;
+  return m;
+}
+
+function makeCareHeli() {
+  const g = new THREE.Group();
+  g.add(carePkgBox(1.8, 0.45, 0.55, 0x273039, 0, 0, 0));
+  g.add(carePkgBox(0.35, 0.25, 0.45, 0x1d252b, -1.05, 0.03, 0));
+  g.add(carePkgBox(0.9, 0.05, 0.08, 0x111417, -1.55, 0.08, 0));
+  g.add(carePkgBox(2.2, 0.035, 0.12, 0x111417, 0, 0.36, 0));
+  g.add(carePkgBox(0.12, 0.035, 2.2, 0x111417, 0, 0.37, 0));
+  return g;
+}
+
+function makeCareCrate() {
+  const g = new THREE.Group();
+  g.add(carePkgBox(0.9, 0.55, 0.9, 0x53603d, 0, 0.28, 0));
+  g.add(carePkgBox(0.96, 0.08, 0.18, 0x303826, 0, 0.58, 0));
+  g.add(carePkgBox(0.18, 0.08, 0.96, 0x303826, 0, 0.59, 0));
+  return g;
+}
+
+function carePackageDropPoint() {
+  const forward = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw));
+  const p = player.pos.clone().addScaledVector(forward, 5);
+  p.x = THREE.MathUtils.clamp(p.x, -G.map.bounds.x + 2, G.map.bounds.x - 2);
+  p.z = THREE.MathUtils.clamp(p.z, -G.map.bounds.z + 2, G.map.bounds.z - 2);
+  const hit = rayWorld(new THREE.Vector3(p.x, 40, p.z), new THREE.Vector3(0, -1, 0), 45, G.colliders);
+  p.y = hit ? hit.point.y : 0;
+  return p;
 }
 
 function deployCarePackage() {
-  const pool = carePackageRewardPool();
-  if (!pool.length) {
-    AudioSys.carePackage && AudioSys.carePackage();
-    return 'CARE PACKAGE EMPTY';
-  }
-  const open = pool.filter(ks => !player._bankedStreaks.some(b => b.id === ks.id));
-  if (!open.length) {
-    AudioSys.carePackage && AudioSys.carePackage();
-    return 'CARE PACKAGE: ALL REWARDS BANKED';
-  }
-  const reward = open[Math.floor(Math.random() * open.length)];
-  bankKillstreak(reward, false);
+  const drop = carePackageDropPoint();
+  const heli = makeCareHeli();
+  const crate = makeCareCrate();
+  const side = G.map.bounds.x + 12;
+  heli.position.set(-side, drop.y + 9.5, drop.z);
+  crate.position.set(drop.x, drop.y + 8.8, drop.z);
+  crate.visible = false;
+  G.scene.add(heli);
+  G.scene.add(crate);
+  _carePackages.push({
+    drop, heli, crate, t: 0, dropped: false, landed: false,
+    reward: chooseCarePackageReward(), ownerTeam: player.team,
+  });
   AudioSys.carePackage && AudioSys.carePackage();
-  return 'CARE PACKAGE: ' + reward.name + ' READY';
+  return 'CARE PACKAGE INBOUND';
+}
+
+function refillEntityAmmo(ent) {
+  if (ent.isPlayer) {
+    for (const wp of ent.weapons) {
+      wp.mag = wp.def.mag;
+      wp.reserve = Math.max(wp.reserve, wp.def.reserve);
+    }
+  } else if (ent.weapon) {
+    ent.magLeft = ent.weapon.mag;
+    ent.reloadT = 0;
+  }
+}
+
+function claimCarePackage(pkg, ent) {
+  const reward = pkg.reward;
+  if (reward.kind === 'ammo') refillEntityAmmo(ent);
+  else if (ent.isPlayer && KILLSTREAKS[reward.id]) bankKillstreak(KILLSTREAKS[reward.id], false);
+  else ent.lastCarePackageReward = reward.id || reward.kind;
+  const claimedByPlayer = ent.isPlayer;
+  UI.showStreakBanner((claimedByPlayer ? 'CARE PACKAGE: ' : 'ENEMY STOLE PACKAGE: ') + reward.name);
+  G.scene.remove(pkg.heli);
+  G.scene.remove(pkg.crate);
+  _carePackages.splice(_carePackages.indexOf(pkg), 1);
+}
+
+function updateCarePackages(dt) {
+  for (let i = _carePackages.length - 1; i >= 0; i--) {
+    const pkg = _carePackages[i];
+    pkg.t += dt;
+    const side = G.map.bounds.x + 12;
+    const flyT = Math.min(1, pkg.t / 3.2);
+    pkg.heli.position.x = THREE.MathUtils.lerp(-side, side, flyT);
+    pkg.heli.position.z = pkg.drop.z + Math.sin(pkg.t * 2.8) * 0.2;
+    if (pkg.t > 1.15) {
+      pkg.dropped = true;
+      pkg.crate.visible = true;
+      const dropT = Math.min(1, (pkg.t - 1.15) / 1.25);
+      pkg.crate.position.y = THREE.MathUtils.lerp(pkg.drop.y + 8.8, pkg.drop.y, dropT);
+      pkg.landed = dropT >= 1;
+    }
+    if (flyT >= 1) G.scene.remove(pkg.heli);
+    if (!pkg.landed) continue;
+    const claimants = [player, ...G.bots].filter(e => e.alive && e.pos.distanceTo(pkg.drop) < 1.35);
+    if (claimants.length) claimCarePackage(pkg, claimants[0]);
+  }
 }
 
 // ---- napalm strike (#7b): random bombardment across the map ----
@@ -3395,6 +3490,7 @@ function startMatch(mapId, modeId = 'tdm') {
   G.timeLeft = UI.settings.timeLimit > 0 ? UI.settings.timeLimit : Infinity;
   G.time = 0;
   _killCam = null;
+  _carePackages.length = 0;
   UI.hideKillCam();
   player.kills = 0; player.deaths = 0; player.assists = 0;
   player.recentDamagers.length = 0; // #16d
@@ -4519,6 +4615,7 @@ function loop() {
     updateGrenadePreview();
     updateTomahawks(dt); // #16c
     updateSmokeClouds(dt);
+    updateCarePackages(dt);
     updateNapalm(dt);
     updateNuke(dt);
 
@@ -4578,6 +4675,7 @@ window.MAIN = {
 window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
   nukeT: v => v === undefined ? _nukeT : (_nukeT = v),
   killCam: () => _killCam,
+  carePackages: () => _carePackages, chooseCarePackageReward,
   throwables: () => _throwables, throwEquipment, startCooking, releaseThrow,
   grenadePreview: () => _grenadePreview,
   spawnBotThrowable, // #16b
