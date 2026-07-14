@@ -3442,7 +3442,7 @@ function startMatch(mapId, modeId = 'tdm') {
 function deploy() {
   if (player.respawnT > 0) return;
   const cls = UI.classes[UI.selectedClass];
-  normalizeClass(cls);
+  sanitizeClassForLevel(cls);
   if (isGunGameMode()) {
     // P75-P77: Gun Game owns the whole loadout. Custom-class perks and
     // streak selections must not leak into forced ladder tiers.

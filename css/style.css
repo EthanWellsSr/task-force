@@ -139,6 +139,8 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
 }
 .weapon-item:hover, .perk-item:hover { background:rgba(232,163,61,.08); }
 .weapon-item.selected, .perk-item.selected { background:rgba(232,163,61,.18); color:#e8a33d; }
+.weapon-item.locked, .perk-item.locked { opacity:.55; cursor:not-allowed; }
+.weapon-item.locked:hover, .perk-item.locked:hover { background:transparent; }
 .weapon-item .w-cat { color:#6a7060; font-size:10px; }
 .weapon-item.camo-item { flex-direction:column; align-items:flex-start; }
 .weapon-item.camo-item .w-cat { color:#8a9078; line-height:1.35; margin-top:3px; }

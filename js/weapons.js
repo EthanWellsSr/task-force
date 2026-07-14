@@ -187,6 +187,18 @@ function unlockLevelOf(def) {
   return (def && def.unlockLevel) || 1;
 }
 
+function currentProfileLevel() {
+  try {
+    return Profile.load().level;
+  } catch (e) {
+    return 1;
+  }
+}
+
+function isUnlocked(def, level = currentProfileLevel()) {
+  return unlockLevelOf(def) <= level;
+}
+
 // Final Level 1-20 unlock table (P78-P80) — one readable reward per
 // level 2-20. Level 1 is the silent starter kit, so it has no row.
 // `pool` is documentation for UI/copy; metadata on the actual def still
@@ -390,6 +402,29 @@ function selectableKillstreakIds() {
   return KILLSTREAK_ORDER.filter(id => KILLSTREAKS[id] && KILLSTREAKS[id].selectable);
 }
 
+function firstUnlockedWeapon(slot, level, preferredCat = null) {
+  if (preferredCat) {
+    for (const key in WEAPONS)
+      if (WEAPONS[key].slot === slot && WEAPONS[key].cat === preferredCat && isUnlocked(WEAPONS[key], level)) return key;
+  }
+  for (const key in WEAPONS)
+    if (WEAPONS[key].slot === slot && isUnlocked(WEAPONS[key], level)) return key;
+  return slot === 'secondary' ? 'usp' : 'm4a1';
+}
+
+function firstUnlockedPerk(tier, level) {
+  const pick = (PERKS[tier] || []).find(p => isUnlocked(p, level));
+  return pick ? pick.id : (PERKS[tier] && PERKS[tier][0] ? PERKS[tier][0].id : null);
+}
+
+function firstUnlockedThrowable(slot, level) {
+  if (typeof THROWABLES !== 'undefined') {
+    for (const id in THROWABLES)
+      if (THROWABLES[id].slot === slot && isUnlocked(THROWABLES[id], level)) return id;
+  }
+  return slot === 'tactical' ? 'stun' : 'frag';
+}
+
 function normalizeClass(c) {
   if (!c.attachments || typeof c.attachments !== 'object') c.attachments = {};
   for (const slot of ['primary', 'secondary']) {
@@ -428,6 +463,39 @@ function normalizeClass(c) {
   }).slice(0, streakSlotLimit(c));
   if (!c.killstreaks.length) c.killstreaks = DEFAULT_KILLSTREAK_IDS.filter(id => legalStreaks.includes(id)).slice(0, streakSlotLimit(c));
   return c;
+}
+
+function sanitizeClassForLevel(c, level = currentProfileLevel()) {
+  normalizeClass(c);
+  if (!isUnlocked(WEAPONS[c.primary], level)) c.primary = firstUnlockedWeapon('primary', level, WEAPONS[c.primary] && WEAPONS[c.primary].cat);
+  if (!isUnlocked(WEAPONS[c.secondary], level)) c.secondary = firstUnlockedWeapon('secondary', level, WEAPONS[c.secondary] && WEAPONS[c.secondary].cat);
+
+  for (const slot of ['primary', 'secondary']) {
+    const def = WEAPONS[c[slot]];
+    c.attachments[slot] = (c.attachments[slot] || []).filter(id => {
+      const a = ATTACHMENTS[id];
+      return a && attachmentAllowed(a, def) && isUnlocked(a, level);
+    });
+  }
+
+  for (const tier of [1, 2, 3]) {
+    const p = perkById(c.perks[tier - 1]);
+    if (!p || !isUnlocked(p, level)) c.perks[tier - 1] = firstUnlockedPerk(tier, level);
+  }
+
+  if (typeof THROWABLES !== 'undefined') {
+    if (!THROWABLES[c.lethal] || !isUnlocked(THROWABLES[c.lethal], level)) c.lethal = firstUnlockedThrowable('lethal', level);
+    if (!THROWABLES[c.tactical] || !isUnlocked(THROWABLES[c.tactical], level)) c.tactical = firstUnlockedThrowable('tactical', level);
+  }
+
+  const legalStreaks = selectableKillstreakIds()
+    .filter(id => typeof KILLSTREAKS === 'undefined' || (KILLSTREAKS[id] && isUnlocked(KILLSTREAKS[id], level)));
+  c.killstreaks = (c.killstreaks || [])
+    .filter(id => legalStreaks.includes(id))
+    .slice(0, streakSlotLimit(c));
+  if (!c.killstreaks.length)
+    c.killstreaks = DEFAULT_KILLSTREAK_IDS.filter(id => legalStreaks.includes(id)).slice(0, streakSlotLimit(c));
+  return normalizeClass(c);
 }
 
 // ============================================================
@@ -470,10 +538,10 @@ function perkById(id) {
 // Default classes
 const DEFAULT_CLASSES = [
   { name:'CINDERLINE',  primary:'m4a1',         secondary:'usp',    perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'IRONWAKE',    primary:'famas',        secondary:'g18',    perks:['marathon','lightweight','ninja'],  lethal:'frag', tactical:'smoke', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'ASHRUNNER',   primary:'rpd',          secondary:'deagle', perks:['scavenger','stopping','steadyaim'],lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'RAVENFALL',   primary:'intervention', secondary:'usp',    perks:['soh','coldblooded','ninja'],       lethal:'frag', tactical:'smoke', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'DUSTKNIFE',   primary:'ump45',        secondary:'spas12', perks:['marathon','lightweight','commando'],lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'IRONWAKE',    primary:'famas',        secondary:'g18',    perks:['soh','lightweight','steadyaim'],   lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'ASHRUNNER',   primary:'rpd',          secondary:'usp',    perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'RAVENFALL',   primary:'intervention', secondary:'usp',    perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'DUSTKNIFE',   primary:'mp5k',         secondary:'spas12', perks:['soh','lightweight','commando'],    lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
 ];
 
 // Loadout pool bots draw from. #16b: each carries a `lethal` throwable pick

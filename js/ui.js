@@ -110,12 +110,16 @@ const UI = {
     try {
       const c = JSON.parse(localStorage.getItem('tf_classes'));
       // normalizeClass migrates pre-attachment saves (bare weapon keys) in place
-      if (Array.isArray(c) && c.length === 5) { this.classes = c.map(normalizeClass); this.saveClasses(); return; }
+      if (Array.isArray(c) && c.length === 5) { this.classes = c.map(c => sanitizeClassForLevel(c)); this.saveClasses(); return; }
     } catch (e) {}
-    this.classes = DEFAULT_CLASSES.map(c => normalizeClass(JSON.parse(JSON.stringify(c))));
+    this.classes = DEFAULT_CLASSES.map(c => sanitizeClassForLevel(JSON.parse(JSON.stringify(c))));
     this.saveClasses();
   },
   saveClasses() { localStorage.setItem('tf_classes', JSON.stringify(this.classes)); },
+  sanitizeClassesForProfile() {
+    this.classes = this.classes.map(c => sanitizeClassForLevel(c));
+    this.saveClasses();
+  },
 
   // ---------- screens ----------
   show(id) {
@@ -146,6 +150,7 @@ const UI = {
     const apply = (msg, fn) => {
       if (!window.confirm(msg)) return;
       fn();
+      this.sanitizeClassesForProfile();
       this.renderProfileBadge();
       AudioSys.uiClick();
     };
@@ -353,7 +358,7 @@ const UI = {
   },
 
   classStreakLine(c) {
-    normalizeClass(c);
+    sanitizeClassForLevel(c);
     return (c.killstreaks || [])
       .map(id => KILLSTREAKS[id] ? KILLSTREAKS[id].name : id)
       .join(' / ');
@@ -378,6 +383,7 @@ const UI = {
 
   renderClassEditor() {
     const c = this.classes[this.editIdx];
+    sanitizeClassForLevel(c);
     this.renderControlHints();
     this.renderClassSlots();
     this.$('className').value = c.name;
@@ -388,6 +394,8 @@ const UI = {
       unlockLevelOf(def) > 1
         ? `<span class="w-lock" title="UNLOCKS AT LEVEL ${unlockLevelOf(def)}">LVL ${unlockLevelOf(def)}</span>` : '';
     const rewardLabel = def => unlockLevelOf(def) > 1 ? 'LVL ' + unlockLevelOf(def) + ' REWARD' : 'STARTER';
+    const profileLevel = currentProfileLevel();
+    const locked = def => def && !isUnlocked(def, profileLevel);
     const mkWeaponList = (elId, slot, selectedKey, onPick) => {
       const wrap = this.$(elId);
       wrap.innerHTML = '';
@@ -395,9 +403,10 @@ const UI = {
         const w = WEAPONS[key];
         if (w.slot !== slot) continue;
         const div = document.createElement('div');
-        div.className = 'weapon-item' + (key === selectedKey ? ' selected' : '');
+        const isLocked = locked(w);
+        div.className = 'weapon-item' + (key === selectedKey ? ' selected' : '') + (isLocked ? ' locked' : '');
         div.innerHTML = `<span>${w.name}${lockChip(w)}</span><span class="w-cat">${w.cat}</span>`;
-        div.onclick = () => { AudioSys.uiClick(); onPick(key); };
+        if (!isLocked) div.onclick = () => { AudioSys.uiClick(); onPick(key); };
         div.onmouseenter = () => this.renderWeaponStats(key);
         wrap.appendChild(div);
       }
@@ -426,20 +435,23 @@ const UI = {
         for (const a of opts) {
           const div = document.createElement('div');
           const isCamo = a.slot === 'camo';
-          div.className = 'weapon-item attach-item' + (isCamo ? ' camo-item' : '') + (picked.includes(a.id) ? ' selected' : '');
+          const isLocked = locked(a);
+          div.className = 'weapon-item attach-item' + (isCamo ? ' camo-item' : '') + (picked.includes(a.id) ? ' selected' : '') + (isLocked ? ' locked' : '');
           const desc = isCamo ? rewardLabel(a) + ' · ' + attachmentDesc(a) : attachmentDesc(a);
           div.innerHTML = `<span class="attach-name">${a.name}${lockChip(a)}</span><span class="w-cat">${desc}</span>`;
-          div.onclick = () => {
-            AudioSys.uiClick();
-            const i = picked.indexOf(a.id);
-            if (i >= 0) picked.splice(i, 1);
-            else {
-              for (let j = picked.length - 1; j >= 0; j--)
-                if (ATTACHMENTS[picked[j]].slot === cat) picked.splice(j, 1);
-              picked.push(a.id);
-            }
-            this.saveClasses(); this.renderClassEditor(); this.renderWeaponStats(c[slot]);
-          };
+          if (!isLocked) {
+            div.onclick = () => {
+              AudioSys.uiClick();
+              const i = picked.indexOf(a.id);
+              if (i >= 0) picked.splice(i, 1);
+              else {
+                for (let j = picked.length - 1; j >= 0; j--)
+                  if (ATTACHMENTS[picked[j]].slot === cat) picked.splice(j, 1);
+                picked.push(a.id);
+              }
+              this.saveClasses(); this.renderClassEditor(); this.renderWeaponStats(c[slot]);
+            };
+          }
           div.onmouseenter = () => this.renderWeaponStats(c[slot]);
           wrap.appendChild(div);
         }
@@ -496,9 +508,10 @@ const UI = {
       wrap.innerHTML = '';
       PERKS[tier].forEach(p => {
         const div = document.createElement('div');
-        div.className = 'perk-item' + (c.perks[tier - 1] === p.id ? ' selected' : '');
+        const isLocked = locked(p);
+        div.className = 'perk-item' + (c.perks[tier - 1] === p.id ? ' selected' : '') + (isLocked ? ' locked' : '');
         div.innerHTML = `<span>${p.name}${lockChip(p)}</span><span class="p-desc">${p.desc}</span>`;
-        div.onclick = () => { AudioSys.uiClick(); c.perks[tier - 1] = p.id; normalizeClass(c); this.saveClasses(); this.renderClassEditor(); };
+        if (!isLocked) div.onclick = () => { AudioSys.uiClick(); c.perks[tier - 1] = p.id; sanitizeClassForLevel(c); this.saveClasses(); this.renderClassEditor(); };
         wrap.appendChild(div);
       });
     });
@@ -514,9 +527,10 @@ const UI = {
       const cur = c[slotField] || 'none';
       for (const o of opts) {
         const div = document.createElement('div');
-        div.className = 'weapon-item' + (o.id === cur ? ' selected' : '');
+        const isLocked = o.def && locked(o.def);
+        div.className = 'weapon-item' + (o.id === cur ? ' selected' : '') + (isLocked ? ' locked' : '');
         div.innerHTML = `<span>${o.name}${o.def ? lockChip(o.def) : ''}</span>`;
-        div.onclick = () => { AudioSys.uiClick(); c[slotField] = o.id; this.saveClasses(); this.renderClassEditor(); };
+        if (!isLocked) div.onclick = () => { AudioSys.uiClick(); c[slotField] = o.id; sanitizeClassForLevel(c); this.saveClasses(); this.renderClassEditor(); };
         wrap.appendChild(div);
       }
     };
@@ -534,23 +548,26 @@ const UI = {
       if (!ks || !ks.selectable) continue;
       const selected = (c.killstreaks || []).includes(id);
       const kills = Math.max(2, ks.kills - (c.perks.includes('hardline') ? 1 : 0));
+      const isLocked = locked(ks);
       const div = document.createElement('div');
-      div.className = 'weapon-item streak-item' + (selected ? ' selected' : '');
+      div.className = 'weapon-item streak-item' + (selected ? ' selected' : '') + (isLocked ? ' locked' : '');
       div.innerHTML = `<span>${ks.name}${lockChip(ks)}</span><span class="w-cat">${kills} KILLS</span>`;
-      div.onclick = () => {
-        AudioSys.uiClick();
-        normalizeClass(c);
-        const cur = c.killstreaks || [];
-        const idx = cur.indexOf(id);
-        if (idx >= 0) {
-          if (cur.length > 1) cur.splice(idx, 1);
-        } else {
-          if (cur.length >= slotMax) cur.shift();
-          cur.push(id);
-        }
-        normalizeClass(c);
-        this.saveClasses(); this.renderClassEditor();
-      };
+      if (!isLocked) {
+        div.onclick = () => {
+          AudioSys.uiClick();
+          sanitizeClassForLevel(c);
+          const cur = c.killstreaks || [];
+          const idx = cur.indexOf(id);
+          if (idx >= 0) {
+            if (cur.length > 1) cur.splice(idx, 1);
+          } else {
+            if (cur.length >= slotMax) cur.shift();
+            cur.push(id);
+          }
+          sanitizeClassForLevel(c);
+          this.saveClasses(); this.renderClassEditor();
+        };
+      }
       streakWrap.appendChild(div);
     }
   },
@@ -935,6 +952,7 @@ const UI = {
     // throwables and killstreaks announce just like weapons/perks/camos.
     let unlockRows = '';
     if (commit.leveledUp) {
+      this.sanitizeClassesForProfile();
       const unlocked = UNLOCK_TABLE
         .filter(row => row.level > commit.oldLevel && row.level <= commit.newLevel)
         .map(row => row.name);
