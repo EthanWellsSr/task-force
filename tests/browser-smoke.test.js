@@ -256,8 +256,44 @@ async function run() {
         });
         MAIN.quitMatch();
       }
+      UI.classes[UI.selectedClass] = sanitizeClassForLevel({
+        name:'STREAK3',
+        primary:'m4a1',
+        secondary:'usp',
+        perks:['soh','stopping','steadyaim'],
+        lethal:'frag',
+        tactical:'stun',
+        killstreaks:['cuav','uav','carepackage','airstrike'],
+        attachments:{ primary:[], secondary:[] },
+      });
+      UI.saveClasses();
+      UI.loadClasses();
+      const selectorThree = UI.classes[UI.selectedClass].killstreaks.slice();
+      UI.classes[UI.selectedClass] = sanitizeClassForLevel({
+        name:'STREAK4',
+        primary:'m4a1',
+        secondary:'usp',
+        perks:['arsenal','stopping','steadyaim'],
+        lethal:'frag',
+        tactical:'stun',
+        killstreaks:['cuav','uav','carepackage','airstrike'],
+        attachments:{ primary:[], secondary:[] },
+      });
+      UI.saveClasses();
+      UI.loadClasses();
+      const selectorFour = UI.classes[UI.selectedClass].killstreaks.slice();
+      MAIN.startMatch('rust', 'tdm');
+      MAIN.deploy();
+      DEBUG.player._bankedStreaks = [KILLSTREAKS.uav];
+      DEBUG.player._streakSel = 0;
+      UI.classes[UI.selectedClass].killstreaks = ['airstrike','napalm','carepackage','uav'];
+      UI.saveClasses();
+      const bankAfterClassEdit = DEBUG.player._bankedStreaks.map(s => s.id);
+      MAIN.startMatch('rust', 'tdm');
+      const bankAfterMatchReset = DEBUG.player._bankedStreaks.map(s => s.id);
+      const selectorPersistence = { selectorThree, selectorFour, bankAfterClassEdit, bankAfterMatchReset };
 
-      return { fresh, near, nearEnd, multiEnd, capEnd, corruptedClass, level1Editor, maxClass, maxRender, deployedMaxClass, perkDeploy };
+      return { fresh, near, nearEnd, multiEnd, capEnd, corruptedClass, level1Editor, maxClass, maxRender, deployedMaxClass, perkDeploy, selectorPersistence };
     });
 
     assert.ok(progression.fresh.badge.includes('LVL 1'), 'fresh profile badge should show Level 1');
@@ -305,6 +341,10 @@ async function run() {
         assert.strictEqual(row.deployedStreaks.filter(id => id !== 'nuke').length, 3, `${row.perks[0]} should deploy three selected streaks plus special nuke`);
       }
     }
+    assert.deepStrictEqual(progression.selectorPersistence.selectorThree, ['cuav', 'uav', 'carepackage'], 'non-Arsenal classes should persist only three streaks');
+    assert.deepStrictEqual(progression.selectorPersistence.selectorFour, ['cuav', 'uav', 'carepackage', 'airstrike'], 'Arsenal classes should persist four streaks');
+    assert.deepStrictEqual(progression.selectorPersistence.bankAfterClassEdit, ['uav'], 'editing class streaks while alive should preserve banked streaks');
+    assert.deepStrictEqual(progression.selectorPersistence.bankAfterMatchReset, [], 'match reset should clear banked streaks');
 
     const modes = await page.evaluate(async () => {
       const clone = value => value === undefined ? null : JSON.parse(JSON.stringify(value));
