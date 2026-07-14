@@ -482,7 +482,81 @@ async function run() {
       equipmentEffects.decoySpawned = decoyOut;
       MAIN.quitMatch();
 
-      return { snapshots, stats: Profile.load().stats, afterLiveQuits, afterPausedQuit, xpModes, gunGameXp, equipmentDeploy, equipmentEffects };
+      Profile.reset();
+      const streakProfile = Profile.load();
+      streakProfile.xp = Profile.xpThreshold(Profile.LEVEL_CAP);
+      streakProfile.level = Profile.LEVEL_CAP;
+      Profile.save(streakProfile);
+      UI.classes[UI.selectedClass] = sanitizeClassForLevel({
+        name:'STREAKS',
+        primary:'m4a1',
+        secondary:'usp',
+        perks:['hardline','stopping','steadyaim'],
+        lethal:'frag',
+        tactical:'stun',
+        killstreaks:['cuav','uav','carepackage'],
+        attachments:{ primary:[], secondary:[] },
+      });
+      UI.settings.scoreLimit = 30;
+      MAIN.startMatch('rust', 'tdm');
+      MAIN.deploy();
+      const streakTarget = DEBUG.G.bots.find(b => b.team !== DEBUG.player.team);
+      const bankSnapshots = [];
+      for (let i = 0; i < 5; i++) {
+        if (!streakTarget.alive) streakTarget.spawn();
+        streakTarget.spawnProtectT = 0;
+        streakTarget.hp = 100;
+        streakTarget.hurt(9999, DEBUG.player, DEBUG.curW().def.name, false, true);
+        bankSnapshots.push({
+          kills: i + 1,
+          streakKills: DEBUG.player._streakKills,
+          banked: DEBUG.player._bankedStreaks.map(s => s.id),
+          awarded: [...DEBUG.player._streakAwarded],
+        });
+      }
+      const bankedAfterMoreKills = DEBUG.player._bankedStreaks.map(s => s.id);
+      DEBUG.player._bankedStreaks = [KILLSTREAKS.uav];
+      DEBUG.player._streakSel = 0;
+      deployKillstreak();
+      const uavDeploy = { uavUntil: DEBUG.G.uavUntil, banked: DEBUG.player._bankedStreaks.map(s => s.id) };
+      DEBUG.player._bankedStreaks = [KILLSTREAKS.cuav];
+      DEBUG.player._streakSel = 0;
+      deployKillstreak();
+      const cuavDeploy = { jamUntil: DEBUG.G.jamUntil, jamTeam: DEBUG.G.jamTeam, banked: DEBUG.player._bankedStreaks.map(s => s.id) };
+      DEBUG.player._bankedStreaks = [KILLSTREAKS.carepackage];
+      DEBUG.player._streakSel = 0;
+      deployKillstreak();
+      const carePackageDeploy = { banked: DEBUG.player._bankedStreaks.map(s => s.id) };
+      const beforeStreakWeaponKill = {
+        streakKills: DEBUG.player._streakKills,
+        directKills: Profile.MatchStats.kills,
+        killstreakKills: Profile.MatchStats.killstreakKills,
+        xp: Profile.MatchXP.snapshot(),
+        banked: DEBUG.player._bankedStreaks.map(s => s.id),
+      };
+      if (!streakTarget.alive) streakTarget.spawn();
+      streakTarget.spawnProtectT = 0;
+      streakTarget.hp = 100;
+      streakTarget.hurt(9999, DEBUG.player, 'NAPALM', false, true);
+      const afterStreakWeaponKill = {
+        streakKills: DEBUG.player._streakKills,
+        directKills: Profile.MatchStats.kills,
+        killstreakKills: Profile.MatchStats.killstreakKills,
+        xp: Profile.MatchXP.snapshot(),
+        banked: DEBUG.player._bankedStreaks.map(s => s.id),
+      };
+      const killstreakMatrix = {
+        bankSnapshots,
+        bankedAfterMoreKills,
+        uavDeploy,
+        cuavDeploy,
+        carePackageDeploy,
+        beforeStreakWeaponKill,
+        afterStreakWeaponKill,
+      };
+      MAIN.quitMatch();
+
+      return { snapshots, stats: Profile.load().stats, afterLiveQuits, afterPausedQuit, xpModes, gunGameXp, equipmentDeploy, equipmentEffects, killstreakMatrix };
     });
 
     const byMode = Object.fromEntries(modes.snapshots.map(s => [s.mode, s]));
@@ -542,6 +616,20 @@ async function run() {
     assert.strictEqual(modes.equipmentEffects.flashApplied, true, 'flashbang should blind an enemy bot');
     assert.strictEqual(modes.equipmentEffects.throwingKnifeSpawned, true, 'throwing knife should spawn a thrown knife');
     assert.strictEqual(modes.equipmentEffects.decoySpawned, true, 'decoy should spawn a decoy throwable');
+    assert.deepStrictEqual(modes.killstreakMatrix.bankSnapshots[2].banked, ['cuav'], 'Hardline should bank CUAV at 3 kills');
+    assert.deepStrictEqual(modes.killstreakMatrix.bankSnapshots[3].banked, ['cuav', 'uav'], 'Hardline should bank UAV at 4 kills');
+    assert.deepStrictEqual(modes.killstreakMatrix.bankSnapshots[4].banked, ['cuav', 'uav', 'carepackage'], 'Hardline should bank Care Package at 5 kills');
+    assert.deepStrictEqual(modes.killstreakMatrix.bankedAfterMoreKills, ['cuav', 'uav', 'carepackage'], 'awarded streaks should not duplicate in bank');
+    assert.ok(modes.killstreakMatrix.uavDeploy.uavUntil > 0, 'UAV deploy should set UAV timer');
+    assert.deepStrictEqual(modes.killstreakMatrix.uavDeploy.banked, [], 'UAV deploy should consume banked streak');
+    assert.ok(modes.killstreakMatrix.cuavDeploy.jamUntil > 0, 'Counter-UAV deploy should set jam timer');
+    assert.deepStrictEqual(modes.killstreakMatrix.cuavDeploy.banked, [], 'Counter-UAV deploy should consume banked streak');
+    assert.strictEqual(modes.killstreakMatrix.carePackageDeploy.banked.length, 1, 'Care Package should bank one reward');
+    assert.ok(['cuav', 'uav', 'airstrike', 'napalm'].includes(modes.killstreakMatrix.carePackageDeploy.banked[0]), 'Care Package reward should be a non-special non-package streak');
+    assert.strictEqual(modes.killstreakMatrix.afterStreakWeaponKill.streakKills, modes.killstreakMatrix.beforeStreakWeaponKill.streakKills, 'streak weapon kills should not feed streak progress');
+    assert.strictEqual(modes.killstreakMatrix.afterStreakWeaponKill.directKills, modes.killstreakMatrix.beforeStreakWeaponKill.directKills, 'streak weapon kills should not count as direct kills');
+    assert.strictEqual(modes.killstreakMatrix.afterStreakWeaponKill.killstreakKills, modes.killstreakMatrix.beforeStreakWeaponKill.killstreakKills + 1, 'streak weapon kills should count as killstreak kills');
+    assert.strictEqual(modes.killstreakMatrix.afterStreakWeaponKill.xp.killstreakKills, modes.killstreakMatrix.beforeStreakWeaponKill.xp.killstreakKills + 50, 'streak weapon kills should award killstreak XP');
     assert.deepStrictEqual(errors, [], 'browser smoke should have no app console/page errors');
   } finally {
     await browser.close();
