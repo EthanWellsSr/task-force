@@ -455,7 +455,17 @@ const VM_MAG_PULL = {
 const VM_CAMOS = {
   camoDesert:   { shades: [0x4f4530, 0x7d6c48, 0xa38e61, 0xc4ad7e], pattern: true },
   camoWoodland: { shades: [0x1f2b1a, 0x3a4f2e, 0x59683f, 0x7c8656], pattern: true },
+  camoUrban:    { shades: [0x25292d, 0x444b52, 0x68717a, 0x9aa3aa], pattern: true },
+  camoArctic:   { shades: [0x7d8790, 0xa2acb5, 0xc8d2d9, 0xf0f3f5], pattern: true },
+  camoJungle:   { shades: [0x15271b, 0x284a2f, 0x3f6b42, 0x71935c], pattern: true },
   camoDigital:  { shades: [0x2b3134, 0x4a555b, 0x6b797f, 0x93a1a6], pattern: true },
+  camoTiger:    { shades: [0x1b1710, 0x6c4518, 0xb56f20, 0xd49a3a], pattern: true },
+  camoHex:      { shades: [0x1c2528, 0x365055, 0x5f7d7f, 0x91a6a4], pattern: true },
+  camoCarbon:   { shades: [0x111315, 0x25292d, 0x3c4348, 0x5e666b], pattern: true },
+  camoRedline:  { shades: [0x1a1010, 0x3a1c1d, 0x7c2428, 0xd13a3f], pattern: true },
+  camoBlueSteel:{ shades: [0x13202d, 0x26415c, 0x3d6790, 0x78a3c4], pattern: true },
+  camoTopo:     { shades: [0x2c3329, 0x526147, 0x81936e, 0xb8c49a], pattern: true },
+  camoSplinter: { shades: [0x22261d, 0x535945, 0x858b6b, 0xb6ba91], pattern: true },
   camoGold:     { shades: [0x7a5714, 0xa87c1e, 0xd2a428, 0xf0c94e], pattern: false },
 };
 
@@ -1497,8 +1507,8 @@ const KILLSTREAKS = {
     deploy() { deployNapalm(); },
   },
   nuke: {
-    id: 'nuke', name: 'TACTICAL NUKE', kills: 25,
-    selectable: false, special: true, // always armed, never a slot
+    id: 'nuke', name: 'TACTICAL NUKE', kills: 25, unlockLevel: 20,
+    selectable: false, special: true, // late special, never a class slot
     weaponName: 'TACTICAL NUKE',
     deploy() { deployNuke(); },
   },
@@ -2031,7 +2041,7 @@ const THROWABLES = {
   // charge, despawns with its owner's death. Player-only; bots never
   // place one. model: 'c4' = flat olive slab + antenna.
   c4: {
-    name: 'C4', slot: 'lethal',
+    name: 'C4', slot: 'lethal', unlockLevel: 8,
     count: 1, fuse: Infinity, radius: 7, dmg: 125, minDmg: 25,
     sticky: true, remote: true, noCookOff: true, model: 'c4',
     color: 0x4a5230, throwSpeed: 9, throwUp: 2.6,
@@ -2047,7 +2057,7 @@ const THROWABLES = {
   // placement replaces it (one active per owner). Player-only; bots
   // never place one. model: 'claymore' = slab on prongs, green blink.
   claymore: {
-    name: 'CLAYMORE', slot: 'lethal',
+    name: 'CLAYMORE', slot: 'lethal', unlockLevel: 11,
     count: 1, fuse: Infinity, radius: 5, dmg: 125, minDmg: 25,
     plants: true, proximity: true, noCookOff: true, model: 'claymore',
     tripRange: 3.5, tripDot: 0.866, tripDelay: 0.35, // dot = cos(30°) half-angle
@@ -2065,7 +2075,7 @@ const THROWABLES = {
   // display-only; the kill is the engine's 9999. Kills demote in Gun
   // Game like KNIFE/TOMAHAWK (it's a humiliation kill).
   throwingknife: {
-    name: 'THROWING KNIFE', slot: 'lethal',
+    name: 'THROWING KNIFE', slot: 'lethal', unlockLevel: 14,
     count: 1, fuse: Infinity, radius: 0, dmg: 135, minDmg: 135,
     knife: true, noCookOff: true,
     color: 0x8a9096, throwSpeed: 27, throwUp: 1.6,
@@ -2105,7 +2115,7 @@ const THROWABLES = {
   // isn't there. Ends silently and despawns. Player-only; bots never
   // throw tacticals. model: 'decoy' = stubby can + amber blink.
   decoy: {
-    name: 'DECOY', slot: 'tactical',
+    name: 'DECOY', slot: 'tactical', unlockLevel: 6,
     count: 1, fuse: Infinity, radius: 0, dmg: 0, minDmg: 0,
     decoy: true, decoyDur: 8, noCookOff: true, model: 'decoy',
     color: 0x6a5c3a, throwSpeed: 15, throwUp: 3.2,
@@ -2120,7 +2130,7 @@ const THROWABLES = {
   // bots don't read minimaps, so the ignorance is symmetric. Player-only;
   // bots never throw tacticals. Distinct teal body, default silhouette.
   snapshot: {
-    name: 'SNAPSHOT', slot: 'tactical',
+    name: 'SNAPSHOT', slot: 'tactical', unlockLevel: 9,
     count: 1, fuse: 1.5, radius: 14, dmg: 0, minDmg: 0,
     pingDur: 5,
     color: 0x3e6a6e, throwSpeed: 15, throwUp: 3.2,
@@ -2137,7 +2147,7 @@ const THROWABLES = {
   // stun: real flashbangs don't cook. model: 'ninebang' = brighter
   // twin-band cylinder so it reads apart from the stun in flight.
   flashbang: {
-    name: 'FLASHBANG', slot: 'tactical',
+    name: 'FLASHBANG', slot: 'tactical', unlockLevel: 12,
     count: 1, fuse: 1.6, radius: 9, dmg: 0, minDmg: 0,
     flashMax: 3.5, flashMin: 0.8, noCookOff: true, model: 'ninebang',
     color: 0x878e96, throwSpeed: 17, throwUp: 3.0,
@@ -3457,7 +3467,8 @@ function deploy() {
       .filter(id => KILLSTREAKS[id] && KILLSTREAKS[id].selectable)
       .slice(0, streakSlotLimit(cls));
     if (!player.equippedStreakIds.length) player.equippedStreakIds = DEFAULT_KILLSTREAK_IDS.slice(0, streakSlotLimit(cls));
-    for (const id of KILLSTREAK_ORDER) if (KILLSTREAKS[id].special) player.equippedStreakIds.push(id);
+    for (const id of KILLSTREAK_ORDER)
+      if (KILLSTREAKS[id].special && isUnlocked(KILLSTREAKS[id])) player.equippedStreakIds.push(id);
   }
   const mkState = slot => {
     // resolved def (base + attachment mods) — every curW().def consumer

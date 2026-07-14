@@ -236,18 +236,45 @@ for (const cat in WEAPON_UNLOCK_ORDER_BY_CATEGORY) {
 const UNLOCK_TABLE = [
   ...WEAPON_UNLOCK_ROWS,
   { level: 2,  id: 'reddot',       name: 'RED DOT SIGHT',       pool: 'attachment' },
+  { level: 3,  id: 'foregrip',     name: 'FOREGRIP',            pool: 'attachment' },
+  { level: 4,  id: 'laser',        name: 'LASER SIGHT',         pool: 'attachment' },
   { level: 4,  id: 'marathon',     name: 'MARATHON',            pool: 'perk' },
+  { level: 5,  id: 'camoDesert',   name: 'DESERT CAMO',         pool: 'camo' },
   { level: 5,  id: 'smoke',        name: 'SMOKE',               pool: 'throwable' },
+  { level: 6,  id: 'camoWoodland', name: 'WOODLAND CAMO',       pool: 'camo' },
+  { level: 6,  id: 'decoy',        name: 'DECOY',               pool: 'throwable' },
   { level: 7,  id: 'holo',         name: 'HOLOGRAPHIC SIGHT',   pool: 'attachment' },
-  { level: 8,  id: 'camoWoodland', name: 'WOODLAND CAMO',       pool: 'camo' },
+  { level: 7,  id: 'camoUrban',    name: 'URBAN CAMO',          pool: 'camo' },
+  { level: 8,  id: 'c4',           name: 'C4',                  pool: 'throwable' },
+  { level: 8,  id: 'camoArctic',   name: 'ARCTIC CAMO',         pool: 'camo' },
+  { level: 8,  id: 'extmags',      name: 'EXTENDED MAGS',       pool: 'attachment' },
+  { level: 9,  id: 'acog',         name: 'ACOG SIGHT',          pool: 'attachment' },
+  { level: 9,  id: 'camoJungle',   name: 'JUNGLE CAMO',         pool: 'camo' },
+  { level: 9,  id: 'snapshot',     name: 'SNAPSHOT',            pool: 'throwable' },
+  { level: 10, id: 'camoDigital',  name: 'DIGITAL CAMO',        pool: 'camo' },
   { level: 10, id: 'scavenger',    name: 'SCAVENGER',           pool: 'perk' },
+  { level: 10, id: 'suppressor',   name: 'SUPPRESSOR',          pool: 'attachment' },
+  { level: 11, id: 'camoTiger',    name: 'TIGER CAMO',          pool: 'camo' },
+  { level: 11, id: 'claymore',     name: 'CLAYMORE',            pool: 'throwable' },
+  { level: 11, id: 'quickdraw',    name: 'QUICKDRAW GRIP',      pool: 'attachment' },
   { level: 12, id: 'cuav',         name: 'COUNTER-UAV',         pool: 'killstreak' },
+  { level: 12, id: 'camoHex',      name: 'HEX CAMO',            pool: 'camo' },
+  { level: 12, id: 'commando',     name: 'COMMANDO',            pool: 'perk' },
+  { level: 12, id: 'flashbang',    name: 'FLASHBANG',           pool: 'throwable' },
+  { level: 13, id: 'camoCarbon',   name: 'CARBON CAMO',         pool: 'camo' },
   { level: 13, id: 'coldblooded',  name: 'COLD-BLOODED',        pool: 'perk' },
+  { level: 14, id: 'camoRedline',  name: 'REDLINE CAMO',        pool: 'camo' },
+  { level: 14, id: 'throwingknife',name: 'THROWING KNIFE',      pool: 'throwable' },
+  { level: 15, id: 'camoBlueSteel',name: 'BLUE STEEL CAMO',     pool: 'camo' },
   { level: 15, id: 'semtex',       name: 'SEMTEX',              pool: 'throwable' },
+  { level: 16, id: 'arsenal',      name: 'ARSENAL',             pool: 'perk' },
+  { level: 16, id: 'camoTopo',     name: 'TOPO CAMO',           pool: 'camo' },
   { level: 16, id: 'ninja',        name: 'NINJA',               pool: 'perk' },
+  { level: 17, id: 'camoSplinter', name: 'SPLINTER CAMO',       pool: 'camo' },
+  { level: 18, id: 'camoGold',     name: 'GOLD CAMO',           pool: 'camo' },
   { level: 18, id: 'airstrike',    name: 'PRECISION AIRSTRIKE', pool: 'killstreak' },
   { level: 19, id: 'hardline',     name: 'HARDLINE',            pool: 'perk' },
-  { level: 20, id: 'camoGold',     name: 'GOLD CAMO',           pool: 'camo' },
+  { level: 20, id: 'nuke',         name: 'TACTICAL NUKE',       pool: 'killstreak' },
 ].sort((a, b) => (a.level - b.level) || a.name.localeCompare(b.name));
 
 // ============================================================
@@ -275,7 +302,7 @@ const ATTACHMENTS = {
   // inside a 15 m falloff) and no snipers (they carry real scopes).
   acog: { id:'acog', name:'ACOG SIGHT', slot:'optic',
     cats:['Assault Rifle','SMG','LMG'],
-    mods:{ zoom:1.9, adsTime:1.18, spreadAds:.7 } },
+    mods:{ zoom:1.9, adsTime:1.18, spreadAds:.7 }, unlockLevel:9 },
   // P55: suppressor — quiet fire for a shorter falloff band. The teeth:
   // bots' earshot on your shots drops 25 → ~9 m (noteShot ×0.35, composes
   // with ninja) and the minimap fire-flash never writes. The price: the
@@ -288,29 +315,27 @@ const ATTACHMENTS = {
   // no snipers (a quiet one-shot-kill erases the positional trade). The
   // doc's 'Pistol' cat maps to this sandbox's 'Handgun' + 'Machine
   // Pistol' (the suppressed USP is the archetype — same call as P56).
-  // No unlockLevel yet: doc suggested L14 — final slotting is P78's.
   suppressor: { id:'suppressor', name:'SUPPRESSOR', slot:'muzzle',
     cats:['Assault Rifle','SMG','LMG','Handgun','Machine Pistol'],
-    mods:{ rangeMult:.75 }, suppressed:true },
+    mods:{ rangeMult:.75 }, suppressed:true, unlockLevel:10 },
   foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
-    mods:{ recoil:.8, bloom:.8 } },
+    mods:{ recoil:.8, bloom:.8 }, unlockLevel:3 },
   // P57: quickdraw grip — snap-aim speed for a looser aimed cone, the
   // inverse of the holo/ACOG direction. DELIBERATELY shares underbarrel
   // with the foregrip: the one-pick-per-slot rule makes sustained-fire
   // control vs first-shot speed a real choice (#P55-design §3). Same
   // mount list as the foregrip. Stacks bounded with optics (reddot ×
-  // quickdraw = .68 adsTime, paying 15% aimed bloom). No unlockLevel
-  // yet: the doc suggested L17 — final slotting belongs to P78.
+  // quickdraw = .68 adsTime, paying 15% aimed bloom).
   quickdraw: { id:'quickdraw', name:'QUICKDRAW GRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
-    mods:{ adsTime:.8, spreadAds:1.15 } },
+    mods:{ adsTime:.8, spreadAds:1.15 }, unlockLevel:11 },
   // Laser (#19c): its own slot (underbarrel is the foregrip's), trades
   // concealment for a tighter hip cone. Beam drawn from the muzzle in
   // buildViewModel; color is a per-class pick like the reticle color.
   laser: { id:'laser', name:'LASER SIGHT', slot:'laser',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
-    mods:{ spreadHip:.8 } },
+    mods:{ spreadHip:.8 }, unlockLevel:4 },
   // P56: extended mags — +50% magazine for +15% reload time. Reserve is
   // deliberately UNMODIFIED: the total pool stays, you just visit it less
   // often (and Scavenger's mag×1.5 resupply quietly scales with the
@@ -319,17 +344,26 @@ const ATTACHMENTS = {
   // excluded (7→10 bolt rounds is identity-flat; they already trade
   // everything for damage). The doc's cats said 'Pistol' — this sandbox's
   // category strings are 'Handgun' + 'Machine Pistol' (G18's 33-rounder
-  // is the classic). No unlockLevel yet: the doc suggested L10 but P14's
-  // table already holds L10 (Scavenger) — final slotting belongs to P78.
+  // is the classic).
   extmags: { id:'extmags', name:'EXTENDED MAGS', slot:'mag',
     cats:['Assault Rifle','SMG','LMG','Handgun','Machine Pistol','Shotgun'],
-    mods:{ mag:1.5, reload:1.15 } },
-  // P58: cosmetic-only camo reward ladder. These ride the existing camo
-  // attachment slot/save path and have no stat modifiers or lock enforcement.
-  camoDesert:   { id:'camoDesert',   name:'DESERT CAMO',   slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:1,  desc:'TAN FIELD PATTERN' },
-  camoWoodland: { id:'camoWoodland', name:'WOODLAND CAMO', slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:8,  desc:'GREEN FIELD PATTERN' },
-  camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, desc:'GRAY DIGITAL PATTERN' },
-  camoGold:     { id:'camoGold',     name:'GOLD CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:20, desc:'ASPIRATIONAL GOLD FINISH' },
+    mods:{ mag:1.5, reload:1.15 }, unlockLevel:8 },
+  // T2: cosmetic-only camo ladder. All camos are locked until Level 5,
+  // then one camo unlocks per level with Gold as the final camo.
+  camoDesert:    { id:'camoDesert',    name:'DESERT CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:5,  desc:'TAN FIELD PATTERN' },
+  camoWoodland:  { id:'camoWoodland',  name:'WOODLAND CAMO',   slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:6,  desc:'GREEN FIELD PATTERN' },
+  camoUrban:     { id:'camoUrban',     name:'URBAN CAMO',      slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:7,  desc:'GRAY CITY PATTERN' },
+  camoArctic:    { id:'camoArctic',    name:'ARCTIC CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:8,  desc:'WHITE FIELD PATTERN' },
+  camoJungle:    { id:'camoJungle',    name:'JUNGLE CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:9,  desc:'DENSE GREEN PATTERN' },
+  camoDigital:   { id:'camoDigital',   name:'DIGITAL CAMO',    slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:10, desc:'GRAY DIGITAL PATTERN' },
+  camoTiger:     { id:'camoTiger',     name:'TIGER CAMO',      slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:11, desc:'STRIPED FIELD PATTERN' },
+  camoHex:       { id:'camoHex',       name:'HEX CAMO',        slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:12, desc:'ANGULAR HEX PATTERN' },
+  camoCarbon:    { id:'camoCarbon',    name:'CARBON CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:13, desc:'DARK CARBON WEAVE' },
+  camoRedline:   { id:'camoRedline',   name:'REDLINE CAMO',    slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:14, desc:'RED ACCENT PATTERN' },
+  camoBlueSteel: { id:'camoBlueSteel', name:'BLUE STEEL CAMO', slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:15, desc:'BLUE METAL PATTERN' },
+  camoTopo:      { id:'camoTopo',      name:'TOPO CAMO',       slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:16, desc:'CONTOUR LINE PATTERN' },
+  camoSplinter:  { id:'camoSplinter',  name:'SPLINTER CAMO',   slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:17, desc:'SHARP SPLINTER PATTERN' },
+  camoGold:      { id:'camoGold',      name:'GOLD CAMO',       slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:18, desc:'ASPIRATIONAL GOLD FINISH' },
 };
 
 function attachmentAllowed(att, def) {
@@ -537,18 +571,18 @@ const PERKS = {
     // (P70: hardline's discount). Safe as inert data because every perk
     // check in main.js is an id-keyed player.perks.has('<id>') lookup.
     // Same tier = mutually exclusive by the one-pick-per-tier rule.
-    { id:'arsenal',   name:'ARSENAL',           desc:'Equip a fourth killstreak slot' },
+    { id:'arsenal',   name:'ARSENAL',           desc:'Equip a fourth killstreak slot', unlockLevel:16 },
     { id:'hardline',  name:'HARDLINE',          desc:'Killstreaks cost 1 less kill', unlockLevel:19 },
   ],
   2: [
     { id:'stopping',    name:'STOPPING POWER', desc:'+25% bullet damage', unlockLevel:1 },
-    { id:'lightweight', name:'LIGHTWEIGHT',    desc:'Move 8% faster' },
+    { id:'lightweight', name:'LIGHTWEIGHT',    desc:'Move 8% faster', unlockLevel:6 },
     { id:'coldblooded', name:'COLD-BLOODED',   desc:'Bots spot you from 30% closer', unlockLevel:13 },
   ],
   3: [
     { id:'steadyaim', name:'STEADY AIM', desc:'35% tighter hip fire', unlockLevel:1 },
     { id:'ninja',     name:'NINJA',      desc:'Silent steps, quieter shots, bots react 40% slower', unlockLevel:16 },
-    { id:'commando',  name:'COMMANDO',   desc:'Extended melee lunge range' },
+    { id:'commando',  name:'COMMANDO',   desc:'Extended melee lunge range', unlockLevel:12 },
   ],
 };
 
@@ -563,10 +597,10 @@ function perkById(id) {
 // Default classes
 const DEFAULT_CLASSES = [
   { name:'CINDERLINE',  primary:'f2000', secondary:'m9',       perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'IRONWAKE',    primary:'mac10', secondary:'g18',      perks:['soh','lightweight','steadyaim'],   lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'IRONWAKE',    primary:'mac10', secondary:'g18',      perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
   { name:'ASHRUNNER',   primary:'rpd',   secondary:'m9',       perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
   { name:'RAVENFALL',   primary:'m14',   secondary:'m9',       perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'DUSTKNIFE',   primary:'aa12',  secondary:'tomahawk', perks:['soh','lightweight','commando'],    lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'DUSTKNIFE',   primary:'aa12',  secondary:'tomahawk', perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
 ];
 
 // Loadout pool bots draw from. #16b: each carries a `lethal` throwable pick
