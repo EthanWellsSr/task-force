@@ -170,9 +170,31 @@ const WEAPONS = {
     speed:1.0, range:[8,30], model:'tomahawk', throwWeapon:true },
 };
 
-// Annotate each def with its own key so per-weapon systems (viewmodel
-// recipes, attachments) can branch on identity without a reverse lookup.
+// T1: category-local weapon progression. Each weapon class starts with its
+// weakest/least reliable pick at Level 1, then unlocks the next rank in that
+// category on the matching level. Later category-XP work can reuse the rank
+// metadata without re-auditing weapon order.
+const WEAPON_UNLOCK_ORDER_BY_CATEGORY = {
+  'Assault Rifle': ['f2000', 'm4a1', 'tar21', 'famas', 'scar', 'acr', 'fal'],
+  'SMG': ['mac10', 'mp5k', 'p90', 'vector', 'ump45'],
+  'LMG': ['rpd', 'mg4', 'm240', 'm60'],
+  'Shotgun': ['aa12', 'r870'],
+  'Sniper Rifle': ['m14', 'intervention', 'barrett'],
+  'Handgun': ['m9', 'usp', 'deagle'],
+  'Machine Pistol': ['g18'],
+  'Melee': ['tomahawk'],
+};
+
+// Annotate each def with its own key/progression metadata so per-weapon
+// systems can branch on identity and unlock order without reverse lookups.
 for (const k in WEAPONS) WEAPONS[k].key = k;
+for (const cat in WEAPON_UNLOCK_ORDER_BY_CATEGORY) {
+  WEAPON_UNLOCK_ORDER_BY_CATEGORY[cat].forEach((key, idx) => {
+    if (!WEAPONS[key]) return;
+    WEAPONS[key].categoryUnlockRank = idx + 1;
+    WEAPONS[key].unlockLevel = idx + 1;
+  });
+}
 
 // Fire mode label shown on the HUD
 function fireModeLabel(w) {
@@ -203,27 +225,30 @@ function isUnlocked(def, level = currentProfileLevel()) {
 // level 2-20. Level 1 is the silent starter kit, so it has no row.
 // `pool` is documentation for UI/copy; metadata on the actual def still
 // drives class-editor lock chips until gate enforcement lands.
+const WEAPON_UNLOCK_ROWS = [];
+for (const cat in WEAPON_UNLOCK_ORDER_BY_CATEGORY) {
+  for (const id of WEAPON_UNLOCK_ORDER_BY_CATEGORY[cat]) {
+    const w = WEAPONS[id];
+    if (w && unlockLevelOf(w) > 1) WEAPON_UNLOCK_ROWS.push({ level: unlockLevelOf(w), id, name: w.name, pool: 'weapon' });
+  }
+}
+
 const UNLOCK_TABLE = [
+  ...WEAPON_UNLOCK_ROWS,
   { level: 2,  id: 'reddot',       name: 'RED DOT SIGHT',       pool: 'attachment' },
-  { level: 3,  id: 'ump45',        name: 'HK UMP45',            pool: 'weapon' },
   { level: 4,  id: 'marathon',     name: 'MARATHON',            pool: 'perk' },
   { level: 5,  id: 'smoke',        name: 'SMOKE',               pool: 'throwable' },
-  { level: 6,  id: 'scar',         name: 'FN SCAR-H',           pool: 'weapon' },
   { level: 7,  id: 'holo',         name: 'HOLOGRAPHIC SIGHT',   pool: 'attachment' },
   { level: 8,  id: 'camoWoodland', name: 'WOODLAND CAMO',       pool: 'camo' },
-  { level: 9,  id: 'deagle',       name: 'DESERT EAGLE',        pool: 'weapon' },
   { level: 10, id: 'scavenger',    name: 'SCAVENGER',           pool: 'perk' },
-  { level: 11, id: 'aa12',         name: 'ATCHISSON AA-12',     pool: 'weapon' },
   { level: 12, id: 'cuav',         name: 'COUNTER-UAV',         pool: 'killstreak' },
   { level: 13, id: 'coldblooded',  name: 'COLD-BLOODED',        pool: 'perk' },
-  { level: 14, id: 'p90',          name: 'FN P90',              pool: 'weapon' },
   { level: 15, id: 'semtex',       name: 'SEMTEX',              pool: 'throwable' },
   { level: 16, id: 'ninja',        name: 'NINJA',               pool: 'perk' },
-  { level: 17, id: 'barrett',      name: 'BARRETT M82',         pool: 'weapon' },
   { level: 18, id: 'airstrike',    name: 'PRECISION AIRSTRIKE', pool: 'killstreak' },
   { level: 19, id: 'hardline',     name: 'HARDLINE',            pool: 'perk' },
   { level: 20, id: 'camoGold',     name: 'GOLD CAMO',           pool: 'camo' },
-];
+].sort((a, b) => (a.level - b.level) || a.name.localeCompare(b.name));
 
 // ============================================================
 // ATTACHMENTS — one pick per slot category, per weapon.
@@ -537,11 +562,11 @@ function perkById(id) {
 
 // Default classes
 const DEFAULT_CLASSES = [
-  { name:'CINDERLINE',  primary:'m4a1',         secondary:'usp',    perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'IRONWAKE',    primary:'famas',        secondary:'g18',    perks:['soh','lightweight','steadyaim'],   lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'ASHRUNNER',   primary:'rpd',          secondary:'usp',    perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'RAVENFALL',   primary:'intervention', secondary:'usp',    perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'DUSTKNIFE',   primary:'mp5k',         secondary:'spas12', perks:['soh','lightweight','commando'],    lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'CINDERLINE',  primary:'f2000', secondary:'m9',       perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'IRONWAKE',    primary:'mac10', secondary:'g18',      perks:['soh','lightweight','steadyaim'],   lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'ASHRUNNER',   primary:'rpd',   secondary:'m9',       perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'RAVENFALL',   primary:'m14',   secondary:'m9',       perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'DUSTKNIFE',   primary:'aa12',  secondary:'tomahawk', perks:['soh','lightweight','commando'],    lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
 ];
 
 // Loadout pool bots draw from. #16b: each carries a `lethal` throwable pick
