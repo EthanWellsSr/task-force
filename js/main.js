@@ -1477,17 +1477,17 @@ const KILLSTREAKS = {
     },
   },
   cuav: {
-    id: 'cuav', name: 'COUNTER-UAV', kills: 4, unlockLevel: 11, // #P60-design §2: the cheapest slot — it protects, it can't kill
+    id: 'cuav', name: 'COUNTER-UAV', kills: 4, unlockLevel: 12, // #P60-design §2: the cheapest slot — it protects, it can't kill
     selectable: true, weaponName: null, // it jams — it never kills
     deploy() { deployCounterUav(); },
   },
   carepackage: {
-    id: 'carepackage', name: 'CARE PACKAGE', kills: 6, unlockLevel: 4, // P63: no crate physics; it immediately banks an existing reward
+    id: 'carepackage', name: 'CARE PACKAGE', kills: 6, unlockLevel: 1, // P63: starter streak; no crate physics, immediately banks an existing reward
     selectable: true, weaponName: null, // it grants another streak — it never kills
     deploy() { return deployCarePackage(); },
   },
   airstrike: {
-    id: 'airstrike', name: 'PRECISION AIRSTRIKE', kills: 8, unlockLevel: 16, // #P60-design §3
+    id: 'airstrike', name: 'PRECISION AIRSTRIKE', kills: 8, unlockLevel: 18, // #P60-design §3
     selectable: true, weaponName: 'AIRSTRIKE', // kill-attribution tag
     deploy() { deployAirstrike(); },
   },

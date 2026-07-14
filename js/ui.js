@@ -931,22 +931,13 @@ const UI = {
     const lvl = commit.leveledUp
       ? `LVL ${commit.oldLevel} → LVL ${commit.newLevel} — ${Profile.rankName(commit.newLevel)}`
       : `LVL ${commit.newLevel} — ${Profile.rankName(commit.newLevel)}`;
-    // P13: unlock summary — every item whose unlockLevel falls inside the
-    // levels gained this match (data-only; nothing is enforced yet)
+    // P80: unlock summary follows the final one-reward-per-level table, so
+    // throwables and killstreaks announce just like weapons/perks/camos.
     let unlockRows = '';
     if (commit.leveledUp) {
-      const pools = [WEAPONS, ATTACHMENTS];
-      const unlocked = [];
-      for (const pool of pools)
-        for (const k in pool) {
-          const u = pool[k].unlockLevel;
-          if (u > commit.oldLevel && u <= commit.newLevel) unlocked.push(pool[k].name);
-        }
-      for (const tier of Object.values(PERKS))
-        for (const perk of tier) {
-          const u = perk.unlockLevel;
-          if (u > commit.oldLevel && u <= commit.newLevel) unlocked.push(perk.name);
-        }
+      const unlocked = UNLOCK_TABLE
+        .filter(row => row.level > commit.oldLevel && row.level <= commit.newLevel)
+        .map(row => row.name);
       unlockRows = unlocked.map(n =>
         `<div class="xp-unlock">UNLOCKED — ${n}</div>`).join('');
     }

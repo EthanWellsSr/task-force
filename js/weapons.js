@@ -53,7 +53,7 @@ const WEAPONS = {
   vector: { slot:'primary', cat:'SMG', name:'KRISS VECTOR',
     dmg:21, minDmg:14, head:1.4, rpm:1090, mag:30, reserve:180, reload:1.8, mode:'auto',
     spreadHip:.026, spreadAds:.0050, recoil:.0075, bloom:.0028, zoom:1.25, adsTime:.17,
-    speed:1.0, range:[14,30], model:'smg', unlockLevel:8 },
+    speed:1.0, range:[14,30], model:'smg' },
   p90: { slot:'primary', cat:'SMG', name:'FN P90',
     dmg:23, minDmg:15, head:1.4, rpm:855, mag:50, reserve:150, reload:2.4, mode:'auto',
     spreadHip:.027, spreadAds:.0052, recoil:.011, bloom:.0035, zoom:1.25, adsTime:.19,
@@ -109,7 +109,7 @@ const WEAPONS = {
     dmg:12, minDmg:4, head:1.2, rpm:300, mag:8, reserve:40, reload:2.5, mode:'auto',
     pellets:8,
     spreadHip:.05, spreadAds:.034, recoil:.05, bloom:.02, zoom:1.15, adsTime:.22,
-    speed:.93, range:[6,15], model:'shotgun' },
+    speed:.93, range:[6,15], model:'shotgun', unlockLevel:11 },
 
   // ---------- PRIMARY: SNIPERS ----------
   // Sniper balance: body shots one-shot only up close (Intervention) or never
@@ -187,32 +187,30 @@ function unlockLevelOf(def) {
   return (def && def.unlockLevel) || 1;
 }
 
-// Provisional Level 1-20 unlock table (P14) — one reward per level 2-20,
-// hand-authored from the progression plan. Level 1 is the silent starter
-// kit, so it has no row. `id` is the def key (WEAPONS / ATTACHMENTS /
-// perk / throwable id) when the item exists today; `future: true` rows
-// are final-tuning placeholders (no def yet) the UI labels accordingly.
-// Replaced by the real table after the arsenal/equipment/streak buildout.
+// Final Level 1-20 unlock table (P78-P80) — one readable reward per
+// level 2-20. Level 1 is the silent starter kit, so it has no row.
+// `pool` is documentation for UI/copy; metadata on the actual def still
+// drives class-editor lock chips until gate enforcement lands.
 const UNLOCK_TABLE = [
-  { level: 2,  id: 'reddot',      name: 'RED DOT SIGHT',      future: false },
-  { level: 3,  id: 'ump45',       name: 'HK UMP45',           future: false },
-  { level: 4,  id: 'marathon',    name: 'MARATHON',           future: false },
-  { level: 5,  id: 'smoke',       name: 'SMOKE',              future: false }, // throwable def lives in main.js
-  { level: 6,  id: 'scar',        name: 'FN SCAR-H',          future: false },
-  { level: 7,  id: 'holo',        name: 'HOLOGRAPHIC SIGHT',  future: false },
-  { level: 8,  id: 'vector',      name: 'KRISS VECTOR',       future: false },
-  { level: 9,  id: 'deagle',      name: 'DESERT EAGLE',       future: false },
-  { level: 10, id: 'scavenger',   name: 'SCAVENGER',          future: false },
-  { level: 11, id: null,          name: 'FULL-AUTO SHOTGUN',  future: true }, // pending final shotgun roster (P17-P22)
-  { level: 12, id: 'laser',       name: 'LASER SIGHT',        future: false },
-  { level: 13, id: 'coldblooded', name: 'COLD-BLOODED',       future: false },
-  { level: 14, id: 'p90',         name: 'FN P90',             future: false },
-  { level: 15, id: 'semtex',      name: 'SEMTEX',             future: false }, // P42: shipped (throwable def in main.js)
-  { level: 16, id: 'ninja',       name: 'NINJA',              future: false },
-  { level: 17, id: 'barrett',     name: 'BARRETT M82',        future: false },
-  { level: 18, id: 'foregrip',    name: 'FOREGRIP',           future: false },
-  { level: 19, id: null,          name: 'KILLSTREAK PERK',    future: true }, // 4th-slot or cheaper-streak Tier 1 perk (P38/P39)
-  { level: 20, id: 'camoGold',    name: 'GOLD CAMO',          future: false },
+  { level: 2,  id: 'reddot',       name: 'RED DOT SIGHT',       pool: 'attachment' },
+  { level: 3,  id: 'ump45',        name: 'HK UMP45',            pool: 'weapon' },
+  { level: 4,  id: 'marathon',     name: 'MARATHON',            pool: 'perk' },
+  { level: 5,  id: 'smoke',        name: 'SMOKE',               pool: 'throwable' },
+  { level: 6,  id: 'scar',         name: 'FN SCAR-H',           pool: 'weapon' },
+  { level: 7,  id: 'holo',         name: 'HOLOGRAPHIC SIGHT',   pool: 'attachment' },
+  { level: 8,  id: 'camoWoodland', name: 'WOODLAND CAMO',       pool: 'camo' },
+  { level: 9,  id: 'deagle',       name: 'DESERT EAGLE',        pool: 'weapon' },
+  { level: 10, id: 'scavenger',    name: 'SCAVENGER',           pool: 'perk' },
+  { level: 11, id: 'aa12',         name: 'ATCHISSON AA-12',     pool: 'weapon' },
+  { level: 12, id: 'cuav',         name: 'COUNTER-UAV',         pool: 'killstreak' },
+  { level: 13, id: 'coldblooded',  name: 'COLD-BLOODED',        pool: 'perk' },
+  { level: 14, id: 'p90',          name: 'FN P90',              pool: 'weapon' },
+  { level: 15, id: 'semtex',       name: 'SEMTEX',              pool: 'throwable' },
+  { level: 16, id: 'ninja',        name: 'NINJA',               pool: 'perk' },
+  { level: 17, id: 'barrett',      name: 'BARRETT M82',         pool: 'weapon' },
+  { level: 18, id: 'airstrike',    name: 'PRECISION AIRSTRIKE', pool: 'killstreak' },
+  { level: 19, id: 'hardline',     name: 'HARDLINE',            pool: 'perk' },
+  { level: 20, id: 'camoGold',     name: 'GOLD CAMO',           pool: 'camo' },
 ];
 
 // ============================================================
@@ -259,7 +257,7 @@ const ATTACHMENTS = {
     mods:{ rangeMult:.75 }, suppressed:true },
   foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
-    mods:{ recoil:.8, bloom:.8 }, unlockLevel:18 },
+    mods:{ recoil:.8, bloom:.8 } },
   // P57: quickdraw grip — snap-aim speed for a looser aimed cone, the
   // inverse of the holo/ACOG direction. DELIBERATELY shares underbarrel
   // with the foregrip: the one-pick-per-slot rule makes sustained-fire
@@ -275,7 +273,7 @@ const ATTACHMENTS = {
   // buildViewModel; color is a per-class pick like the reticle color.
   laser: { id:'laser', name:'LASER SIGHT', slot:'laser',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
-    mods:{ spreadHip:.8 }, unlockLevel:12 },
+    mods:{ spreadHip:.8 } },
   // P56: extended mags — +50% magazine for +15% reload time. Reserve is
   // deliberately UNMODIFIED: the total pool stays, you just visit it less
   // often (and Scavenger's mag×1.5 resupply quietly scales with the
@@ -293,7 +291,7 @@ const ATTACHMENTS = {
   // attachment slot/save path and have no stat modifiers or lock enforcement.
   camoDesert:   { id:'camoDesert',   name:'DESERT CAMO',   slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:1,  desc:'TAN FIELD PATTERN' },
   camoWoodland: { id:'camoWoodland', name:'WOODLAND CAMO', slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:8,  desc:'GREEN FIELD PATTERN' },
-  camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:15, desc:'GRAY DIGITAL PATTERN' },
+  camoDigital:  { id:'camoDigital',  name:'DIGITAL CAMO',  slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, desc:'GRAY DIGITAL PATTERN' },
   camoGold:     { id:'camoGold',     name:'GOLD CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:20, desc:'ASPIRATIONAL GOLD FINISH' },
 };
 
@@ -447,7 +445,7 @@ const PERKS = {
     // check in main.js is an id-keyed player.perks.has('<id>') lookup.
     // Same tier = mutually exclusive by the one-pick-per-tier rule.
     { id:'arsenal',   name:'ARSENAL',           desc:'Equip a fourth killstreak slot' },
-    { id:'hardline',  name:'HARDLINE',          desc:'Killstreaks cost 1 less kill' },
+    { id:'hardline',  name:'HARDLINE',          desc:'Killstreaks cost 1 less kill', unlockLevel:19 },
   ],
   2: [
     { id:'stopping',    name:'STOPPING POWER', desc:'+25% bullet damage', unlockLevel:1 },
