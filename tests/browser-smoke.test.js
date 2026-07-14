@@ -386,7 +386,103 @@ async function run() {
       };
       MAIN.quitMatch();
 
-      return { snapshots, stats: Profile.load().stats, afterLiveQuits, afterPausedQuit, xpModes, gunGameXp };
+      const equipmentDeploy = [];
+      const lethalIds = ['frag', 'semtex', 'c4', 'claymore', 'throwingknife'];
+      const tacticalIds = ['stun', 'smoke', 'decoy', 'snapshot', 'flashbang'];
+      Profile.reset();
+      const maxProfile = Profile.load();
+      maxProfile.xp = Profile.xpThreshold(Profile.LEVEL_CAP);
+      maxProfile.level = Profile.LEVEL_CAP;
+      Profile.save(maxProfile);
+      for (const lethal of lethalIds) {
+        for (const tactical of tacticalIds) {
+          UI.classes[UI.selectedClass] = sanitizeClassForLevel({
+            name:'EQUIP',
+            primary:'m4a1',
+            secondary:'usp',
+            perks:['soh','stopping','steadyaim'],
+            lethal,
+            tactical,
+            killstreaks:['uav','carepackage','napalm'],
+            attachments:{ primary:[], secondary:[] },
+          });
+          MAIN.startMatch('rust', 'tdm');
+          MAIN.deploy();
+          equipmentDeploy.push({
+            lethal,
+            tactical,
+            equip: DEBUG.player.equip,
+            equipLeft: DEBUG.player.equipLeft,
+            equipTac: DEBUG.player.equipTac,
+            equipTacLeft: DEBUG.player.equipTacLeft,
+          });
+          MAIN.quitMatch();
+        }
+      }
+
+      function enemyNear(dx = 4, dz = 0) {
+        const bot = DEBUG.G.bots.find(b => b.team !== DEBUG.player.team);
+        if (!bot.alive) bot.spawn();
+        bot.pos.copy(DEBUG.player.pos).add(new THREE.Vector3(dx, 0, dz));
+        bot.hp = 100;
+        bot.alive = true;
+        bot.spawnProtectT = 0;
+        bot.stunT = 0;
+        bot.blindT = 0;
+        bot.pingedUntil = 0;
+        return bot;
+      }
+
+      Profile.reset();
+      MAIN.startMatch('rust', 'tdm');
+      MAIN.deploy();
+      const equipmentEffects = {};
+      let bot = enemyNear();
+      THROWABLES.frag.detonate({ def: THROWABLES.frag, pos: bot.pos.clone(), owner: DEBUG.player });
+      equipmentEffects.fragKilled = !bot.alive;
+      bot = enemyNear();
+      THROWABLES.semtex.detonate({ def: THROWABLES.semtex, pos: bot.pos.clone(), owner: DEBUG.player, stuckTo: bot });
+      equipmentEffects.semtexStuckKilled = !bot.alive;
+      bot = enemyNear();
+      THROWABLES.c4.detonate({ def: THROWABLES.c4, pos: bot.pos.clone(), owner: DEBUG.player });
+      equipmentEffects.c4Killed = !bot.alive;
+      bot = enemyNear(0.3, 0);
+      THROWABLES.claymore.detonate({ def: THROWABLES.claymore, pos: DEBUG.player.pos.clone(), owner: DEBUG.player, facingX: 1, facingZ: 0 });
+      equipmentEffects.claymoreKilled = !bot.alive;
+      bot = enemyNear();
+      THROWABLES.stun.detonate({ def: THROWABLES.stun, pos: bot.pos.clone(), owner: DEBUG.player });
+      equipmentEffects.stunApplied = bot.stunT > 0;
+      THROWABLES.smoke.detonate({ def: THROWABLES.smoke, pos: DEBUG.player.pos.clone(), owner: DEBUG.player });
+      equipmentEffects.smokeClouds = DEBUG.smokeClouds().length;
+      bot = enemyNear();
+      THROWABLES.snapshot.detonate({ def: THROWABLES.snapshot, pos: bot.pos.clone(), owner: DEBUG.player });
+      equipmentEffects.snapshotPinged = bot.pingedUntil > DEBUG.G.time;
+      bot = enemyNear();
+      THROWABLES.flashbang.detonate({ def: THROWABLES.flashbang, pos: bot.pos.clone(), owner: DEBUG.player });
+      equipmentEffects.flashApplied = bot.blindT > 0;
+      UI.classes[UI.selectedClass] = sanitizeClassForLevel({
+        name:'KNIFE',
+        primary:'m4a1',
+        secondary:'usp',
+        perks:['soh','stopping','steadyaim'],
+        lethal:'throwingknife',
+        tactical:'decoy',
+        killstreaks:['uav','carepackage','napalm'],
+        attachments:{ primary:[], secondary:[] },
+      });
+      MAIN.startMatch('rust', 'tdm');
+      MAIN.deploy();
+      const beforeKnife = DEBUG.tomahawks().length;
+      DEBUG.throwEquipment('lethal');
+      const afterKnife = DEBUG.tomahawks().length;
+      DEBUG.player.throwT = 0;
+      DEBUG.throwEquipment('tactical');
+      const decoyOut = DEBUG.throwables().some(t => t.def && t.def.decoy);
+      equipmentEffects.throwingKnifeSpawned = afterKnife > beforeKnife;
+      equipmentEffects.decoySpawned = decoyOut;
+      MAIN.quitMatch();
+
+      return { snapshots, stats: Profile.load().stats, afterLiveQuits, afterPausedQuit, xpModes, gunGameXp, equipmentDeploy, equipmentEffects };
     });
 
     const byMode = Object.fromEntries(modes.snapshots.map(s => [s.mode, s]));
@@ -430,6 +526,22 @@ async function run() {
     assert.ok(modes.gunGameXp.commit && modes.gunGameXp.commit.xp.total > 0, 'Gun Game should commit XP');
     assert.strictEqual(modes.gunGameXp.profile.stats.kills, 1, 'Gun Game should persist lifetime kill');
     assert.strictEqual(modes.gunGameXp.profile.stats.totalXpEarned, modes.gunGameXp.commit.xp.total, 'Gun Game should persist earned XP');
+    for (const row of modes.equipmentDeploy) {
+      assert.strictEqual(row.equip, row.lethal, `${row.lethal}/${row.tactical} should deploy lethal`);
+      assert.ok(row.equipLeft > 0, `${row.lethal} should deploy with count`);
+      assert.strictEqual(row.equipTac, row.tactical, `${row.lethal}/${row.tactical} should deploy tactical`);
+      assert.ok(row.equipTacLeft > 0, `${row.tactical} should deploy with count`);
+    }
+    assert.strictEqual(modes.equipmentEffects.fragKilled, true, 'frag should damage enemies through real detonate path');
+    assert.strictEqual(modes.equipmentEffects.semtexStuckKilled, true, 'stuck semtex should kill through real detonate path');
+    assert.strictEqual(modes.equipmentEffects.c4Killed, true, 'C4 should damage enemies through real detonate path');
+    assert.strictEqual(modes.equipmentEffects.claymoreKilled, true, 'claymore should damage enemies in its frontal arc');
+    assert.strictEqual(modes.equipmentEffects.stunApplied, true, 'stun should apply bot stun');
+    assert.ok(modes.equipmentEffects.smokeClouds > 0, 'smoke should create a smoke cloud');
+    assert.strictEqual(modes.equipmentEffects.snapshotPinged, true, 'snapshot should ping an enemy bot');
+    assert.strictEqual(modes.equipmentEffects.flashApplied, true, 'flashbang should blind an enemy bot');
+    assert.strictEqual(modes.equipmentEffects.throwingKnifeSpawned, true, 'throwing knife should spawn a thrown knife');
+    assert.strictEqual(modes.equipmentEffects.decoySpawned, true, 'decoy should spawn a decoy throwable');
     assert.deepStrictEqual(errors, [], 'browser smoke should have no app console/page errors');
   } finally {
     await browser.close();
