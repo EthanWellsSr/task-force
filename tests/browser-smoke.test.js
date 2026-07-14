@@ -169,7 +169,63 @@ async function run() {
       UI.loadClasses();
       const corruptedClass = JSON.parse(JSON.stringify(UI.classes[0]));
 
-      return { fresh, near, nearEnd, multiEnd, capEnd, corruptedClass };
+      Profile.reset();
+      UI.loadClasses();
+      UI.editIdx = 0;
+      UI.selectedClass = 0;
+      UI.renderClassEditor();
+      const lockedScar = [...document.querySelectorAll('#primaryList .weapon-item.locked')]
+        .find(el => el.textContent.includes('FN SCAR-H'));
+      const level1PrimaryBefore = UI.classes[0].primary;
+      if (lockedScar) lockedScar.click();
+      const level1Editor = {
+        primaryBefore: level1PrimaryBefore,
+        primaryAfterLockedClick: UI.classes[0].primary,
+        lockedPrimaryCount: document.querySelectorAll('#primaryList .weapon-item.locked').length,
+        lockedPerkCount: document.querySelectorAll('#perk1List .perk-item.locked, #perk2List .perk-item.locked, #perk3List .perk-item.locked').length,
+        lockedEquipmentCount: document.querySelectorAll('#lethalList .weapon-item.locked, #tacticalList .weapon-item.locked').length,
+        lockedStreakCount: document.querySelectorAll('#streakList .weapon-item.locked').length,
+      };
+
+      p = Profile.load();
+      p.xp = Profile.xpThreshold(Profile.LEVEL_CAP);
+      p.level = Profile.levelFromTotalXp(p.xp);
+      Profile.save(p);
+      UI.classes[0] = sanitizeClassForLevel({
+        name:'MAXKIT',
+        primary:'p90',
+        secondary:'deagle',
+        perks:['hardline','coldblooded','ninja'],
+        lethal:'semtex',
+        tactical:'smoke',
+        killstreaks:['cuav','airstrike','napalm'],
+        attachments:{ primary:['reddot','camoGold'], secondary:['camoGold'] },
+      });
+      UI.saveClasses();
+      UI.loadClasses();
+      UI.editIdx = 0;
+      UI.selectedClass = 0;
+      UI.renderClassEditor();
+      UI.renderSpawnScreen();
+      const editorText = document.getElementById('classScreen').textContent;
+      const spawnText = document.getElementById('spawnClasses').textContent;
+      MAIN.startMatch('rust', 'tdm');
+      MAIN.deploy();
+      const deployedMaxClass = {
+        weapon: DEBUG.curW().def.key,
+        weaponName: DEBUG.curW().def.name,
+        attachments: DEBUG.curW().def.attachments || [],
+        secondary: DEBUG.player.weapons[1].def.key,
+        perks: [...DEBUG.player.perks],
+        equip: DEBUG.player.equip,
+        equipTac: DEBUG.player.equipTac,
+        streaks: DEBUG.player.equippedStreakIds.slice(),
+      };
+      MAIN.quitMatch();
+      const maxClass = JSON.parse(JSON.stringify(UI.classes[0]));
+      const maxRender = { editorText, spawnText };
+
+      return { fresh, near, nearEnd, multiEnd, capEnd, corruptedClass, level1Editor, maxClass, maxRender, deployedMaxClass };
     });
 
     assert.ok(progression.fresh.badge.includes('LVL 1'), 'fresh profile badge should show Level 1');
@@ -185,6 +241,27 @@ async function run() {
     assert.strictEqual(progression.capEnd.progress, 'MAX LEVEL', 'cap progress should read MAX LEVEL');
     assert.strictEqual(progression.corruptedClass.primary, 'm4a1', 'bad primary should migrate to starter primary');
     assert.strictEqual(progression.corruptedClass.secondary, 'usp', 'bad secondary should migrate to starter secondary');
+    assert.strictEqual(progression.level1Editor.primaryAfterLockedClick, progression.level1Editor.primaryBefore, 'Level 1 locked primary click should be inert');
+    assert.ok(progression.level1Editor.lockedPrimaryCount > 0, 'Level 1 editor should render locked weapons');
+    assert.ok(progression.level1Editor.lockedPerkCount > 0, 'Level 1 editor should render locked perks');
+    assert.ok(progression.level1Editor.lockedEquipmentCount > 0, 'Level 1 editor should render locked equipment');
+    assert.ok(progression.level1Editor.lockedStreakCount > 0, 'Level 1 editor should render locked streaks');
+    assert.strictEqual(progression.maxClass.primary, 'p90', 'max class should persist P90');
+    assert.strictEqual(progression.maxClass.secondary, 'deagle', 'max class should persist Deagle');
+    assert.deepStrictEqual(progression.maxClass.perks, ['hardline', 'coldblooded', 'ninja'], 'max class should persist high-level perks');
+    assert.strictEqual(progression.maxClass.lethal, 'semtex', 'max class should persist Semtex');
+    assert.strictEqual(progression.maxClass.tactical, 'smoke', 'max class should persist Smoke');
+    assert.deepStrictEqual(progression.maxClass.killstreaks, ['cuav', 'airstrike', 'napalm'], 'max class should persist high-level streaks');
+    for (const label of ['FN P90', 'DESERT EAGLE', 'GOLD CAMO', 'SEMTEX', 'SMOKE', 'COUNTER-UAV', 'PRECISION AIRSTRIKE'])
+      assert.ok(progression.maxRender.editorText.includes(label) || progression.maxRender.spawnText.includes(label), `max class render should include ${label}`);
+    assert.strictEqual(progression.deployedMaxClass.weapon, 'p90', 'max class should deploy P90');
+    assert.deepStrictEqual(progression.deployedMaxClass.attachments, ['reddot', 'camoGold'], 'max class should deploy primary optic and camo');
+    assert.strictEqual(progression.deployedMaxClass.secondary, 'deagle', 'max class should deploy Deagle');
+    assert.deepStrictEqual(progression.deployedMaxClass.perks, ['hardline', 'coldblooded', 'ninja'], 'max class should deploy high-level perks');
+    assert.strictEqual(progression.deployedMaxClass.equip, 'semtex', 'max class should deploy Semtex');
+    assert.strictEqual(progression.deployedMaxClass.equipTac, 'smoke', 'max class should deploy Smoke');
+    for (const id of ['cuav', 'airstrike', 'napalm', 'nuke'])
+      assert.ok(progression.deployedMaxClass.streaks.includes(id), `max class should deploy ${id} streak`);
 
     const modes = await page.evaluate(async () => {
       const clone = value => value === undefined ? null : JSON.parse(JSON.stringify(value));
