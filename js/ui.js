@@ -644,6 +644,23 @@ const UI = {
     }
   },
 
+  showKillCam(killerName, weaponName, seconds) {
+    this.$('killCamKiller').textContent = killerName || 'UNKNOWN';
+    this.$('killCamWeapon').textContent = weaponName || '';
+    this.updateKillCam(seconds || 0);
+    this.$('killCam').classList.remove('hidden');
+  },
+
+  updateKillCam(seconds) {
+    const el = this.$('killCamTimer');
+    if (el) el.textContent = 'SPAWN IN ' + Math.max(0, Math.ceil(seconds));
+  },
+
+  hideKillCam() {
+    const el = this.$('killCam');
+    if (el) el.classList.add('hidden');
+  },
+
   // ---------- HUD ----------
   teamClass(team) {
     return team === 'tf' || team === 'sp' ? team : 'ffa';

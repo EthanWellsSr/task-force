@@ -2159,6 +2159,8 @@ const GREN_GRAVITY = 13;
 const GREN_STEP_BOUNCED = 1, GREN_STEP_REST = 2;
 const GREN_PREVIEW_DT = 1 / 60, GREN_PREVIEW_POINTS = 64;
 const GREN_PREVIEW_ARC_SKIP = 0.08;
+const KILLCAM_DUR = 2.75;
+let _killCam = null;
 const GREN_THROW_FORWARD = 0.28, GREN_THROW_RIGHT = 0.34;
 const _throwables = [];
 const _blastAt = new THREE.Vector3();
@@ -3392,6 +3394,8 @@ function startMatch(mapId, modeId = 'tdm') {
   G.scores = makeModeScores(G.mode);
   G.timeLeft = UI.settings.timeLimit > 0 ? UI.settings.timeLimit : Infinity;
   G.time = 0;
+  _killCam = null;
+  UI.hideKillCam();
   player.kills = 0; player.deaths = 0; player.assists = 0;
   player.recentDamagers.length = 0; // #16d
   player._streakKills = 0;
@@ -3540,6 +3544,47 @@ function deploy() {
 
 function curW() { return player.weapons[player.cur]; }
 
+function startKillCam(attacker, weaponName) {
+  if (!attacker || !attacker.pos || !(G.mode || MODES.tdm).respawn) return false;
+  _killCam = {
+    t: KILLCAM_DUR,
+    killer: attacker,
+    pos: attacker.pos.clone(),
+    yaw: attacker.yaw || 0,
+    pitch: attacker.pitch || 0,
+    weaponName,
+  };
+  G.state = 'killcam';
+  player.respawnT = KILLCAM_DUR;
+  UI.show('hud');
+  UI.showKillCam(attacker.name, weaponName, KILLCAM_DUR);
+  return true;
+}
+
+function finishKillCam(attacker, weaponName) {
+  _killCam = null;
+  UI.hideKillCam();
+  G.state = 'dead';
+  player.respawnT = (G.mode || MODES.tdm).respawn ? 1.0 : Infinity;
+  document.exitPointerLock && document.exitPointerLock();
+  UI.renderSpawnScreen(`KILLED BY ${attacker ? attacker.name : '?'}  [${weaponName}]`);
+  UI.setRespawnCountdown(player.respawnT);
+  UI.show('spawnScreen');
+}
+
+function updateKillCam(dt) {
+  if (!_killCam) return;
+  _killCam.t -= dt;
+  const killer = _killCam.killer;
+  const pos = killer && killer.alive && killer.pos ? killer.pos : _killCam.pos;
+  const yaw = killer && killer.alive ? (killer.yaw || 0) : _killCam.yaw;
+  const pitch = killer && killer.alive ? (killer.pitch || 0) : _killCam.pitch;
+  G.camera.position.set(pos.x, pos.y + 1.62, pos.z);
+  G.camera.rotation.set(pitch, yaw, 0);
+  UI.updateKillCam(_killCam.t);
+  if (_killCam.t <= 0) finishKillCam(killer, _killCam.weaponName);
+}
+
 function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect) {
   if (!player.alive || G.state !== 'playing') return;
   if (player.spawnProtectT > 0 && !bypassProtect) return; // #18a spawn invuln
@@ -3581,11 +3626,13 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect) {
     // that kill may have ended the match (or started the Nuketown
     // end-of-match nuke) — don't clobber the state with 'dead'
     if (G.state === 'end' || G.state === 'nukecine') return;
-    G.state = 'dead';
-    player.respawnT = (G.mode || MODES.tdm).respawn ? 3.5 : Infinity;
-    document.exitPointerLock && document.exitPointerLock();
-    UI.renderSpawnScreen(`KILLED BY ${attacker ? attacker.name : '?'}  [${weaponName}]`);
-    UI.show('spawnScreen');
+    if (!startKillCam(attacker, weaponName)) {
+      G.state = 'dead';
+      player.respawnT = (G.mode || MODES.tdm).respawn ? 3.5 : Infinity;
+      document.exitPointerLock && document.exitPointerLock();
+      UI.renderSpawnScreen(`KILLED BY ${attacker ? attacker.name : '?'}  [${weaponName}]`);
+      UI.show('spawnScreen');
+    }
   }
 }
 
@@ -4443,7 +4490,7 @@ function loop() {
   let dt = Math.min(0.033, (now - lastT) / 1000);
   lastT = now;
 
-  const live = G.state === 'playing' || G.state === 'dead';
+  const live = G.state === 'playing' || G.state === 'dead' || G.state === 'killcam';
   if (live) {
     G.time += dt;
     G.timeLeft -= dt;
@@ -4460,6 +4507,7 @@ function loop() {
       player.respawnT -= dt;
       UI.setRespawnCountdown(player.respawnT);
     }
+    if (G.state === 'killcam') updateKillCam(dt);
 
     fxUpdate(dt);
     updateThrowables(dt);
@@ -4525,6 +4573,7 @@ window.MAIN = {
 
 window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
   nukeT: v => v === undefined ? _nukeT : (_nukeT = v),
+  killCam: () => _killCam,
   throwables: () => _throwables, throwEquipment, startCooking, releaseThrow,
   grenadePreview: () => _grenadePreview,
   spawnBotThrowable, // #16b
