@@ -180,10 +180,8 @@ const WEAPON_UNLOCK_ORDER_BY_CATEGORY = {
   'LMG': ['rpd', 'mg4', 'm240', 'm60'],
   'Shotgun': ['aa12', 'r870'],
   'Sniper Rifle': ['m14', 'intervention', 'barrett'],
-  'Handgun': ['m9', 'usp', 'deagle'],
-  'Machine Pistol': ['g18'],
-  'Melee': ['tomahawk'],
 };
+const SECONDARY_UNLOCK_ORDER = ['usp', 'deagle', 'm9', 'g18', 'spas12', 'tomahawk'];
 
 // Annotate each def with its own key/progression metadata so per-weapon
 // systems can branch on identity and unlock order without reverse lookups.
@@ -195,6 +193,11 @@ for (const cat in WEAPON_UNLOCK_ORDER_BY_CATEGORY) {
     WEAPONS[key].unlockLevel = idx + 1;
   });
 }
+SECONDARY_UNLOCK_ORDER.forEach((key, idx) => {
+  if (!WEAPONS[key]) return;
+  WEAPONS[key].secondaryUnlockRank = idx + 1;
+  WEAPONS[key].unlockLevel = idx + 1;
+});
 
 // Fire mode label shown on the HUD
 function fireModeLabel(w) {
@@ -225,8 +228,43 @@ function currentWeaponCategoryLevel(cat) {
   }
 }
 
-function isUnlocked(def, level = currentProfileLevel()) {
-  if (def && def.categoryUnlockRank) return def.categoryUnlockRank <= currentWeaponCategoryLevel(def.cat);
+function currentWeaponLevel(key) {
+  try {
+    return Profile.weaponSpecificLevel(key);
+  } catch (e) {
+    return 1;
+  }
+}
+
+function currentSecondaryLevel() {
+  try {
+    return Profile.weaponCategoryLevel('Handgun');
+  } catch (e) {
+    return 1;
+  }
+}
+
+function weaponUnlockLevel(def) {
+  return def && (def.categoryUnlockRank || def.secondaryUnlockRank || unlockLevelOf(def));
+}
+
+function isWeaponUnlocked(def) {
+  if (!def) return false;
+  if (def.categoryUnlockRank) return def.categoryUnlockRank <= currentWeaponCategoryLevel(def.cat);
+  if (def.secondaryUnlockRank) return def.secondaryUnlockRank <= currentSecondaryLevel();
+  return unlockLevelOf(def) <= currentProfileLevel();
+}
+
+function isAttachmentUnlocked(att, weaponKey) {
+  if (!att) return false;
+  if (!weaponKey) return unlockLevelOf(att) <= currentProfileLevel();
+  return unlockLevelOf(att) <= currentWeaponLevel(weaponKey);
+}
+
+function isUnlocked(def, level = currentProfileLevel(), weaponKey = null) {
+  if (def && def.slot && (def.slot === 'primary' || def.slot === 'secondary')) return isWeaponUnlocked(def);
+  if (def && def.pool === 'reticleColor') return def.unlockLevel <= currentWeaponLevel(weaponKey);
+  if (def && ATTACHMENTS && ATTACHMENTS[def.id]) return isAttachmentUnlocked(def, weaponKey);
   return unlockLevelOf(def) <= level;
 }
 
@@ -241,49 +279,57 @@ for (const cat in WEAPON_UNLOCK_ORDER_BY_CATEGORY) {
     if (w && unlockLevelOf(w) > 1) WEAPON_UNLOCK_ROWS.push({ level: unlockLevelOf(w), id, name: w.name, pool: 'weapon' });
   }
 }
+for (const id of SECONDARY_UNLOCK_ORDER) {
+  const w = WEAPONS[id];
+  if (w && weaponUnlockLevel(w) > 1) WEAPON_UNLOCK_ROWS.push({ level: weaponUnlockLevel(w), id, name: w.name, pool: 'secondary' });
+}
 
 const UNLOCK_TABLE = [
+  { level: 4,  id: 'marathon',     name: 'MARATHON',            pool: 'perk' },
+  { level: 5,  id: 'smoke',        name: 'SMOKE',               pool: 'throwable' },
+  { level: 6,  id: 'decoy',        name: 'DECOY',               pool: 'throwable' },
+  { level: 6,  id: 'lightweight',  name: 'LIGHTWEIGHT',         pool: 'perk' },
+  { level: 8,  id: 'c4',           name: 'C4',                  pool: 'throwable' },
+  { level: 9,  id: 'snapshot',     name: 'SNAPSHOT',            pool: 'throwable' },
+  { level: 10, id: 'scavenger',    name: 'SCAVENGER',           pool: 'perk' },
+  { level: 11, id: 'claymore',     name: 'CLAYMORE',            pool: 'throwable' },
+  { level: 12, id: 'commando',     name: 'COMMANDO',            pool: 'perk' },
+  { level: 12, id: 'cuav',         name: 'COUNTER-UAV',         pool: 'killstreak' },
+  { level: 12, id: 'flashbang',    name: 'FLASHBANG',           pool: 'throwable' },
+  { level: 13, id: 'coldblooded',  name: 'COLD-BLOODED',        pool: 'perk' },
+  { level: 14, id: 'throwingknife',name: 'THROWING KNIFE',      pool: 'throwable' },
+  { level: 15, id: 'semtex',       name: 'SEMTEX',              pool: 'throwable' },
+  { level: 16, id: 'arsenal',      name: 'ARSENAL',             pool: 'perk' },
+  { level: 16, id: 'ninja',        name: 'NINJA',               pool: 'perk' },
+  { level: 18, id: 'airstrike',    name: 'PRECISION AIRSTRIKE', pool: 'killstreak' },
+  { level: 19, id: 'hardline',     name: 'HARDLINE',            pool: 'perk' },
+].sort((a, b) => (a.level - b.level) || a.name.localeCompare(b.name));
+
+const WEAPON_TRACK_UNLOCK_TABLE = [
   ...WEAPON_UNLOCK_ROWS,
   { level: 2,  id: 'reddot',       name: 'RED DOT SIGHT',       pool: 'attachment' },
   { level: 3,  id: 'foregrip',     name: 'FOREGRIP',            pool: 'attachment' },
   { level: 4,  id: 'laser',        name: 'LASER SIGHT',         pool: 'attachment' },
-  { level: 4,  id: 'marathon',     name: 'MARATHON',            pool: 'perk' },
   { level: 5,  id: 'camoDesert',   name: 'DESERT CAMO',         pool: 'camo' },
-  { level: 5,  id: 'smoke',        name: 'SMOKE',               pool: 'throwable' },
   { level: 6,  id: 'camoWoodland', name: 'WOODLAND CAMO',       pool: 'camo' },
-  { level: 6,  id: 'decoy',        name: 'DECOY',               pool: 'throwable' },
   { level: 7,  id: 'holo',         name: 'HOLOGRAPHIC SIGHT',   pool: 'attachment' },
   { level: 7,  id: 'camoUrban',    name: 'URBAN CAMO',          pool: 'camo' },
-  { level: 8,  id: 'c4',           name: 'C4',                  pool: 'throwable' },
   { level: 8,  id: 'camoArctic',   name: 'ARCTIC CAMO',         pool: 'camo' },
   { level: 8,  id: 'extmags',      name: 'EXTENDED MAGS',       pool: 'attachment' },
   { level: 9,  id: 'acog',         name: 'ACOG SIGHT',          pool: 'attachment' },
   { level: 9,  id: 'camoJungle',   name: 'JUNGLE CAMO',         pool: 'camo' },
-  { level: 9,  id: 'snapshot',     name: 'SNAPSHOT',            pool: 'throwable' },
+  { level: 9,  id: 'acogChevron',  name: 'ACOG CHEVRON',        pool: 'reticle' },
   { level: 10, id: 'camoDigital',  name: 'DIGITAL CAMO',        pool: 'camo' },
-  { level: 10, id: 'scavenger',    name: 'SCAVENGER',           pool: 'perk' },
   { level: 10, id: 'suppressor',   name: 'SUPPRESSOR',          pool: 'attachment' },
   { level: 11, id: 'camoTiger',    name: 'TIGER CAMO',          pool: 'camo' },
-  { level: 11, id: 'claymore',     name: 'CLAYMORE',            pool: 'throwable' },
   { level: 11, id: 'quickdraw',    name: 'QUICKDRAW GRIP',      pool: 'attachment' },
-  { level: 12, id: 'cuav',         name: 'COUNTER-UAV',         pool: 'killstreak' },
   { level: 12, id: 'camoHex',      name: 'HEX CAMO',            pool: 'camo' },
-  { level: 12, id: 'commando',     name: 'COMMANDO',            pool: 'perk' },
-  { level: 12, id: 'flashbang',    name: 'FLASHBANG',           pool: 'throwable' },
   { level: 13, id: 'camoCarbon',   name: 'CARBON CAMO',         pool: 'camo' },
-  { level: 13, id: 'coldblooded',  name: 'COLD-BLOODED',        pool: 'perk' },
   { level: 14, id: 'camoRedline',  name: 'REDLINE CAMO',        pool: 'camo' },
-  { level: 14, id: 'throwingknife',name: 'THROWING KNIFE',      pool: 'throwable' },
   { level: 15, id: 'camoBlueSteel',name: 'BLUE STEEL CAMO',     pool: 'camo' },
-  { level: 15, id: 'semtex',       name: 'SEMTEX',              pool: 'throwable' },
-  { level: 16, id: 'arsenal',      name: 'ARSENAL',             pool: 'perk' },
   { level: 16, id: 'camoTopo',     name: 'TOPO CAMO',           pool: 'camo' },
-  { level: 16, id: 'ninja',        name: 'NINJA',               pool: 'perk' },
   { level: 17, id: 'camoSplinter', name: 'SPLINTER CAMO',       pool: 'camo' },
   { level: 18, id: 'camoGold',     name: 'GOLD CAMO',           pool: 'camo' },
-  { level: 18, id: 'airstrike',    name: 'PRECISION AIRSTRIKE', pool: 'killstreak' },
-  { level: 19, id: 'hardline',     name: 'HARDLINE',            pool: 'perk' },
-  { level: 20, id: 'nuke',         name: 'TACTICAL NUKE',       pool: 'killstreak' },
 ].sort((a, b) => (a.level - b.level) || a.name.localeCompare(b.name));
 
 // ============================================================
@@ -385,12 +431,12 @@ function attachmentAllowed(att, def) {
 // string, not an attachment id — it isn't a slot pick), migrated to 'red'
 // in normalizeClass, resolved to a hex via resolveWeaponDef.reticleColor.
 const RETICLE_COLORS = [
-  { id:'red',     name:'RED',     hex:0xff2020 },
-  { id:'green',   name:'GREEN',   hex:0x35ff45 },
-  { id:'cyan',    name:'CYAN',    hex:0x25dcff },
-  { id:'amber',   name:'AMBER',   hex:0xffb025 },
-  { id:'magenta', name:'MAGENTA', hex:0xff35d5 },
-  { id:'white',   name:'WHITE',   hex:0xf2f2f2 },
+  { id:'red',     name:'RED',     hex:0xff2020, unlockLevel:1, pool:'reticleColor' },
+  { id:'green',   name:'GREEN',   hex:0x35ff45, unlockLevel:9, pool:'reticleColor' },
+  { id:'cyan',    name:'CYAN',    hex:0x25dcff, unlockLevel:11, pool:'reticleColor' },
+  { id:'amber',   name:'AMBER',   hex:0xffb025, unlockLevel:13, pool:'reticleColor' },
+  { id:'magenta', name:'MAGENTA', hex:0xff35d5, unlockLevel:15, pool:'reticleColor' },
+  { id:'white',   name:'WHITE',   hex:0xf2f2f2, unlockLevel:17, pool:'reticleColor' },
 ];
 function reticleHex(id) {
   const rc = RETICLE_COLORS.find(rc => rc.id === id);
@@ -411,6 +457,11 @@ function laserHex(id) {
   return (lc || LASER_COLORS[0]).hex;
 }
 
+const ACOG_RETICLES = [
+  { id:'cross', name:'CROSS', unlockLevel:9 },
+  { id:'chevron', name:'CHEVRON', unlockLevel:9 },
+];
+
 // Short mod summary for the class editor rows ("ADS TIME -15% · ADS SPREAD -10%")
 const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', spreadHip:'HIP SPREAD', recoil:'RECOIL', bloom:'BLOOM', zoom:'ZOOM', mag:'MAG', reload:'RELOAD', rangeMult:'RANGE' }; // P55/P56 labels
 function attachmentDesc(att) {
@@ -428,7 +479,7 @@ function attachmentDesc(att) {
 // apply modifiers ad hoc. Returns the base def itself when nothing valid
 // is attached; otherwise a copy carrying `attachments` (valid ids, for the
 // viewmodel to branch on) with mods multiplied in.
-function resolveWeaponDef(key, attIds, dotColor, laserColor) {
+function resolveWeaponDef(key, attIds, dotColor, laserColor, acogReticle) {
   const base = WEAPONS[key];
   const ids = (attIds || []).filter(id => ATTACHMENTS[id] && attachmentAllowed(ATTACHMENTS[id], base));
   if (!ids.length) return base;
@@ -437,6 +488,7 @@ function resolveWeaponDef(key, attIds, dotColor, laserColor) {
   def.attachments = ids;
   def.reticleColor = reticleHex(dotColor); // buildViewModel tints the dot/holo reticle with this
   def.laserColor = laserHex(laserColor);   // ...and the laser beam/dot with this
+  def.acogReticle = ACOG_RETICLES.some(r => r.id === acogReticle) ? acogReticle : 'cross';
   for (const id of ids) {
     const mods = ATTACHMENTS[id].mods;
     for (const stat in mods) {
@@ -509,6 +561,8 @@ function normalizeClass(c) {
     // reticle color (#19b): pre-color saves (and junk values) default to red
     const ck = slot + 'DotColor';
     if (!RETICLE_COLORS.some(rc => rc.id === c.attachments[ck])) c.attachments[ck] = 'red';
+    const ak = slot + 'AcogReticle';
+    if (!ACOG_RETICLES.some(r => r.id === c.attachments[ak])) c.attachments[ak] = 'cross';
     // laser color (#19c): pre-laser saves (and junk values) default to green
     const lk = slot + 'LaserColor';
     if (!LASER_COLORS.some(lc => lc.id === c.attachments[lk])) c.attachments[lk] = 'green';
@@ -536,15 +590,19 @@ function normalizeClass(c) {
 
 function sanitizeClassForLevel(c, level = currentProfileLevel()) {
   normalizeClass(c);
-  if (!WEAPONS[c.primary] || !isUnlocked(WEAPONS[c.primary], level)) c.primary = firstUnlockedWeapon('primary', level, WEAPONS[c.primary] && WEAPONS[c.primary].cat);
-  if (!WEAPONS[c.secondary] || !isUnlocked(WEAPONS[c.secondary], level)) c.secondary = firstUnlockedWeapon('secondary', level, WEAPONS[c.secondary] && WEAPONS[c.secondary].cat);
+  if (!WEAPONS[c.primary] || !isWeaponUnlocked(WEAPONS[c.primary])) c.primary = firstUnlockedWeapon('primary', level, WEAPONS[c.primary] && WEAPONS[c.primary].cat);
+  if (!WEAPONS[c.secondary] || !isWeaponUnlocked(WEAPONS[c.secondary])) c.secondary = firstUnlockedWeapon('secondary', level, WEAPONS[c.secondary] && WEAPONS[c.secondary].cat);
 
   for (const slot of ['primary', 'secondary']) {
     const def = WEAPONS[c[slot]];
     c.attachments[slot] = (c.attachments[slot] || []).filter(id => {
       const a = ATTACHMENTS[id];
-      return a && attachmentAllowed(a, def) && isUnlocked(a, level);
+      return a && attachmentAllowed(a, def) && isAttachmentUnlocked(a, c[slot]);
     });
+    if (!isUnlocked(RETICLE_COLORS.find(rc => rc.id === c.attachments[slot + 'DotColor']), level, c[slot]))
+      c.attachments[slot + 'DotColor'] = 'red';
+    if (!ACOG_RETICLES.some(r => r.id === c.attachments[slot + 'AcogReticle'] && r.unlockLevel <= currentWeaponLevel(c[slot])))
+      c.attachments[slot + 'AcogReticle'] = 'cross';
   }
 
   for (const tier of [1, 2, 3]) {
@@ -606,11 +664,11 @@ function perkById(id) {
 
 // Default classes
 const DEFAULT_CLASSES = [
-  { name:'CINDERLINE',  primary:'f2000', secondary:'m9',       perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'IRONWAKE',    primary:'mac10', secondary:'g18',      perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'ASHRUNNER',   primary:'rpd',   secondary:'m9',       perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'RAVENFALL',   primary:'m14',   secondary:'m9',       perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
-  { name:'DUSTKNIFE',   primary:'aa12',  secondary:'tomahawk', perks:['soh','stopping','steadyaim'],      lethal:'frag', tactical:'stun',  killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'CINDERLINE',  primary:'f2000', secondary:'usp', perks:['soh','stopping','steadyaim'], lethal:'frag', tactical:'stun', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'IRONWAKE',    primary:'mac10', secondary:'usp', perks:['soh','stopping','steadyaim'], lethal:'frag', tactical:'stun', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'ASHRUNNER',   primary:'rpd',   secondary:'usp', perks:['soh','stopping','steadyaim'], lethal:'frag', tactical:'stun', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'RAVENFALL',   primary:'m14',   secondary:'usp', perks:['soh','stopping','steadyaim'], lethal:'frag', tactical:'stun', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
+  { name:'DUSTKNIFE',   primary:'aa12',  secondary:'usp', perks:['soh','stopping','steadyaim'], lethal:'frag', tactical:'stun', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
 ];
 
 // Loadout pool bots draw from. #16b: each carries a `lethal` throwable pick

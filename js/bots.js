@@ -169,7 +169,9 @@ class Bot {
     this.grenLeft = 0;   // grenades left this life (reset in spawn)
     this.grenCdT = 0;    // throw cooldown / initial arm delay
 
-    const s = BOT_SKILL[world.api.difficulty] || BOT_SKILL.regular;
+    const difficulty = world.api.difficultyForTeam ? world.api.difficultyForTeam(team) : world.api.difficulty;
+    const s = BOT_SKILL[difficulty] || BOT_SKILL.regular;
+    this.difficulty = difficulty || 'regular';
     const v = 0.8 + Math.random() * 0.4;
     this.skill = { ...s, acc: s.acc * v, react: s.react / v };
 

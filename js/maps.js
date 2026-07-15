@@ -307,7 +307,7 @@ function buildNuketown(scene, colliders) {
     t.box(-11.85, H1 + 0.42, -7.35, 4.7, 0.85, 0.1, innerC); // rail at the hole
     // ---- interior staircase (0.4 m risers: bots follow, stepUp is 0.55)
     for (let i = 0; i < 7; i++)
-      t.box(-10.6 - 0.53 * i, 0.2 * (i + 1), -8.2, 0.53, 0.4 * (i + 1), 1.15, 0x7a6248);
+      t.box(-10.6 - 0.53 * i, 0.2 * (i + 1), -8.225, 0.56, 0.4 * (i + 1), 1.55, 0x7a6248);
     // ---- roof + chimney (stepped slabs fake a gable, wide eaves)
     t.box(-13.75, TOP + 0.14, -3, 9.9, 0.28, 13.4, roofC);
     t.box(-13.75, TOP + 0.42, -3, 6.6, 0.28, 13.4, roofC);
@@ -330,12 +330,12 @@ function buildNuketown(scene, colliders) {
     t.box(-13.75, GROOF, 5.3, 8.9, 0.2, 5.4, roofC);
     t.box(-13.75, GROOF - 0.03, 5.3, 9.1, 0.12, 5.6, TRIM, ns);   // eave
     // ---- rear deck at second-floor level + exterior staircase down
-    t.box(-19.3, 2.7, -0.15, 2.6, 0.2, 3.7, 0x9a7a55);
+    t.box(-19.1, 2.7, -0.15, 3.0, 0.2, 3.7, 0x9a7a55);
     for (const pz of [-1.6, 1.3]) t.box(-20.3, 1.3, pz, 0.16, 2.6, 0.16, 0x9a7a55);
     t.box(-20.55, 3.2, -0.15, 0.1, 0.8, 3.7, TRIM);
     t.box(-19.3, 3.2, -2.0, 2.6, 0.8, 0.1, TRIM);
     for (let i = 0; i < 7; i++)
-      t.box(-19.3, 0.2 * (i + 1), 4.9 - 0.52 * i, 2.2, 0.4 * (i + 1), 0.52, 0x7a6248);
+      t.box(-19.1, 0.2 * (i + 1), 4.9 - 0.52 * i, 2.8, 0.4 * (i + 1), 0.56, 0x7a6248);
     k.beam(s * -20.45, 1.0, s * 4.95, s * -20.45, 3.15, s * 1.65, 0.12, 0x7a6248, ns);
     k.beam(s * -20.45, 0.55, s * 4.95, s * -20.45, 2.45, s * 1.65, 0.08, 0x7a6248, ns);
     // ---- furniture (kept against walls so bots keep clean lanes)
@@ -469,9 +469,9 @@ function buildNuketown(scene, colliders) {
   busG.rotation.y = BUSA;
   scene.add(busG);
   const busSin = Math.sin(BUSA), busCos = Math.cos(BUSA);
-  for (const off of [-2.8, 0, 2.8])
-    k.blocker(BUSX + off * busSin, 1.55, BUSZ + off * busCos, 3.05, 3.1, 3.42);
-  k.blocker(BUSX + 5.0 * busSin, 0.85, BUSZ + 5.0 * busCos, 2.6, 1.7, 2.25);
+  for (const off of [-2.7, 0, 2.7])
+    k.blocker(BUSX + off * busSin, 1.25, BUSZ + off * busCos, 2.55, 2.5, 2.35);
+  k.blocker(BUSX + 4.85 * busSin, 0.62, BUSZ + 4.85 * busCos, 2.35, 1.24, 1.55);
 
   // ---- moving truck beside the bus (open cargo hold facing the bus)
   const TRUCKX = 3.0;
@@ -560,14 +560,14 @@ function buildNuketown(scene, colliders) {
     [2.2, 8.0], [1.4, -6.4],               // mid-street lane (truck side)
     [-0.2, 14.6],                           // blockade front
     // upstairs — three routes in: interior stair, rear deck stair, roof
-    [-10.55, -8.2, 0.4], [-14.6, -8.2, 2.8],
+    [-10.55, -8.55, 0.4], [-14.6, -8.55, 2.8],
     [-11.6, -6.4, 2.8], [-11.6, -0.2, 2.8], // street-window room
     [-14.6, -6.6, 2.8],                     // hall, clear of the stair rail
     [-15.8, -4.9, 2.8], [-15.8, -6.1, 2.8], // bedroom door out / in
     [-16.5, -8.4, 2.8],                     // bedroom
     [-16.9, -0.4, 2.8],                     // inside the rear-deck door
     [-19.3, -0.4, 2.8], [-19.3, 1.9, 2.8],  // rear deck + head of the stair
-    [-19.3, 4.64, 0.4],                     // foot of the rear stair
+    [-19.1, 4.64, 0.4],                     // foot of the rear stair
     [-10.7, 8.5, 0.5], [-11.65, 8.5, 1.0],  // crate-chain climb to the garage roof
     [-12.6, 8.5, 1.5], [-13.55, 8.5, 2.0],
     [-14.5, 8.5, 2.5], [-14.5, 6.7, 2.8],
@@ -587,6 +587,11 @@ function buildNuketown(scene, colliders) {
     },
     waypointSeeds: grid.concat(extra),
     windows: k.windows,
+    debugCollisionProbes: [
+      { name: 'school_bus_hood_clearance', from: [-4.8, 1.35, -1.2], to: [-0.6, 1.35, 3.8] },
+      { name: 'bus_truck_gap', from: [-1.4, 1.15, -3.6], to: [2.2, 1.15, 1.6] },
+      { name: 'upstairs_window_lane', from: [-9.2, 3.55, -0.2], to: [9.2, 3.55, 0.2] },
+    ],
   };
 }
 

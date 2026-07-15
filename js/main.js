@@ -351,8 +351,9 @@ const VM_RETICLE = {
   holoDot: 0.004,
   holoRingInner: 0.0085,
   holoRingOuter: 0.011,
-  acogHair: 0.0024,
-  acogArm: 0.012,
+  acogHair: 0.0017,
+  acogArm: 0.008,
+  acogChevron: 0.010,
 };
 
 // Red dot mount points (#9c): rail-top y + mount z per weapon key
@@ -373,6 +374,8 @@ const VM_OPTIC = {
   rpd: { y: 0.045, z: -0.15 },
   m240: { y: 0.05, z: -0.16 },
   mg4: { y: 0.046, z: -0.14 },
+  m14: { y: 0.052, z: -0.22 },
+  sniper: { y: 0.052, z: -0.22 },
   spas12: { y: 0.04, z: -0.1 },
   r870: { y: 0.038, z: -0.1 },
   aa12: { y: 0.05, z: -0.14 },
@@ -700,11 +703,13 @@ const VM_RECIPES = {
     s(0.016, 0.032, 0.02, dark, 0, 0.056, -0.06);    // rear
     return 0.92;
   },
-  intervention({ p, m, k, cyl, dark, mid }) {
+  intervention({ p, m, k, dark, mid, black }) {
     p(0.045, 0.07, 0.6, dark, 0, 0, -0.3);           // chassis
     p(0.024, 0.024, 0.46, mid, 0, 0.006, -0.83);     // long fluted barrel
     p(0.04, 0.04, 0.08, dark, 0, 0.006, -1.09);      // muzzle brake
-    cyl(0.034, 0.24, 0x1c1e22, 0, 0.072, -0.26);     // scope
+    p(0.008, 0.046, 0.24, black, -0.026, 0.072, -0.26);
+    p(0.008, 0.046, 0.24, black, 0.026, 0.072, -0.26);
+    p(0.06, 0.008, 0.24, black, 0, 0.098, -0.26);
     k(0.055, 0.016, 0.016, mid, 0.048, 0.03, -0.07); // bolt handle arm, right side
     k(0.02, 0.022, 0.022, dark, 0.082, 0.03, -0.07); // bolt knob
     p(0.028, 0.024, 0.22, dark, 0, 0.028, 0.12);     // skeleton stock spine
@@ -716,13 +721,15 @@ const VM_RECIPES = {
     p(0.012, 0.012, 0.16, dark, -0.02, -0.03, -0.85);
     return 1.15;
   },
-  barrett({ p, m, cyl, dark, mid }) {
+  barrett({ p, m, dark, mid, black }) {
     p(0.058, 0.09, 0.72, dark, 0, 0, -0.28);         // thick receiver
     p(0.03, 0.03, 0.3, mid, 0, 0.008, -0.78);        // barrel
     p(0.062, 0.055, 0.14, dark, 0, 0.008, -0.99);    // huge arrow muzzle brake
     p(0.095, 0.035, 0.07, mid, 0, 0.008, -0.97);     // brake side fins
     m(0.042, 0.1, 0.15, mid, 0, -0.095, -0.3);       // long box mag
-    cyl(0.032, 0.22, 0x1c1e22, 0, 0.075, -0.18);     // scope
+    p(0.008, 0.044, 0.22, black, -0.025, 0.075, -0.18);
+    p(0.008, 0.044, 0.22, black, 0.025, 0.075, -0.18);
+    p(0.058, 0.008, 0.22, black, 0, 0.1, -0.18);
     p(0.05, 0.09, 0.045, dark, 0, -0.005, 0.1);      // butt pad
     p(0.03, 0.07, 0.04, dark, 0, -0.075, -0.04);     // grip
     p(0.02, 0.05, 0.3, mid, 0, -0.062, -0.55);       // lower spring housing
@@ -867,7 +874,9 @@ function buildViewModel(w) {
   } else if (type === 'sniper') {
     part(0.05, 0.075, 0.9, dark, 0, 0, -0.45);
     part(0.026, 0.026, 0.32, mid, 0, 0.006, -1.0);
-    cyl(0.032, 0.2, 0x1c1e22, 0, 0.07, -0.3);
+    part(0.008, 0.044, 0.22, black, -0.025, 0.07, -0.3);
+    part(0.008, 0.044, 0.22, black, 0.025, 0.07, -0.3);
+    part(0.058, 0.008, 0.22, black, 0, 0.095, -0.3);
     part(0.045, 0.09, 0.2, wood, 0, -0.015, 0.05);
     len = 1.17;
   } else if (type === 'shotgun') {
@@ -925,12 +934,21 @@ function buildViewModel(w) {
       part(0.064, 0.008, 0.02, black, 0, retY - 0.028, mnt.z - 0.068);
       const hair = VM_RETICLE.acogHair;
       const arm = VM_RETICLE.acogArm;
-      const hbar = new THREE.Mesh(new THREE.BoxGeometry(arm, hair, 0.003), glow());
-      hbar.position.set(0, retY, mnt.z);
-      g.add(hbar);
-      const vbar = new THREE.Mesh(new THREE.BoxGeometry(hair, arm, 0.003), glow());
-      vbar.position.set(0, retY, mnt.z);
-      g.add(vbar);
+      if (w.acogReticle === 'chevron') {
+        for (const sign of [-1, 1]) {
+          const ch = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.acogChevron, hair, 0.003), glow());
+          ch.position.set(sign * VM_RETICLE.acogChevron * 0.32, retY - 0.002, mnt.z);
+          ch.rotation.z = sign * 0.72;
+          g.add(ch);
+        }
+      } else {
+        const hbar = new THREE.Mesh(new THREE.BoxGeometry(arm, hair, 0.003), glow());
+        hbar.position.set(0, retY, mnt.z);
+        g.add(hbar);
+        const vbar = new THREE.Mesh(new THREE.BoxGeometry(hair, arm, 0.003), glow());
+        vbar.position.set(0, retY, mnt.z);
+        g.add(vbar);
+      }
     } else {
       // holo: wide flat open window frame with a circle-dot reticle
       retY = mnt.y + 0.046;
@@ -1509,7 +1527,7 @@ const KILLSTREAKS = {
     deploy() { deployNapalm(); },
   },
   nuke: {
-    id: 'nuke', name: 'TACTICAL NUKE', kills: 25, unlockLevel: 20,
+    id: 'nuke', name: 'TACTICAL NUKE', kills: 25, unlockLevel: 1,
     selectable: false, special: true, // late special, never a class slot
     weaponName: 'TACTICAL NUKE',
     deploy() { deployNuke(); },
@@ -1628,7 +1646,7 @@ function deployCarePackage() {
   G.scene.add(crate);
   _carePackages.push({
     drop, heli, crate, t: 0, dropped: false, landed: false,
-    reward: chooseCarePackageReward(), ownerTeam: player.team,
+    reward: chooseCarePackageReward(), owner: player, ownerTeam: player.team,
   });
   AudioSys.carePackage && AudioSys.carePackage();
   return 'CARE PACKAGE INBOUND';
@@ -1651,8 +1669,14 @@ function claimCarePackage(pkg, ent) {
   if (reward.kind === 'ammo') refillEntityAmmo(ent);
   else if (ent.isPlayer && KILLSTREAKS[reward.id]) bankKillstreak(KILLSTREAKS[reward.id], false);
   else ent.lastCarePackageReward = reward.id || reward.kind;
+  const claimingTeam = ent.team;
+  const ownerTeam = pkg.ownerTeam;
   const claimedByPlayer = ent.isPlayer;
-  UI.showStreakBanner((claimedByPlayer ? 'CARE PACKAGE: ' : 'ENEMY STOLE PACKAGE: ') + reward.name);
+  let prefix = 'PACKAGE SECURED: ';
+  if (ent === pkg.owner) prefix = 'CARE PACKAGE: ';
+  else if (claimingTeam === ownerTeam) prefix = claimedByPlayer ? 'PACKAGE SECURED: ' : 'TEAMMATE SECURED PACKAGE: ';
+  else prefix = 'ENEMY STOLE PACKAGE: ';
+  UI.showStreakBanner(prefix + reward.name);
   G.scene.remove(pkg.heli);
   G.scene.remove(pkg.crate);
   _carePackages.splice(_carePackages.indexOf(pkg), 1);
@@ -3373,7 +3397,7 @@ function addWeaponCategoryXpForKill(weaponName, headshot) {
   let xp = Profile.XP_EARN.directKill;
   if (headshot) xp += Profile.XP_EARN.headshotBonus;
   if (weaponName === 'TOMAHAWK') xp += Profile.XP_EARN.meleeBonus;
-  Profile.MatchWeaponXP.add(def.cat, Profile.scaledMatchXp(xp));
+  Profile.MatchWeaponXP.add(def.cat, Profile.scaledMatchXp(xp), def.key);
 }
 
 function registerKill(killer, victim, weaponName, headshot) {
@@ -3462,7 +3486,7 @@ function registerKill(killer, victim, weaponName, headshot) {
 
 function startMatch(mapId, modeId = 'tdm') {
   Profile.onMatchStart(); // P5: matchesPlayed++ and resets MatchXP/MatchStats
-  Profile.setMatchDifficulty(UI.settings.difficulty);
+  Profile.setMatchDifficulty(UI.settings.enemyDifficulty || UI.settings.difficulty);
   G.mapId = mapId;
   G.modeId = modeById(modeId).id;
   G.mode = modeById(G.modeId);
@@ -3523,7 +3547,13 @@ function startMatch(mapId, modeId = 'tdm') {
   const world = {
     scene: G.scene, colliders: G.colliders, graph: G.graph,
     api: {
-      difficulty: UI.settings.difficulty,
+      difficulty: UI.settings.enemyDifficulty || UI.settings.difficulty,
+      difficultyForTeam: team => {
+        if (G.mode && G.mode.structure === 'ffa') return UI.settings.enemyDifficulty || UI.settings.difficulty;
+        return team === player.team
+          ? (UI.settings.friendlyDifficulty || UI.settings.difficulty)
+          : (UI.settings.enemyDifficulty || UI.settings.difficulty);
+      },
       pickSpawn, getEnemies, registerKill, noteShot, audioPan, smokeBlocked,
       commsJammed, // P61: hearShot's jam gate
       tracer: fxTracer,
@@ -3542,7 +3572,7 @@ function startMatch(mapId, modeId = 'tdm') {
   if (G.mode.structure === 'ffa') {
     const names = shuffledFfaNames();
     const count = Math.max(1, n * 2 - 1);
-    for (let i = 0; i < count; i++) G.bots.push(new Bot(names[i % names.length], 'ffa' + (i + 1), world));
+      for (let i = 0; i < count; i++) G.bots.push(new Bot(names[i % names.length], 'ffa' + (i + 1), world));
   } else {
     for (const team of G.mode.teams) {
       const names = shuffledBotNames(team);
@@ -3551,6 +3581,7 @@ function startMatch(mapId, modeId = 'tdm') {
     }
   }
   G.combatants = [player, ...G.bots];
+  for (const c of G.combatants) c._replay = [];
   if (isGunGameMode()) {
     for (const c of G.combatants) prepareGunGameCombatant(c);
   }
@@ -3586,14 +3617,15 @@ function deploy() {
       .slice(0, streakSlotLimit(cls));
     if (!player.equippedStreakIds.length) player.equippedStreakIds = DEFAULT_KILLSTREAK_IDS.slice(0, streakSlotLimit(cls));
     for (const id of KILLSTREAK_ORDER)
-      if (KILLSTREAKS[id].special && isUnlocked(KILLSTREAKS[id])) player.equippedStreakIds.push(id);
+      if (KILLSTREAKS[id].special) player.equippedStreakIds.push(id);
   }
   const mkState = slot => {
     // resolved def (base + attachment mods) — every curW().def consumer
     // (fire path, startReload, HUD, viewmodel) reads modified stats from here
     const w = resolveWeaponDef(cls[slot], cls.attachments && cls.attachments[slot],
       cls.attachments && cls.attachments[slot + 'DotColor'],
-      cls.attachments && cls.attachments[slot + 'LaserColor']);
+      cls.attachments && cls.attachments[slot + 'LaserColor'],
+      cls.attachments && cls.attachments[slot + 'AcogReticle']);
     // SCAVENGER no longer doubles reserve here (#6) — it resupplies off
     // corpses in updateScavenger(); everyone spawns with normal reserve
     return { def: w, mag: w.mag, reserve: w.reserve };
@@ -3634,6 +3666,7 @@ function deploy() {
     : player.team === 'tf' ? (G.mapId === 'rust' ? Math.PI * 1.25 : Math.PI) : 0;
   player.pitch = 0;
   player.alive = true;
+  vmRoot.visible = true;
   buildViewModel(curW().def);
   G.state = 'playing';
   UI.show('hud');
@@ -3642,11 +3675,49 @@ function deploy() {
 
 function curW() { return player.weapons[player.cur]; }
 
+const KILLCAM_BUFFER = 4.5;
+
+function combatantReplayWeapon(ent) {
+  if (!ent) return '';
+  if (ent.isPlayer) return curW().def.name;
+  return ent.weapon ? ent.weapon.name : '';
+}
+
+function recordReplayFrames(dt) {
+  if (!G.combatants) return;
+  for (const ent of G.combatants) {
+    if (!ent || !ent.alive || !ent.pos) continue;
+    if (!ent._replay) ent._replay = [];
+    ent._replay.push({
+      t: G.time,
+      x: ent.pos.x,
+      y: ent.pos.y,
+      z: ent.pos.z,
+      yaw: ent.yaw || 0,
+      pitch: ent.pitch || 0,
+      adsAmt: ent.adsAmt || 0,
+      fov: ent.isPlayer ? G.camera.fov : UI.settings.fov,
+      weaponName: combatantReplayWeapon(ent),
+    });
+    const minT = G.time - KILLCAM_BUFFER;
+    while (ent._replay.length && ent._replay[0].t < minT) ent._replay.shift();
+  }
+}
+
 function startKillCam(attacker, weaponName) {
   if (!attacker || !attacker.pos || !(G.mode || MODES.tdm).respawn) return false;
+  const replay = attacker._replay && attacker._replay.length
+    ? attacker._replay.map(f => Object.assign({}, f))
+    : [{
+        t: G.time, x: attacker.pos.x, y: attacker.pos.y, z: attacker.pos.z,
+        yaw: attacker.yaw || 0, pitch: attacker.pitch || 0, adsAmt: 0,
+        fov: UI.settings.fov, weaponName,
+      }];
   _killCam = {
     t: KILLCAM_DUR,
     killer: attacker,
+    replay,
+    idx: 0,
     pos: attacker.pos.clone(),
     yaw: attacker.yaw || 0,
     pitch: attacker.pitch || 0,
@@ -3654,6 +3725,7 @@ function startKillCam(attacker, weaponName) {
   };
   G.state = 'killcam';
   player.respawnT = KILLCAM_DUR;
+  vmRoot.visible = false;
   UI.show('hud');
   UI.showKillCam(attacker.name, weaponName, KILLCAM_DUR);
   return true;
@@ -3661,6 +3733,8 @@ function startKillCam(attacker, weaponName) {
 
 function finishKillCam(attacker, weaponName) {
   _killCam = null;
+  vmRoot.visible = true;
+  MAIN.applyFov();
   UI.hideKillCam();
   G.state = 'dead';
   player.respawnT = (G.mode || MODES.tdm).respawn ? 1.0 : Infinity;
@@ -3674,11 +3748,19 @@ function updateKillCam(dt) {
   if (!_killCam) return;
   _killCam.t -= dt;
   const killer = _killCam.killer;
-  const pos = killer && killer.alive && killer.pos ? killer.pos : _killCam.pos;
-  const yaw = killer && killer.alive ? (killer.yaw || 0) : _killCam.yaw;
-  const pitch = killer && killer.alive ? (killer.pitch || 0) : _killCam.pitch;
-  G.camera.position.set(pos.x, pos.y + 1.62, pos.z);
-  G.camera.rotation.set(pitch, yaw, 0);
+  const replay = _killCam.replay || [];
+  const u = THREE.MathUtils.clamp(1 - _killCam.t / KILLCAM_DUR, 0, 1);
+  const idx = replay.length ? Math.min(replay.length - 1, Math.floor(u * replay.length)) : -1;
+  const f = idx >= 0 ? replay[idx] : null;
+  if (f) {
+    G.camera.position.set(f.x, f.y + 1.62, f.z);
+    G.camera.rotation.set(f.pitch || 0, f.yaw || 0, 0);
+    G.camera.fov = f.fov || UI.settings.fov;
+    G.camera.updateProjectionMatrix();
+  } else {
+    G.camera.position.set(_killCam.pos.x, _killCam.pos.y + 1.62, _killCam.pos.z);
+    G.camera.rotation.set(_killCam.pitch, _killCam.yaw, 0);
+  }
   UI.updateKillCam(_killCam.t);
   if (_killCam.t <= 0) finishKillCam(killer, _killCam.weaponName);
 }
@@ -4608,6 +4690,7 @@ function loop() {
       updateScavenger(); // #6: resupply reserve off corpses
       updateTargetName(dt);
     }
+    if (G.state === 'playing') recordReplayFrames(dt);
     if (G.state === 'dead') {
       player.respawnT -= dt;
       UI.setRespawnCountdown(player.respawnT);

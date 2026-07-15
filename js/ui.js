@@ -65,7 +65,12 @@ function keyLabel(code) {
 }
 
 const UI = {
-  settings: { sens: 1.0, fov: 80, volume: 0.7, difficulty: 'regular', teamSize: 6, scoreLimit: 75, timeLimit: 600 },
+  settings: {
+    sens: 1.0, fov: 80, volume: 0.7,
+    friendlyDifficulty: 'regular', enemyDifficulty: 'regular',
+    difficulty: 'regular',
+    teamSize: 6, scoreLimit: 75, timeLimit: 600,
+  },
   classes: [],
   editIdx: 0,        // class being edited
   selectedClass: 0,  // class chosen on spawn screen
@@ -94,6 +99,9 @@ const UI = {
       const s = JSON.parse(localStorage.getItem('tf_settings'));
       if (s) Object.assign(this.settings, s);
     } catch (e) {}
+    if (!this.settings.friendlyDifficulty) this.settings.friendlyDifficulty = this.settings.difficulty || 'regular';
+    if (!this.settings.enemyDifficulty) this.settings.enemyDifficulty = this.settings.difficulty || 'regular';
+    this.settings.difficulty = this.settings.enemyDifficulty;
     this.normalizeKeybinds();
   },
   saveSettings() { localStorage.setItem('tf_settings', JSON.stringify(this.settings)); },
@@ -237,7 +245,15 @@ const UI = {
     bindRange('pauseSens', 'sens', 'pauseSensVal', v => v.toFixed(1));
     bindRange('pauseFov', 'fov', 'pauseFovVal', v => v.toFixed(0));
     bindRange('pauseVol', 'volume', 'pauseVolVal', v => Math.round(v * 100) + '%');
-    this.$('setDiff').addEventListener('change', e => { this.settings.difficulty = e.target.value; this.saveSettings(); });
+    this.$('setFriendlyDiff').addEventListener('change', e => {
+      this.settings.friendlyDifficulty = e.target.value;
+      this.saveSettings();
+    });
+    this.$('setEnemyDiff').addEventListener('change', e => {
+      this.settings.enemyDifficulty = e.target.value;
+      this.settings.difficulty = e.target.value;
+      this.saveSettings();
+    });
     this.$('setTeamSize').addEventListener('change', e => { this.settings.teamSize = parseInt(e.target.value); this.saveSettings(); });
     this.$('setScoreLimit').addEventListener('change', e => { this.settings.scoreLimit = parseInt(e.target.value); this.saveSettings(); });
     this.$('setTimeLimit').addEventListener('change', e => { this.settings.timeLimit = parseInt(e.target.value); this.saveSettings(); });
@@ -256,7 +272,8 @@ const UI = {
     this.$('setSens').value = s.sens; this.$('setSensVal').textContent = s.sens.toFixed(1);
     this.$('setFov').value = s.fov; this.$('setFovVal').textContent = s.fov.toFixed(0);
     this.$('setVol').value = s.volume; this.$('setVolVal').textContent = Math.round(s.volume * 100) + '%';
-    this.$('setDiff').value = s.difficulty;
+    this.$('setFriendlyDiff').value = s.friendlyDifficulty || s.difficulty || 'regular';
+    this.$('setEnemyDiff').value = s.enemyDifficulty || s.difficulty || 'regular';
     this.$('setTeamSize').value = String(s.teamSize);
     this.$('setScoreLimit').value = String(s.scoreLimit);
     this.$('setTimeLimit').value = String(s.timeLimit);
@@ -398,12 +415,14 @@ const UI = {
 
     // P15: unlock-hint chip for any def with unlock metadata past Level 1.
     // Data-only — nothing is disabled until the gate-enforcement slice.
-    const lockChip = def =>
+    const lockChip = (def, label = 'LVL') =>
       unlockLevelOf(def) > 1
-        ? `<span class="w-lock" title="UNLOCKS AT LEVEL ${unlockLevelOf(def)}">LVL ${unlockLevelOf(def)}</span>` : '';
-    const rewardLabel = def => unlockLevelOf(def) > 1 ? 'LVL ' + unlockLevelOf(def) + ' REWARD' : 'STARTER';
+        ? `<span class="w-lock" title="UNLOCKS AT ${label} ${unlockLevelOf(def)}">${label} ${unlockLevelOf(def)}</span>` : '';
+    const rewardLabel = def => unlockLevelOf(def) > 1 ? 'WPN LVL ' + unlockLevelOf(def) + ' REWARD' : 'STARTER';
     const profileLevel = currentProfileLevel();
-    const locked = def => def && !isUnlocked(def, profileLevel);
+    const lockedAccount = def => def && !isUnlocked(def, profileLevel);
+    const lockedWeapon = def => def && !isWeaponUnlocked(def);
+    const lockedAttachment = (def, weaponKey) => def && !isAttachmentUnlocked(def, weaponKey);
     const mkWeaponList = (elId, slot, selectedKey, onPick) => {
       const wrap = this.$(elId);
       wrap.innerHTML = '';
@@ -411,9 +430,9 @@ const UI = {
         const w = WEAPONS[key];
         if (w.slot !== slot) continue;
         const div = document.createElement('div');
-        const isLocked = locked(w);
+        const isLocked = lockedWeapon(w);
         div.className = 'weapon-item' + (key === selectedKey ? ' selected' : '') + (isLocked ? ' locked' : '');
-        div.innerHTML = `<span>${w.name}${lockChip(w)}</span><span class="w-cat">${w.cat}</span>`;
+        div.innerHTML = `<span>${w.name}${lockChip(w, slot === 'primary' ? 'CLASS LVL' : 'SECONDARY LVL')}</span><span class="w-cat">${w.cat}</span>`;
         if (!isLocked) div.onclick = () => { AudioSys.uiClick(); onPick(key); };
         div.onmouseenter = () => this.renderWeaponStats(key);
         wrap.appendChild(div);
@@ -443,10 +462,10 @@ const UI = {
         for (const a of opts) {
           const div = document.createElement('div');
           const isCamo = a.slot === 'camo';
-          const isLocked = locked(a);
+          const isLocked = lockedAttachment(a, c[slot]);
           div.className = 'weapon-item attach-item' + (isCamo ? ' camo-item' : '') + (picked.includes(a.id) ? ' selected' : '') + (isLocked ? ' locked' : '');
           const desc = isCamo ? rewardLabel(a) + ' · ' + attachmentDesc(a) : attachmentDesc(a);
-          div.innerHTML = `<span class="attach-name">${a.name}${lockChip(a)}</span><span class="w-cat">${desc}</span>`;
+          div.innerHTML = `<span class="attach-name">${a.name}${lockChip(a, 'WPN LVL')}</span><span class="w-cat">${desc}</span>`;
           if (!isLocked) {
             div.onclick = () => {
               AudioSys.uiClick();
@@ -463,19 +482,40 @@ const UI = {
           div.onmouseenter = () => this.renderWeaponStats(c[slot]);
           wrap.appendChild(div);
         }
+        if (cat === 'optic' && picked.includes('acog')) {
+          const row = document.createElement('div');
+          row.className = 'reticle-row';
+          row.innerHTML = '<span class="reticle-label">ACOG RETICLE</span>';
+          const cur = c.attachments[slot + 'AcogReticle'] || 'cross';
+          for (const rt of ACOG_RETICLES) {
+            const chip = document.createElement('button');
+            const isRtLocked = rt.unlockLevel > currentWeaponLevel(c[slot]);
+            chip.className = 'reticle-style' + (rt.id === cur ? ' selected' : '') + (isRtLocked ? ' locked' : '');
+            chip.textContent = rt.id === 'chevron' ? '^' : '+';
+            chip.title = rt.name + (isRtLocked ? ' - WPN LVL ' + rt.unlockLevel : '');
+            if (!isRtLocked) chip.onclick = () => {
+              AudioSys.uiClick();
+              c.attachments[slot + 'AcogReticle'] = rt.id;
+              this.saveClasses(); this.renderClassEditor();
+            };
+            row.appendChild(chip);
+          }
+          wrap.appendChild(row);
+        }
         // reticle color chips (#19b): only while an optic is equipped —
-        // one shared pick per weapon, tints red dot and holo alike
+        // one shared pick per weapon, tints mounted optic reticles
         if (cat === 'optic' && picked.some(id => ATTACHMENTS[id] && ATTACHMENTS[id].slot === 'optic')) {
           const row = document.createElement('div');
           row.className = 'reticle-row';
           row.innerHTML = '<span class="reticle-label">SIGHT COLOR</span>';
           const cur = c.attachments[slot + 'DotColor'] || 'red';
           for (const rc of RETICLE_COLORS) {
+            const isColorLocked = !isUnlocked(rc, profileLevel, c[slot]);
             const chip = document.createElement('div');
-            chip.className = 'reticle-chip' + (rc.id === cur ? ' selected' : '');
+            chip.className = 'reticle-chip' + (rc.id === cur ? ' selected' : '') + (isColorLocked ? ' locked' : '');
             chip.style.background = '#' + rc.hex.toString(16).padStart(6, '0');
-            chip.title = rc.name;
-            chip.onclick = () => {
+            chip.title = rc.name + (isColorLocked ? ' - WPN LVL ' + rc.unlockLevel : '');
+            if (!isColorLocked) chip.onclick = () => {
               AudioSys.uiClick();
               c.attachments[slot + 'DotColor'] = rc.id;
               this.saveClasses(); this.renderClassEditor();
@@ -516,7 +556,7 @@ const UI = {
       wrap.innerHTML = '';
       PERKS[tier].forEach(p => {
         const div = document.createElement('div');
-        const isLocked = locked(p);
+        const isLocked = lockedAccount(p);
         div.className = 'perk-item' + (c.perks[tier - 1] === p.id ? ' selected' : '') + (isLocked ? ' locked' : '');
         div.innerHTML = `<span>${p.name}${lockChip(p)}</span><span class="p-desc">${p.desc}</span>`;
         if (!isLocked) div.onclick = () => { AudioSys.uiClick(); c.perks[tier - 1] = p.id; sanitizeClassForLevel(c); this.saveClasses(); this.renderClassEditor(); };
@@ -535,7 +575,7 @@ const UI = {
       const cur = c[slotField] || 'none';
       for (const o of opts) {
         const div = document.createElement('div');
-        const isLocked = o.def && locked(o.def);
+        const isLocked = o.def && lockedAccount(o.def);
         div.className = 'weapon-item' + (o.id === cur ? ' selected' : '') + (isLocked ? ' locked' : '');
         div.innerHTML = `<span>${o.name}${o.def ? lockChip(o.def) : ''}</span>`;
         if (!isLocked) div.onclick = () => { AudioSys.uiClick(); c[slotField] = o.id; sanitizeClassForLevel(c); this.saveClasses(); this.renderClassEditor(); };
@@ -556,7 +596,7 @@ const UI = {
       if (!ks || !ks.selectable) continue;
       const selected = (c.killstreaks || []).includes(id);
       const kills = Math.max(2, ks.kills - (c.perks.includes('hardline') ? 1 : 0));
-      const isLocked = locked(ks);
+      const isLocked = lockedAccount(ks);
       const div = document.createElement('div');
       div.className = 'weapon-item streak-item' + (selected ? ' selected' : '') + (isLocked ? ' locked' : '');
       div.innerHTML = `<span>${ks.name}${lockChip(ks)}</span><span class="w-cat">${kills} KILLS</span>`;
@@ -585,7 +625,9 @@ const UI = {
     // an unequipped weapon shows its base def (no attachments picked yet)
     const c = this.classes[this.editIdx];
     const slot = key === c.primary ? 'primary' : key === c.secondary ? 'secondary' : null;
-    const w = slot ? resolveWeaponDef(key, c.attachments[slot]) : WEAPONS[key];
+    const w = slot ? resolveWeaponDef(key, c.attachments[slot],
+      c.attachments[slot + 'DotColor'], c.attachments[slot + 'LaserColor'],
+      c.attachments[slot + 'AcogReticle']) : WEAPONS[key];
     const wrap = this.$('weaponStats');
     let html = `<div style="font-weight:700;letter-spacing:1px;margin-bottom:8px">${w.name} <span style="color:#6a7060;font-size:9px">${w.cat} &middot; ${fireModeLabel(w)} &middot; ${w.mag} RND MAG</span></div>`;
     if (slot) {

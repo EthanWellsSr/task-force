@@ -182,8 +182,15 @@
         <input id="setFov" type="range" min="60" max="110" step="1"><span id="setFovVal"></span></div>
       <div class="setting-row"><label>VOLUME</label>
         <input id="setVol" type="range" min="0" max="1" step="0.05"><span id="setVolVal"></span></div>
-      <div class="setting-row"><label>BOT DIFFICULTY</label>
-        <select id="setDiff">
+      <div class="setting-row"><label>FRIENDLY BOT DIFFICULTY</label>
+        <select id="setFriendlyDiff">
+          <option value="recruit">RECRUIT</option>
+          <option value="regular" selected>REGULAR</option>
+          <option value="hardened">HARDENED</option>
+          <option value="veteran">VETERAN</option>
+        </select></div>
+      <div class="setting-row"><label>ENEMY BOT DIFFICULTY</label>
+        <select id="setEnemyDiff">
           <option value="recruit">RECRUIT</option>
           <option value="regular" selected>REGULAR</option>
           <option value="hardened">HARDENED</option>

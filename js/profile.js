@@ -21,6 +21,8 @@ const Profile = {
     'Assault Rifle', 'SMG', 'LMG', 'Shotgun', 'Sniper Rifle',
     'Handgun', 'Machine Pistol', 'Melee',
   ],
+  PRIMARY_CATEGORIES: ['Assault Rifle', 'SMG', 'LMG', 'Shotgun', 'Sniper Rifle'],
+  SECONDARY_CATEGORIES: ['Handgun', 'Machine Pistol', 'Shotgun', 'Melee'],
 
   // Grounded arcade ranks, index 0 = Level 1. Spec pins SERGEANT
   // at Level 7 and the ladder tops out at COMMANDER (Level 20).
@@ -65,6 +67,9 @@ const Profile = {
       xp: 0,
       prestige: 0,
       weaponXp: this.defaultWeaponXp(),
+      primaryClassXp: this.defaultPrimaryClassXp(),
+      secondaryXp: 0,
+      weaponSpecificXp: {},
       stats: this.defaultStats(),
     };
   },
@@ -72,6 +77,12 @@ const Profile = {
   defaultWeaponXp() {
     const xp = {};
     for (const cat of this.WEAPON_CATEGORIES) xp[cat] = 0;
+    return xp;
+  },
+
+  defaultPrimaryClassXp() {
+    const xp = {};
+    for (const cat of this.PRIMARY_CATEGORIES) xp[cat] = 0;
     return xp;
   },
 
@@ -84,8 +95,24 @@ const Profile = {
     p.xp = this._int(raw.xp, 0, 0);
     p.level = this.levelFromTotalXp(p.xp);
     p.prestige = this._int(raw.prestige, 0, 0);
-    if (raw.weaponXp && typeof raw.weaponXp === 'object')
+    if (raw.weaponXp && typeof raw.weaponXp === 'object') {
       for (const cat of this.WEAPON_CATEGORIES) p.weaponXp[cat] = this._int(raw.weaponXp[cat], 0, 0);
+      for (const cat of this.PRIMARY_CATEGORIES) p.primaryClassXp[cat] = p.weaponXp[cat];
+      let secondaryCarry = 0;
+      for (const cat of this.SECONDARY_CATEGORIES) secondaryCarry = Math.max(secondaryCarry, p.weaponXp[cat] || 0);
+      p.secondaryXp = secondaryCarry;
+    }
+    if (raw.primaryClassXp && typeof raw.primaryClassXp === 'object')
+      for (const cat of this.PRIMARY_CATEGORIES) p.primaryClassXp[cat] = this._int(raw.primaryClassXp[cat], 0, 0);
+    p.secondaryXp = this._int(raw.secondaryXp, p.secondaryXp || 0, 0);
+    if (raw.weaponSpecificXp && typeof raw.weaponSpecificXp === 'object') {
+      for (const key in raw.weaponSpecificXp) {
+        if (typeof key === 'string' && key.length <= 40)
+          p.weaponSpecificXp[key] = this._int(raw.weaponSpecificXp[key], 0, 0);
+      }
+    }
+    for (const cat of this.PRIMARY_CATEGORIES) p.weaponXp[cat] = p.primaryClassXp[cat] || 0;
+    for (const cat of this.SECONDARY_CATEGORIES) p.weaponXp[cat] = p.secondaryXp || 0;
     const s = raw.stats;
     if (s && typeof s === 'object')
       for (const k in p.stats) p.stats[k] = this._int(s[k], 0, 0);
@@ -122,19 +149,19 @@ const Profile = {
 
   // ---------- P2: level curve + rank helpers (all pure) ----------
 
-  // XP cost of the level -> level+1 step. L1->2 = 500, then +250
+  // XP cost of the level -> level+1 step. L1->2 = 1000, then +500
   // per level. 0 at/past the cap (there is no next level).
   xpForLevelUp(level) {
     if (level < 1 || level >= this.LEVEL_CAP) return 0;
-    return 500 + 250 * (level - 1);
+    return 1000 + 500 * (level - 1);
   },
 
   // Cumulative total XP needed to *reach* a level (L1 = 0). Closed
-  // form of the sum; L20 = 52,250.
+  // form of the sum; L20 = 104,500.
   xpThreshold(level) {
     if (level <= 1) return 0;
     if (level > this.LEVEL_CAP) level = this.LEVEL_CAP;
-    return 125 * (level - 1) * (level + 2);
+    return 250 * (level - 1) * (level + 2);
   },
 
   // Level for a lifetime XP total, clamped to 1..LEVEL_CAP.
@@ -166,13 +193,31 @@ const Profile = {
 
   weaponCategoryLevel(cat, profile) {
     const p = profile || this.load();
+    if (this.PRIMARY_CATEGORIES.includes(cat))
+      return this.levelFromTotalXp(p.primaryClassXp && p.primaryClassXp[cat] ? p.primaryClassXp[cat] : 0);
+    if (this.SECONDARY_CATEGORIES.includes(cat))
+      return this.levelFromTotalXp(p.secondaryXp || 0);
     return this.levelFromTotalXp(p.weaponXp && p.weaponXp[cat] ? p.weaponXp[cat] : 0);
+  },
+
+  weaponSpecificLevel(key, profile) {
+    const p = profile || this.load();
+    return this.levelFromTotalXp(p.weaponSpecificXp && p.weaponSpecificXp[key] ? p.weaponSpecificXp[key] : 0);
   },
 
   addMaxWeaponXp(profile) {
     const p = profile || this.load();
     if (!p.weaponXp) p.weaponXp = this.defaultWeaponXp();
-    for (const cat of this.WEAPON_CATEGORIES) p.weaponXp[cat] = this.xpThreshold(this.LEVEL_CAP);
+    if (!p.primaryClassXp) p.primaryClassXp = this.defaultPrimaryClassXp();
+    if (!p.weaponSpecificXp) p.weaponSpecificXp = {};
+    for (const cat of this.PRIMARY_CATEGORIES) {
+      p.primaryClassXp[cat] = this.xpThreshold(this.LEVEL_CAP);
+      p.weaponXp[cat] = p.primaryClassXp[cat];
+    }
+    p.secondaryXp = this.xpThreshold(this.LEVEL_CAP);
+    for (const cat of this.SECONDARY_CATEGORIES) p.weaponXp[cat] = p.secondaryXp;
+    if (typeof WEAPONS !== 'undefined')
+      for (const key in WEAPONS) p.weaponSpecificXp[key] = this.xpThreshold(this.LEVEL_CAP);
     return p;
   },
 
@@ -252,18 +297,22 @@ const Profile = {
 
   MatchWeaponXP: {
     byCategory: {},
+    byWeapon: {},
 
     reset() {
       this.byCategory = {};
+      this.byWeapon = {};
     },
 
-    add(cat, xp) {
+    add(cat, xp, weaponKey) {
       if (!cat || !(xp > 0)) return;
-      this.byCategory[cat] = (this.byCategory[cat] || 0) + Math.floor(xp);
+      const amt = Math.floor(xp);
+      this.byCategory[cat] = (this.byCategory[cat] || 0) + amt;
+      if (weaponKey) this.byWeapon[weaponKey] = (this.byWeapon[weaponKey] || 0) + amt;
     },
 
     snapshot() {
-      return Object.assign({}, this.byCategory);
+      return { byCategory: Object.assign({}, this.byCategory), byWeapon: Object.assign({}, this.byWeapon) };
     },
   },
 
@@ -364,7 +413,16 @@ const Profile = {
     for (const cat of this.WEAPON_CATEGORIES) oldWeaponLevels[cat] = this.weaponCategoryLevel(cat, p);
     p.xp += earned;
     if (!p.weaponXp) p.weaponXp = this.defaultWeaponXp();
-    for (const cat in weaponEarned) p.weaponXp[cat] = (p.weaponXp[cat] || 0) + weaponEarned[cat];
+    if (!p.primaryClassXp) p.primaryClassXp = this.defaultPrimaryClassXp();
+    if (!p.weaponSpecificXp) p.weaponSpecificXp = {};
+    for (const cat in weaponEarned.byCategory) {
+      if (this.PRIMARY_CATEGORIES.includes(cat)) p.primaryClassXp[cat] = (p.primaryClassXp[cat] || 0) + weaponEarned.byCategory[cat];
+      else if (this.SECONDARY_CATEGORIES.includes(cat)) p.secondaryXp = (p.secondaryXp || 0) + weaponEarned.byCategory[cat];
+    }
+    for (const key in weaponEarned.byWeapon)
+      p.weaponSpecificXp[key] = (p.weaponSpecificXp[key] || 0) + weaponEarned.byWeapon[key];
+    for (const cat of this.PRIMARY_CATEGORIES) p.weaponXp[cat] = p.primaryClassXp[cat] || 0;
+    for (const cat of this.SECONDARY_CATEGORIES) p.weaponXp[cat] = p.secondaryXp || 0;
     p.stats.totalXpEarned += earned;
     p.level = this.levelFromTotalXp(p.xp);
     this.save(p);
@@ -372,7 +430,8 @@ const Profile = {
     for (const cat of this.WEAPON_CATEGORIES) newWeaponLevels[cat] = this.weaponCategoryLevel(cat, p);
     return {
       xp: this.MatchXP.snapshot(),
-      weaponXp: weaponEarned,
+      weaponXp: weaponEarned.byCategory,
+      weaponSpecificXp: weaponEarned.byWeapon,
       difficulty: this._matchDifficulty,
       xpMultiplier: this._matchXpMultiplier,
       stats: this.MatchStats.snapshot(),
@@ -393,27 +452,27 @@ const Profile = {
     const ok = (cond, msg) => { if (!cond) { fails++; console.error('[Profile selfTest] FAIL:', msg); } };
 
     // curve steps
-    ok(this.xpForLevelUp(1) === 500, 'L1->2 = 500');
-    ok(this.xpForLevelUp(2) === 750, 'L2->3 = 750');
-    ok(this.xpForLevelUp(3) === 1000, 'L3->4 = 1000');
-    ok(this.xpForLevelUp(19) === 5000, 'L19->20 = 5000');
+    ok(this.xpForLevelUp(1) === 1000, 'L1->2 = 1000');
+    ok(this.xpForLevelUp(2) === 1500, 'L2->3 = 1500');
+    ok(this.xpForLevelUp(3) === 2000, 'L3->4 = 2000');
+    ok(this.xpForLevelUp(19) === 10000, 'L19->20 = 10000');
     ok(this.xpForLevelUp(20) === 0, 'no step past cap');
     // cumulative thresholds
     ok(this.xpThreshold(1) === 0, 'reach L1 = 0');
-    ok(this.xpThreshold(2) === 500, 'reach L2 = 500');
-    ok(this.xpThreshold(3) === 1250, 'reach L3 = 1250');
-    ok(this.xpThreshold(20) === 52250, 'reach L20 = 52250');
+    ok(this.xpThreshold(2) === 1000, 'reach L2 = 1000');
+    ok(this.xpThreshold(3) === 2500, 'reach L3 = 2500');
+    ok(this.xpThreshold(20) === 104500, 'reach L20 = 104500');
     // level from total XP
     ok(this.levelFromTotalXp(0) === 1, '0 XP = L1');
-    ok(this.levelFromTotalXp(499) === 1, '499 XP = L1');
-    ok(this.levelFromTotalXp(500) === 2, '500 XP = L2');
-    ok(this.levelFromTotalXp(52249) === 19, '52249 XP = L19');
-    ok(this.levelFromTotalXp(52250) === 20, '52250 XP = L20');
+    ok(this.levelFromTotalXp(999) === 1, '999 XP = L1');
+    ok(this.levelFromTotalXp(1000) === 2, '1000 XP = L2');
+    ok(this.levelFromTotalXp(104499) === 19, '104499 XP = L19');
+    ok(this.levelFromTotalXp(104500) === 20, '104500 XP = L20');
     ok(this.levelFromTotalXp(1e9) === 20, 'clamps at L20');
     // progress
-    const pr = this.progressToNext(600);
-    ok(pr.level === 2 && pr.current === 100 && pr.needed === 750, 'progress at 600 XP');
-    const cap = this.progressToNext(99999);
+    const pr = this.progressToNext(1200);
+    ok(pr.level === 2 && pr.current === 200 && pr.needed === 1500, 'progress at 1200 XP');
+    const cap = this.progressToNext(199999);
     ok(cap.level === 20 && cap.current === 0 && cap.needed === 0, 'progress at cap');
     // ranks
     ok(this.RANK_NAMES.length === 20, '20 rank names');
@@ -485,11 +544,11 @@ const Profile = {
     mx.onDirectKill(); mx.onDirectKill();          // 200
     let res = this.commitMatch('win');             // +100 complete +250 win = 550
     ok(res && res.totalXp === 550 && res.xp.total === 550, 'win commit totals 550');
-    ok(res.oldLevel === 1 && res.newLevel === 2 && res.leveledUp === true, 'level 1 -> 2');
-    ok(res.progress.level === 2 && res.progress.current === 50 && res.progress.needed === 750, 'commit progress');
+    ok(res.oldLevel === 1 && res.newLevel === 1 && res.leveledUp === false, '550 XP stays level 1');
+    ok(res.progress.level === 1 && res.progress.current === 550 && res.progress.needed === 1000, 'commit progress');
     ok(res.stats.result === 'win', 'result in commit snapshot');
     let cp = this.load();
-    ok(cp.xp === 550 && cp.level === 2 && cp.stats.totalXpEarned === 550 && cp.stats.wins === 1, 'commit persisted');
+    ok(cp.xp === 550 && cp.level === 1 && cp.stats.totalXpEarned === 550 && cp.stats.wins === 1, 'commit persisted');
     ok(this.commitMatch('win') === null, 'second commit is a null no-op');
     ok(this.load().xp === 550 && this.load().stats.wins === 1, 'no double commit');
     // draw: complete XP, no win XP, no lifetime win/loss
@@ -499,20 +558,20 @@ const Profile = {
     ok(res.totalXp === 750 && res.xp.matchComplete === 100 && res.xp.matchWin === 0, 'draw pays complete only');
     cp = this.load();
     ok(cp.stats.wins === 1 && cp.stats.losses === 0 && res.stats.result === 'draw', 'draw bumps neither');
-    ok(res.oldLevel === 2 && res.newLevel === 2 && !res.leveledUp, 'no level-up on small draw');
-    // loss + multi-level jump: 2 nukes + complete = 2100 -> 2850 total = L4
+    ok(res.oldLevel === 1 && res.newLevel === 1 && !res.leveledUp, 'no level-up on small draw');
+    // loss + multi-level jump: 2 nukes + complete = 2100 -> 2850 total = L3
     this.onMatchStart();
     mx.onNukeCalled(); mx.onNukeCalled();
     res = this.commitMatch('loss');
-    ok(res.totalXp === 2850 && res.oldLevel === 2 && res.newLevel === 4 && res.leveledUp, 'multi-level jump 2 -> 4');
+    ok(res.totalXp === 2850 && res.oldLevel === 1 && res.newLevel === 3 && res.leveledUp, 'multi-level jump 1 -> 3');
     cp = this.load();
     ok(cp.stats.losses === 1 && cp.stats.totalXpEarned === 2850, 'loss + totalXpEarned track commits');
     // cap clamp: hand-set xp near the top, then a big win
-    cp.xp = 52000; this.save(cp);                  // totalXpEarned untouched by design
+    cp.xp = 104000; this.save(cp);                 // totalXpEarned untouched by design
     this.onMatchStart();
     mx.onNukeCalled();                             // 1000 +100 complete +250 win = 1350
     res = this.commitMatch('win');
-    ok(res.oldLevel === 19 && res.newLevel === 20 && res.totalXp === 53350, 'clamps at L20');
+    ok(res.oldLevel === 19 && res.newLevel === 20 && res.totalXp === 105350, 'clamps at L20');
     ok(res.progress.level === 20 && res.progress.current === 0 && res.progress.needed === 0, 'cap progress');
     ok(this.load().stats.totalXpEarned === 4200, 'totalXpEarned counts commits only, not raw xp');
     // put the real profile back
