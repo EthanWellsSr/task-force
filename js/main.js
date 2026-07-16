@@ -3679,22 +3679,36 @@ function curW() { return player.weapons[player.cur]; }
 const KILLCAM_BUFFER = 5.5;
 const KILLCAM_PRE_ROLL = 3.25;
 const KILLCAM_POST_ROLL = 0.35;
-const KILLCAM_EYE_HEIGHT = 1.62; // killer eye height — the replay is the killer's first-person POV
+const KILLCAM_EYE_HEIGHT = 1.62; // killer eye height used by the chase camera anchor
+const KILLCAM_CHASE_DIST = 3.15;
+const KILLCAM_CHASE_HEIGHT = 0.65;
+const KILLCAM_SHOULDER_OFFSET = 0.48;
 let _killCamVictim = null;
-let _killCamHiddenBots = null; // live bots hidden+frozen for the duration of the replay
+let _killCamHiddenBots = null; // live bot visibility restored after replay
 const _killCamMarker = new THREE.Vector3();
 const _killCamMuzzle = new THREE.Vector3(); // scratch for the fatal-shot muzzle point
-const _killCamVmTarget = new THREE.Vector3();
+const _killCamForward = new THREE.Vector3();
+const _killCamFlatForward = new THREE.Vector3();
+const _killCamRight = new THREE.Vector3();
+const _killCamEye = new THREE.Vector3();
+const _killCamLook = new THREE.Vector3();
 
 function killCamCleanupVictim() {
   if (_killCamVictim) {
     if (_killCamVictim.parent) _killCamVictim.parent.remove(_killCamVictim);
     _killCamVictim = null;
   }
-  // Un-hide the live bots the replay froze (see startKillCam). Their own
-  // update() re-corrects any that died/respawned once the loop resumes them.
+  // Restore live bot meshes after the replay has driven them through their
+  // recorded positions.
   if (_killCamHiddenBots) {
-    for (const b of _killCamHiddenBots) if (b.mesh) b.mesh.visible = true;
+    for (const entry of _killCamHiddenBots) {
+      const b = entry.bot || entry;
+      if (!b || !b.mesh) continue;
+      b.mesh.visible = entry.visible !== undefined ? entry.visible : true;
+      b.mesh.position.copy(b.pos);
+      b.mesh.rotation.set(0, b.yaw || 0, 0);
+      if (b.mesh.userData && b.mesh.userData.flash) b.mesh.userData.flash.visible = false;
+    }
     _killCamHiddenBots = null;
   }
 }
@@ -3721,6 +3735,65 @@ function lerpAngle(a, b, t) {
   return a + d * t;
 }
 
+function cloneReplayFrame(f) {
+  return f ? Object.assign({}, f) : null;
+}
+
+function mixReplayFrames(a, b, mix) {
+  return {
+    t: THREE.MathUtils.lerp(a.t, b.t, mix),
+    x: THREE.MathUtils.lerp(a.x, b.x, mix),
+    y: THREE.MathUtils.lerp(a.y, b.y, mix),
+    z: THREE.MathUtils.lerp(a.z, b.z, mix),
+    yaw: lerpAngle(a.yaw || 0, b.yaw || 0, mix),
+    meshYaw: lerpAngle(a.meshYaw || 0, b.meshYaw || 0, mix),
+    pitch: THREE.MathUtils.lerp(a.pitch || 0, b.pitch || 0, mix),
+    fov: THREE.MathUtils.lerp(a.fov || UI.settings.fov, b.fov || UI.settings.fov, mix),
+    adsAmt: THREE.MathUtils.lerp(a.adsAmt || 0, b.adsAmt || 0, mix),
+    speedNow: THREE.MathUtils.lerp(a.speedNow || 0, b.speedNow || 0, mix),
+    crouchAmt: THREE.MathUtils.lerp(a.crouchAmt || 0, b.crouchAmt || 0, mix),
+    proneAmt: THREE.MathUtils.lerp(a.proneAmt || 0, b.proneAmt || 0, mix),
+    sprinting: mix < 0.5 ? !!a.sprinting : !!b.sprinting,
+    flash: mix < 0.5 ? !!a.flash : !!b.flash,
+  };
+}
+
+function sampleReplayFrame(replay, replayT) {
+  if (!replay || !replay.length) return null;
+  if (replayT <= replay[0].t) return cloneReplayFrame(replay[0]);
+  const last = replay[replay.length - 1];
+  if (replayT >= last.t) return cloneReplayFrame(last);
+  for (let i = 1; i < replay.length; i++) {
+    if (replay[i].t < replayT) continue;
+    const a = replay[i - 1], b = replay[i];
+    const span = Math.max(0.0001, b.t - a.t);
+    return mixReplayFrames(a, b, THREE.MathUtils.clamp((replayT - a.t) / span, 0, 1));
+  }
+  return cloneReplayFrame(last);
+}
+
+function applyReplayFrameToMesh(mesh, frame, replayT, fall = 0) {
+  if (!mesh || !frame) return;
+  mesh.visible = true;
+  mesh.position.set(frame.x, frame.y, frame.z);
+  mesh.rotation.set(-Math.PI * 0.5 * fall, frame.meshYaw || 0, 0);
+  const ud = mesh.userData || {};
+  if (ud.body) {
+    ud.body.scale.y = THREE.MathUtils.lerp(THREE.MathUtils.lerp(1, 0.73, frame.crouchAmt || 0), 0.36, frame.proneAmt || 0);
+    ud.body.scale.z = THREE.MathUtils.lerp(1, 1.35, frame.proneAmt || 0);
+  }
+  const moving = (frame.speedNow || 0) > 0.5 && fall <= 0;
+  const leg = moving
+    ? Math.sin((frame.t || replayT) * 9) * (frame.sprinting ? 0.75 : (frame.proneAmt || 0) > 0.5 ? 0.25 : 0.55)
+    : 0;
+  if (ud.legL) ud.legL.rotation.x = leg;
+  if (ud.legR) ud.legR.rotation.x = -leg;
+  if (ud.flash) {
+    ud.flash.visible = !!frame.flash;
+    if (ud.flash.visible) ud.flash.rotation.z = ((frame.t || replayT) * 31) % (Math.PI * 2);
+  }
+}
+
 function combatantEyeHeight(ent) {
   if (ent && ent.isPlayer) return eyeHeight();
   return 1.62;
@@ -3738,50 +3811,10 @@ function combatantReplayWeapon(ent) {
   return ent.weapon ? ent.weapon.name : '';
 }
 
-function killCamWeaponDef(attacker, weaponName) {
-  if (attacker && attacker.isPlayer) return curW().def;
-  if (attacker && attacker.weapon) return attacker.weapon;
-  return weaponDefForKillName(weaponName) || curW().def;
-}
-
 function restorePlayerViewModel(visible = true) {
   if (player.weapons && player.weapons.length) buildViewModel(curW().def);
   vmRoot.visible = visible;
   vmKnife.visible = false;
-  document.getElementById('scopeOverlay').classList.add('hidden');
-}
-
-function startKillCamViewModel(attacker, weaponName) {
-  const def = killCamWeaponDef(attacker, weaponName);
-  if (def) buildViewModel(def);
-  vmRoot.visible = !!def;
-  vmKnife.visible = false;
-  if (!vmGun) return;
-  vmGun.visible = true;
-  vmGun.position.copy(VM_POS.hip);
-  vmGun.rotation.set(0, 0, 0);
-  if (vmGun.userData.flash) vmGun.userData.flash.visible = false;
-  const laser = vmGun.userData.laser;
-  if (laser) laser.beam.visible = laser.dot.visible = false;
-}
-
-function updateKillCamViewModel(dt, frame, replayT) {
-  if (!vmGun) return;
-  const adsAmt = THREE.MathUtils.clamp((frame && frame.adsAmt) || 0, 0, 1);
-  _killCamVmTarget.lerpVectors(VM_POS.hip, vmGun.userData.adsPos || VM_POS.ads, adsAmt);
-  const shotPulse = (_killCam && _killCam.aim && !_killCam.melee)
-    ? Math.max(0, 1 - Math.abs(replayT - _killCam.lethalT) / 0.13)
-    : 0;
-  _killCamVmTarget.z += shotPulse * 0.035;
-  vmGun.position.lerp(_killCamVmTarget, Math.min(1, dt * 18));
-  vmGun.rotation.set(shotPulse * 0.08, 0, 0);
-  vmGun.visible = true;
-  vmKnife.visible = false;
-  if (vmGun.userData.flash) {
-    vmGun.userData.flash.visible = shotPulse > 0.05 && replayT >= _killCam.lethalT - 0.16;
-  }
-  const laser = vmGun.userData.laser;
-  if (laser) laser.beam.visible = laser.dot.visible = false;
   document.getElementById('scopeOverlay').classList.add('hidden');
 }
 
@@ -3801,10 +3834,16 @@ function replayFrameForCombatant(ent, t = G.time, aimPoint = null) {
     y: ent.pos.y,
     z: ent.pos.z,
     yaw,
+    meshYaw: ent.isPlayer ? (ent.yaw || 0) + Math.PI : (ent.yaw || 0),
     pitch,
     adsAmt: ent.adsAmt || 0,
     fov: ent.isPlayer ? G.camera.fov : UI.settings.fov,
     weaponName: combatantReplayWeapon(ent),
+    speedNow: ent.speedNow || 0,
+    crouchAmt: ent.crouchAmt || 0,
+    proneAmt: ent.proneAmt || 0,
+    sprinting: !!ent.sprinting,
+    flash: typeof ent.lastShotTime === 'number' && t >= ent.lastShotTime && t - ent.lastShotTime <= 0.08,
   };
 }
 
@@ -3843,7 +3882,8 @@ function updateKillCamYouMarker() {
     UI.hideKillCamYouMarker();
     return;
   }
-  _killCamMarker.set(player.pos.x, player.pos.y + 2.25, player.pos.z).project(G.camera);
+  const p = _killCam.victim.position;
+  _killCamMarker.set(p.x, p.y + 2.25, p.z).project(G.camera);
   const visible = _killCamMarker.z >= -1 && _killCamMarker.z <= 1;
   const pad = 24;
   const x = THREE.MathUtils.clamp((_killCamMarker.x * 0.5 + 0.5) * window.innerWidth, pad, window.innerWidth - pad);
@@ -3862,28 +3902,48 @@ function buildLethalReplayFrame(attacker, weaponName, shot) {
 
 function killCamReplayWindow(attacker, lethalFrame) {
   const startT = G.time - KILLCAM_PRE_ROLL;
-  const replay = attacker._replay && attacker._replay.length
-    ? attacker._replay
-        .filter(f => f.t >= startT && f.t <= G.time)
+  const replay = combatantReplayWindow(attacker, startT, G.time, lethalFrame);
+  return replay;
+}
+
+function combatantReplayWindow(ent, startT, endT, finalFrame = null) {
+  const replay = ent && ent._replay && ent._replay.length
+    ? ent._replay
+        .filter(f => f.t >= startT && f.t <= endT)
         .map(f => Object.assign({}, f))
     : [];
-  if (!replay.length || replay[replay.length - 1].t < lethalFrame.t) replay.push(lethalFrame);
-  else replay[replay.length - 1] = lethalFrame;
+  if (!finalFrame) return replay;
+  if (!replay.length || replay[replay.length - 1].t < finalFrame.t) replay.push(finalFrame);
+  else replay[replay.length - 1] = finalFrame;
   return replay;
+}
+
+function buildKillCamActors(attacker, startT, endT) {
+  const actors = [];
+  for (const b of G.bots || []) {
+    if (!b || !b.mesh) continue;
+    const replay = combatantReplayWindow(b, startT, endT);
+    if (replay.length) actors.push({ ent: b, mesh: b.mesh, replay });
+  }
+  return actors;
 }
 
 function startKillCam(attacker, weaponName, shot) {
   if (!attacker || !attacker.pos || !(G.mode || MODES.tdm).respawn) return false;
   const lethalFrame = buildLethalReplayFrame(attacker, weaponName, shot);
   const replay = killCamReplayWindow(attacker, lethalFrame);
-  const startT = replay[0] ? replay[0].t : G.time;
+  const startT = G.time - KILLCAM_PRE_ROLL;
   const endT = lethalFrame.t + KILLCAM_POST_ROLL;
   const victim = createKillCamVictim();
+  const victimFinalFrame = replayFrameForCombatant(player, lethalFrame.t);
+  const victimReplay = combatantReplayWindow(player, startT, lethalFrame.t, victimFinalFrame);
+  const actors = buildKillCamActors(attacker, startT, lethalFrame.t);
   _killCam = {
     t: KILLCAM_DUR,
     elapsed: 0,
     killer: attacker,
     replay,
+    actors,
     startT,
     endT,
     lethalT: lethalFrame.t,
@@ -3892,6 +3952,7 @@ function startKillCam(attacker, weaponName, shot) {
     pitch: lethalFrame.pitch,
     weaponName,
     victim,
+    victimReplay,
     aim: lethalFrame.aim,                                    // fatal-round impact point
     shotModel: (attacker.weapon && attacker.weapon.model) || 'ar',
     suppressed: !!(attacker.weapon && attacker.weapon.suppressed),
@@ -3900,13 +3961,16 @@ function startKillCam(attacker, weaponName, shot) {
   };
   G.state = 'killcam';
   player.respawnT = KILLCAM_DUR;
-  // The replay plays back the killer's past eye position, but the live world
-  // keeps its post-kill positions. Hide (and, via the loop, freeze) every bot
-  // so the replay isn't cluttered by the killer walking away after the shot or
-  // other combatants darting around — only the victim body (below) is shown.
-  _killCamHiddenBots = G.bots.filter(b => b.mesh && b.mesh.visible);
-  for (const b of _killCamHiddenBots) b.mesh.visible = false;
-  startKillCamViewModel(attacker, weaponName);
+  // The replay owns combatant mesh transforms until cleanup. Bots with
+  // recorded frames, including the killer, are shown moving through their
+  // historical positions; bots without frames stay hidden instead of freezing
+  // at their post-kill location.
+  _killCamHiddenBots = G.bots.map(b => ({ bot: b, visible: !!(b.mesh && b.mesh.visible) }));
+  const replayBots = new Set(actors.map(a => a.ent));
+  for (const b of G.bots) if (b.mesh) b.mesh.visible = replayBots.has(b);
+  vmRoot.visible = false;
+  vmKnife.visible = false;
+  document.getElementById('scopeOverlay').classList.add('hidden');
   UI.show('hud');
   UI.showKillCam(attacker.name, weaponName, KILLCAM_DUR);
   return true;
@@ -3934,42 +3998,39 @@ function updateKillCam(dt) {
   const replay = _killCam.replay || [];
   const u = THREE.MathUtils.clamp(_killCam.elapsed / KILLCAM_DUR, 0, 1);
   const replayT = THREE.MathUtils.lerp(_killCam.startT, _killCam.endT, u);
-  let f = replay.length ? replay[replay.length - 1] : null;
-  if (replay.length > 1 && replayT < replay[replay.length - 1].t) {
-    for (let i = 1; i < replay.length; i++) {
-      if (replay[i].t < replayT) continue;
-      const a = replay[i - 1], b = replay[i];
-      const span = Math.max(0.0001, b.t - a.t);
-      const mix = THREE.MathUtils.clamp((replayT - a.t) / span, 0, 1);
-      f = {
-        x: THREE.MathUtils.lerp(a.x, b.x, mix),
-        y: THREE.MathUtils.lerp(a.y, b.y, mix),
-        z: THREE.MathUtils.lerp(a.z, b.z, mix),
-        yaw: lerpAngle(a.yaw, b.yaw, mix),
-        pitch: THREE.MathUtils.lerp(a.pitch, b.pitch, mix),
-        fov: THREE.MathUtils.lerp(a.fov || UI.settings.fov, b.fov || UI.settings.fov, mix),
-        adsAmt: THREE.MathUtils.lerp(a.adsAmt || 0, b.adsAmt || 0, mix),
-      };
-      break;
-    }
+  let f = sampleReplayFrame(replay, replayT);
+  const victimFrame = sampleReplayFrame(_killCam.victimReplay, replayT);
+  if (_killCam.victim && victimFrame) {
+    const fall = THREE.MathUtils.clamp((replayT - _killCam.lethalT) / KILLCAM_POST_ROLL, 0, 1);
+    applyReplayFrameToMesh(_killCam.victim, victimFrame, replayT, _ss(fall));
   }
-  // First-person POV: sit at the killer's eye and look exactly where the
-  // killer looked (rotation.order is YXZ, same convention as the live camera),
-  // so the replay ends on the killer's own sight picture of the fatal shot.
+  for (const actor of _killCam.actors || []) applyReplayFrameToMesh(actor.mesh, sampleReplayFrame(actor.replay, replayT), replayT);
+  // Third-person chase replay: place the camera behind the killer's recorded
+  // movement while keeping the look point on the replayed victim/fatal impact.
   if (f) {
-    G.camera.position.set(f.x, f.y + KILLCAM_EYE_HEIGHT, f.z);
-    G.camera.rotation.set(f.pitch || 0, f.yaw || 0, 0);
+    const yaw = f.yaw || 0;
+    const pitch = f.pitch || 0;
+    const cosPitch = Math.cos(pitch);
+    _killCamForward.set(-Math.sin(yaw) * cosPitch, Math.sin(pitch), -Math.cos(yaw) * cosPitch).normalize();
+    _killCamFlatForward.set(_killCamForward.x, 0, _killCamForward.z);
+    if (_killCamFlatForward.lengthSq() < 0.0001) _killCamFlatForward.set(0, 0, -1);
+    else _killCamFlatForward.normalize();
+    _killCamRight.set(-_killCamFlatForward.z, 0, _killCamFlatForward.x);
+    _killCamEye.set(f.x, f.y + KILLCAM_EYE_HEIGHT, f.z);
+    if (victimFrame) _killCamLook.set(victimFrame.x, victimFrame.y + 1.2, victimFrame.z);
+    else if (_killCam.aim) _killCamLook.copy(_killCam.aim);
+    else _killCamLook.copy(_killCamEye).addScaledVector(_killCamForward, 12);
+    G.camera.position.copy(_killCamEye)
+      .addScaledVector(_killCamFlatForward, -KILLCAM_CHASE_DIST)
+      .addScaledVector(_killCamRight, KILLCAM_SHOULDER_OFFSET);
+    G.camera.position.y += KILLCAM_CHASE_HEIGHT;
+    G.camera.lookAt(_killCamLook);
     G.camera.fov = f.fov || UI.settings.fov;
     G.camera.updateProjectionMatrix();
   } else {
     G.camera.position.set(_killCam.pos.x, _killCam.pos.y + KILLCAM_EYE_HEIGHT, _killCam.pos.z);
     G.camera.rotation.set(_killCam.pitch || 0, _killCam.yaw || 0, 0);
   }
-  if (_killCam.victim && replayT >= _killCam.lethalT) {
-    const fall = THREE.MathUtils.clamp((replayT - _killCam.lethalT) / KILLCAM_POST_ROLL, 0, 1);
-    _killCam.victim.rotation.x = -Math.PI * 0.5 * _ss(fall);
-  }
-  updateKillCamViewModel(dt, f, replayT);
   // Replay the fatal shot: a short muzzle-flash + tracer burst that lands on
   // the victim right as they drop, so the death has a visible cause instead of
   // just keeling over. Skipped for melee kills (no tracer to draw).
@@ -3978,8 +4039,10 @@ function updateKillCam(dt) {
     const inBurst = replayT >= _killCam.lethalT - 0.16 && replayT <= _killCam.lethalT + 0.03;
     if (inBurst && _killCam.shotTimer <= 0) {
       _killCam.shotTimer = 0.06;
-      G.camera.updateMatrixWorld();
-      const muzzle = _killCamMuzzle.set(0.12, -0.12, -0.6).applyMatrix4(G.camera.matrixWorld);
+      const muzzle = _killCamMuzzle.copy(_killCamEye)
+        .addScaledVector(_killCamForward, 0.72)
+        .addScaledVector(_killCamRight, 0.12);
+      muzzle.y -= 0.12;
       fxTracer(muzzle, _killCam.aim);
       fxSpark(_killCam.aim, false, 0.28);
       muzzleLight.intensity = 1.4;
