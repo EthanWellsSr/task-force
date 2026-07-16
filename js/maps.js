@@ -372,7 +372,7 @@ function buildNuketown(scene, colliders) {
     // bots can both walk the third upstairs route.
     const climb = [[-10.7, 0.5], [-11.65, 1.0], [-12.6, 1.5], [-13.55, 2.0], [-14.5, 2.5]];
     for (let i = 0; i < climb.length; i++)
-      t.box(climb[i][0], climb[i][1] / 2, 8.5, 0.95, climb[i][1], 1.0, i % 2 ? 0x6e5e40 : 0x7a6a4a);
+      t.box(climb[i][0], climb[i][1] / 2, 8.05, 0.95, climb[i][1], 1.0, i % 2 ? 0x6e5e40 : 0x7a6a4a);
     // backyard spawn: deeper board-fenced yard with a gate at each end
     // onto the side lanes
     t.wall('x', -28, -18, -10.5, 2.2, T, wood, [{ a: -25.8, b: -24.4 }]);
