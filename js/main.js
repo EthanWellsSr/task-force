@@ -3560,6 +3560,7 @@ function startMatch(mapId, modeId = 'tdm') {
       tracer: fxTracer,
       throwGrenade: spawnBotThrowable, // #16b: bot lobs a frag
       recordDamage,                    // #16d: log a damager for assists
+      noteReplayDeath,
 
       playerPos: () => player.pos,
       playerTeam: player.team,
@@ -3755,6 +3756,7 @@ function mixReplayFrames(a, b, mix) {
     proneAmt: THREE.MathUtils.lerp(a.proneAmt || 0, b.proneAmt || 0, mix),
     sprinting: mix < 0.5 ? !!a.sprinting : !!b.sprinting,
     flash: mix < 0.5 ? !!a.flash : !!b.flash,
+    fall: THREE.MathUtils.lerp(a.fall || 0, b.fall || 0, mix),
   };
 }
 
@@ -3774,6 +3776,7 @@ function sampleReplayFrame(replay, replayT) {
 
 function applyReplayFrameToMesh(mesh, frame, replayT, fall = 0) {
   if (!mesh || !frame) return;
+  fall = Math.max(fall, frame.fall || 0);
   mesh.visible = true;
   mesh.position.set(frame.x, frame.y, frame.z);
   mesh.rotation.set(-Math.PI * 0.5 * fall, frame.meshYaw || 0, 0);
@@ -3844,17 +3847,36 @@ function replayFrameForCombatant(ent, t = G.time, aimPoint = null) {
     proneAmt: ent.proneAmt || 0,
     sprinting: !!ent.sprinting,
     flash: typeof ent.lastShotTime === 'number' && t >= ent.lastShotTime && t - ent.lastShotTime <= 0.08,
+    fall: ent._replayDeathT === undefined ? 0 : _ss((t - ent._replayDeathT) / 0.35),
   };
+}
+
+function recordCombatantReplayFrame(ent, t = G.time) {
+  if (!ent || !ent.pos) return;
+  if (!ent._replay) ent._replay = [];
+  ent._replay.push(replayFrameForCombatant(ent, t));
+  const minT = G.time - KILLCAM_BUFFER;
+  while (ent._replay.length && ent._replay[0].t < minT) ent._replay.shift();
+}
+
+function noteReplayDeath(ent) {
+  if (!ent || !ent.pos) return;
+  ent._replayDeathT = G.time;
+  ent._replayDeathUntil = G.time + KILLCAM_BUFFER;
+  recordCombatantReplayFrame(ent, G.time);
 }
 
 function recordReplayFrames(dt) {
   if (!G.combatants) return;
   for (const ent of G.combatants) {
-    if (!ent || !ent.alive || !ent.pos) continue;
-    if (!ent._replay) ent._replay = [];
-    ent._replay.push(replayFrameForCombatant(ent));
-    const minT = G.time - KILLCAM_BUFFER;
-    while (ent._replay.length && ent._replay[0].t < minT) ent._replay.shift();
+    if (!ent || !ent.pos) continue;
+    if (ent.alive) {
+      ent._replayDeathT = undefined;
+      ent._replayDeathUntil = undefined;
+      recordCombatantReplayFrame(ent);
+    } else if (ent._replayDeathUntil !== undefined && G.time <= ent._replayDeathUntil) {
+      recordCombatantReplayFrame(ent);
+    }
   }
 }
 
@@ -3922,7 +3944,10 @@ function buildKillCamActors(attacker, startT, endT) {
   const actors = [];
   for (const b of G.bots || []) {
     if (!b || !b.mesh) continue;
-    const replay = combatantReplayWindow(b, startT, endT);
+    const deathInWindow = !b.alive && b._replayDeathT !== undefined &&
+      b._replayDeathT <= endT && (b._replayDeathUntil || b._replayDeathT) >= startT;
+    const finalFrame = deathInWindow ? replayFrameForCombatant(b, endT) : null;
+    const replay = combatantReplayWindow(b, startT, endT, finalFrame);
     if (replay.length) actors.push({ ent: b, mesh: b.mesh, replay });
   }
   return actors;

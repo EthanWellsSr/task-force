@@ -377,6 +377,7 @@ class Bot {
       if (attacker) attacker.kills++;
       this.respawnT = 4;
       this.deathAnimT = 2.2;
+      if (this.world.api.noteReplayDeath) this.world.api.noteReplayDeath(this);
       this.world.api.registerKill(attacker, this, weaponName, headshot);
     }
     return true;
