@@ -690,6 +690,7 @@ const UI = {
     this.$('killCamKiller').textContent = killerName || 'UNKNOWN';
     this.$('killCamWeapon').textContent = weaponName || '';
     this.updateKillCam(seconds || 0);
+    this.hideKillCamYouMarker();
     this.$('killCam').classList.remove('hidden');
   },
 
@@ -700,6 +701,24 @@ const UI = {
 
   hideKillCam() {
     const el = this.$('killCam');
+    if (el) el.classList.add('hidden');
+    this.hideKillCamYouMarker();
+  },
+
+  updateKillCamYouMarker(x, y, visible) {
+    const el = this.$('killCamYouMarker');
+    if (!el) return;
+    if (!visible) {
+      el.classList.add('hidden');
+      return;
+    }
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.classList.remove('hidden');
+  },
+
+  hideKillCamYouMarker() {
+    const el = this.$('killCamYouMarker');
     if (el) el.classList.add('hidden');
   },
 

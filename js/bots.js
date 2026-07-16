@@ -146,6 +146,7 @@ class Bot {
     this.isPlayer = false;
     this.pos = new THREE.Vector3();
     this.yaw = 0;
+    this.pitch = 0;
     this.lastShotTime = -99; // minimap does G.time - lastShotTime; keep it a number pre-first-shot
     this.velY = 0;
     this.onGround = true;
@@ -289,6 +290,7 @@ class Bot {
     this.pos.copy(p);
     // face the map center rather than whatever yaw we died holding
     this.yaw = Math.atan2(-p.x, -p.z);
+    this.pitch = 0;
     this.velY = 0;
     this.onGround = true;
     this.crouched = false; this.prone = false; this.sprinting = false;
@@ -581,7 +583,7 @@ class Bot {
       this.world.api.tracer(muzzle, aim);
       AudioSys.throwWhoosh();
       if (hit) {
-        if (t.isPlayer) this.world.api.playerDamage(150, this, w.name, false);
+        if (t.isPlayer) this.world.api.playerDamage(150, this, w.name, false, false, { origin: muzzle.clone(), aim: aim.clone() });
         else t.hurt(150, this, w.name, false);
       }
       this.magLeft--;
@@ -621,6 +623,7 @@ class Bot {
       aim.z += (Math.random() - 0.5) * 2.4 * sc;
     }
     const dir = aim.clone().sub(muzzle).normalize();
+    this.pitch = Math.atan2(dir.y, Math.hypot(dir.x, dir.z));
     const wallHit = rayWorld(muzzle, dir, muzzle.distanceTo(aim) + 2, this.world.colliders);
     const end = (wallHit && wallHit.dist < muzzle.distanceTo(aim) - 0.5) ? wallHit.point : aim;
     this.world.api.tracer(muzzle, end);
@@ -631,7 +634,7 @@ class Bot {
     this.world.api.noteShot(this);
 
     if (hit) {
-      if (t.isPlayer) this.world.api.playerDamage(Math.round(dmg), this, w.name, headshot);
+      if (t.isPlayer) this.world.api.playerDamage(Math.round(dmg), this, w.name, headshot, false, { origin: muzzle.clone(), aim: aim.clone() });
       else t.hurt(Math.round(dmg), this, w.name, headshot);
     }
 

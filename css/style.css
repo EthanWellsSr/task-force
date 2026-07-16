@@ -109,6 +109,31 @@ h1,h2 { font-weight:800; letter-spacing:2px; }
 #killCam .kc-eyebrow { font-size:10px; color:#e8a33d; margin-bottom:4px; }
 #killCamKiller { font-size:18px; font-weight:800; }
 #killCamWeapon, #killCamTimer { font-size:10px; color:#aeb49c; margin-top:3px; }
+#killCamYouMarker {
+  position:absolute;
+  left:0;
+  top:0;
+  transform:translate(-50%, -100%);
+  padding:4px 8px;
+  background:rgba(200,50,50,.92);
+  border:1px solid rgba(255,235,220,.9);
+  color:#fff;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:1px;
+  pointer-events:none;
+  text-shadow:0 1px 1px rgba(0,0,0,.7);
+}
+#killCamYouMarker::after {
+  content:"";
+  position:absolute;
+  left:50%;
+  bottom:-8px;
+  transform:translateX(-50%);
+  border-left:6px solid transparent;
+  border-right:6px solid transparent;
+  border-top:8px solid rgba(200,50,50,.92);
+}
 
 /* ================= PANELS ================= */
 #classScreen, #settingsScreen { display:flex; align-items:center; justify-content:center; background:rgba(8,10,6,.96); }
