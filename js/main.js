@@ -3684,6 +3684,7 @@ let _killCamVictim = null;
 let _killCamHiddenBots = null; // live bots hidden+frozen for the duration of the replay
 const _killCamMarker = new THREE.Vector3();
 const _killCamMuzzle = new THREE.Vector3(); // scratch for the fatal-shot muzzle point
+const _killCamVmTarget = new THREE.Vector3();
 
 function killCamCleanupVictim() {
   if (_killCamVictim) {
@@ -3735,6 +3736,53 @@ function combatantReplayWeapon(ent) {
   if (!ent) return '';
   if (ent.isPlayer) return curW().def.name;
   return ent.weapon ? ent.weapon.name : '';
+}
+
+function killCamWeaponDef(attacker, weaponName) {
+  if (attacker && attacker.isPlayer) return curW().def;
+  if (attacker && attacker.weapon) return attacker.weapon;
+  return weaponDefForKillName(weaponName) || curW().def;
+}
+
+function restorePlayerViewModel(visible = true) {
+  if (player.weapons && player.weapons.length) buildViewModel(curW().def);
+  vmRoot.visible = visible;
+  vmKnife.visible = false;
+  document.getElementById('scopeOverlay').classList.add('hidden');
+}
+
+function startKillCamViewModel(attacker, weaponName) {
+  const def = killCamWeaponDef(attacker, weaponName);
+  if (def) buildViewModel(def);
+  vmRoot.visible = !!def;
+  vmKnife.visible = false;
+  if (!vmGun) return;
+  vmGun.visible = true;
+  vmGun.position.copy(VM_POS.hip);
+  vmGun.rotation.set(0, 0, 0);
+  if (vmGun.userData.flash) vmGun.userData.flash.visible = false;
+  const laser = vmGun.userData.laser;
+  if (laser) laser.beam.visible = laser.dot.visible = false;
+}
+
+function updateKillCamViewModel(dt, frame, replayT) {
+  if (!vmGun) return;
+  const adsAmt = THREE.MathUtils.clamp((frame && frame.adsAmt) || 0, 0, 1);
+  _killCamVmTarget.lerpVectors(VM_POS.hip, vmGun.userData.adsPos || VM_POS.ads, adsAmt);
+  const shotPulse = (_killCam && _killCam.aim && !_killCam.melee)
+    ? Math.max(0, 1 - Math.abs(replayT - _killCam.lethalT) / 0.13)
+    : 0;
+  _killCamVmTarget.z += shotPulse * 0.035;
+  vmGun.position.lerp(_killCamVmTarget, Math.min(1, dt * 18));
+  vmGun.rotation.set(shotPulse * 0.08, 0, 0);
+  vmGun.visible = true;
+  vmKnife.visible = false;
+  if (vmGun.userData.flash) {
+    vmGun.userData.flash.visible = shotPulse > 0.05 && replayT >= _killCam.lethalT - 0.16;
+  }
+  const laser = vmGun.userData.laser;
+  if (laser) laser.beam.visible = laser.dot.visible = false;
+  document.getElementById('scopeOverlay').classList.add('hidden');
 }
 
 function replayFrameForCombatant(ent, t = G.time, aimPoint = null) {
@@ -3858,7 +3906,7 @@ function startKillCam(attacker, weaponName, shot) {
   // other combatants darting around — only the victim body (below) is shown.
   _killCamHiddenBots = G.bots.filter(b => b.mesh && b.mesh.visible);
   for (const b of _killCamHiddenBots) b.mesh.visible = false;
-  vmRoot.visible = false;
+  startKillCamViewModel(attacker, weaponName);
   UI.show('hud');
   UI.showKillCam(attacker.name, weaponName, KILLCAM_DUR);
   return true;
@@ -3867,7 +3915,7 @@ function startKillCam(attacker, weaponName, shot) {
 function finishKillCam(attacker, weaponName) {
   _killCam = null;
   killCamCleanupVictim();
-  vmRoot.visible = true;
+  restorePlayerViewModel(true);
   MAIN.applyFov();
   UI.hideKillCam();
   G.state = 'dead';
@@ -3900,6 +3948,7 @@ function updateKillCam(dt) {
         yaw: lerpAngle(a.yaw, b.yaw, mix),
         pitch: THREE.MathUtils.lerp(a.pitch, b.pitch, mix),
         fov: THREE.MathUtils.lerp(a.fov || UI.settings.fov, b.fov || UI.settings.fov, mix),
+        adsAmt: THREE.MathUtils.lerp(a.adsAmt || 0, b.adsAmt || 0, mix),
       };
       break;
     }
@@ -3920,6 +3969,7 @@ function updateKillCam(dt) {
     const fall = THREE.MathUtils.clamp((replayT - _killCam.lethalT) / KILLCAM_POST_ROLL, 0, 1);
     _killCam.victim.rotation.x = -Math.PI * 0.5 * _ss(fall);
   }
+  updateKillCamViewModel(dt, f, replayT);
   // Replay the fatal shot: a short muzzle-flash + tracer burst that lands on
   // the victim right as they drop, so the death has a visible cause instead of
   // just keeling over. Skipped for melee kills (no tracer to draw).
@@ -4012,6 +4062,7 @@ function finishMatch(win) {
   if (G.state === 'end') return;
   _killCam = null;
   killCamCleanupVictim();
+  restorePlayerViewModel(false);
   UI.hideKillCam();
   G.state = 'end';
   // P6: commit match XP to the profile exactly once per real match end.
@@ -4028,6 +4079,7 @@ function quitMatch() {
   if (G.state === 'playing' || G.state === 'dead' || G.state === 'paused') Profile.onQuit();
   _killCam = null;
   killCamCleanupVictim();
+  restorePlayerViewModel(false);
   UI.hideKillCam();
   G.state = 'menu';
   document.exitPointerLock && document.exitPointerLock();
