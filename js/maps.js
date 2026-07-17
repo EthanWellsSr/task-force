@@ -283,8 +283,10 @@ function buildNuketown(scene, colliders) {
       { a: -6.0, b: -4.8, top: 2.2 },                   // back door -> backyard spawn
       { a: 0.4, b: 2.0, bottom: 0.95, top: 2.6 },       // kitchen window
     ]);
-    t.wall('x', -18, -9.5, -9, H1, T, wallC, [{ a: -16.2, b: -14.4, bottom: 0.95, top: 2.6 }]);
-    t.wall('x', -18, -9.5, 3, H1, T, wallC, [{ a: -14.6, b: -13.4, top: 2.2 }]); // door -> garage
+    // 'x' runs span T/2 past both ends: two wall runs meeting at an L leave
+    // an uncovered corner post you could see clean through at a diagonal
+    t.wall('x', -18.15, -9.35, -9, H1, T, wallC, [{ a: -16.2, b: -14.4, bottom: 0.95, top: 2.6 }]);
+    t.wall('x', -18.15, -9.35, 3, H1, T, wallC, [{ a: -14.6, b: -13.4, top: 2.2 }]); // door -> garage
     t.wall('z', -7.0, 3, -13.5, H1, T, innerC, [{ a: -3.5, b: -2.3, top: 2.2 }]); // kitchen wall
     // ---- second storey
     t.wall('z', -9, 3, -9.5, H2, T, wallC, [
@@ -295,10 +297,10 @@ function buildNuketown(scene, colliders) {
       { a: -1.0, b: 0.2, top: 2.2 },                    // door out to the rear deck
       { a: -7.2, b: -5.6, bottom: 0.9, top: 2.3 },
     ], H1);
-    t.wall('x', -18, -9.5, -9, H2, T, wallC, [{ a: -15.8, b: -14.0, bottom: 0.9, top: 2.3 }], H1);
+    t.wall('x', -18.15, -9.35, -9, H2, T, wallC, [{ a: -15.8, b: -14.0, bottom: 0.9, top: 2.3 }], H1);
     // sill 0.45 above the upstairs floor = 0.4 above the garage roof:
     // the "climb in through the main window" route (vault zone)
-    t.wall('x', -18, -9.5, 3, H2, T, wallC, [{ a: -14.4, b: -12.8, bottom: 0.45, top: 2.05 }], H1);
+    t.wall('x', -18.15, -9.35, 3, H2, T, wallC, [{ a: -14.4, b: -12.8, bottom: 0.45, top: 2.05 }], H1);
     t.wall('x', -18, -14.0, -5.5, H2, T, innerC, [{ a: -16.4, b: -15.2, top: 2.2 }], H1); // bedroom
     // ---- upstairs floor slab, hole over the staircase
     const fC = 0x6e5637;
@@ -325,7 +327,7 @@ function buildNuketown(scene, colliders) {
     t.box(-9.3, H1 + 0.83, -0.2, 0.12, 0.14, 2.3, TRIM, ns);
     // ---- attached garage, opening onto the street; roof is walkable
     t.wall('z', 3, 7.4, -18, H1, T, wallC);
-    t.wall('x', -18, -9.5, 7.4, H1, T, wallC);
+    t.wall('x', -18.15, -9.35, 7.4, H1, T, wallC);
     t.wall('z', 3, 7.4, -9.5, H1, T, wallC, [{ a: 3.7, b: 6.7, top: 2.35 }]); // garage door
     // roof ends inside the rear wall (z 7.5), not overhanging it: the crate
     // climb runs up the outside of that wall (z 7.55..8.55) and a rear eave
@@ -380,9 +382,9 @@ function buildNuketown(scene, colliders) {
       t.box(climb[i][0], climb[i][1] / 2, 8.05, 0.95, climb[i][1], 1.0, i % 2 ? 0x6e5e40 : 0x7a6a4a);
     // backyard spawn: deeper board-fenced yard with a gate at each end
     // onto the side lanes
-    t.wall('x', -28, -18, -10.5, 2.2, T, wood, [{ a: -25.8, b: -24.4 }]);
+    t.wall('x', -28, -17.85, -10.5, 2.2, T, wood, [{ a: -25.8, b: -24.4 }]);
     t.wall('z', -10.5, -9, -18, 2.2, T, wood);
-    t.wall('x', -28, -18, 8.8, 2.2, T, wood, [{ a: -24.4, b: -23.0 }]);
+    t.wall('x', -28, -17.85, 8.8, 2.2, T, wood, [{ a: -24.4, b: -23.0 }]);
     t.wall('z', 7.4, 8.8, -18, 2.2, T, wood);
     // garden plot at the very rear + shed + spawn cover
     t.box(-25.6, 0.03, -7.8, 3.6, 0.06, 3.6, DIRT, nsf);
