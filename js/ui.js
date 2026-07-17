@@ -1041,17 +1041,15 @@ const UI = {
     const lvl = commit.leveledUp
       ? `LVL ${commit.oldLevel} → LVL ${commit.newLevel} — ${Profile.rankName(commit.newLevel)}`
       : `LVL ${commit.newLevel} — ${Profile.rankName(commit.newLevel)}`;
-    // P80: unlock summary follows the final one-reward-per-level table, so
-    // throwables and killstreaks announce just like weapons/perks/camos.
-    let unlockRows = '';
-    if (commit.leveledUp) {
-      this.sanitizeClassesForProfile();
-      const unlocked = UNLOCK_TABLE
-        .filter(row => row.level > commit.oldLevel && row.level <= commit.newLevel)
-        .map(row => row.name);
-      unlockRows = unlocked.map(n =>
-        `<div class="xp-unlock">UNLOCKED — ${n}</div>`).join('');
-    }
+    // Unlock summary spans all three progression tracks: account level
+    // (perks/throwables/killstreaks), weapon-category level (weapons), and
+    // weapon-specific level (attachments/camos/reticles). Weapon and
+    // attachment rewards can land without an account level-up, so this runs
+    // off the full commit, not just commit.leveledUp.
+    const unlocked = unlocksFromCommit(commit);
+    if (unlocked.length) this.sanitizeClassesForProfile();
+    const unlockRows = unlocked.map(n =>
+      `<div class="xp-unlock">UNLOCKED — ${n}</div>`).join('');
     const pr = commit.progress;
     const pct = pr.needed > 0 ? Math.round(100 * pr.current / pr.needed) : 100;
     el.innerHTML = `

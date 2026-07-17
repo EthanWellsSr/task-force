@@ -415,12 +415,21 @@ const Profile = {
     if (!p.weaponXp) p.weaponXp = this.defaultWeaponXp();
     if (!p.primaryClassXp) p.primaryClassXp = this.defaultPrimaryClassXp();
     if (!p.weaponSpecificXp) p.weaponSpecificXp = {};
+    // Per-weapon levels before this match's weapon XP lands — only the
+    // weapons that actually earned XP can have crossed an attachment/camo
+    // unlock threshold, so the end-screen recap only needs those keys.
+    const oldWeaponSpecificLevels = {};
+    for (const key in weaponEarned.byWeapon)
+      oldWeaponSpecificLevels[key] = this.levelFromTotalXp(p.weaponSpecificXp[key] || 0);
     for (const cat in weaponEarned.byCategory) {
       if (this.PRIMARY_CATEGORIES.includes(cat)) p.primaryClassXp[cat] = (p.primaryClassXp[cat] || 0) + weaponEarned.byCategory[cat];
       else if (this.SECONDARY_CATEGORIES.includes(cat)) p.secondaryXp = (p.secondaryXp || 0) + weaponEarned.byCategory[cat];
     }
     for (const key in weaponEarned.byWeapon)
       p.weaponSpecificXp[key] = (p.weaponSpecificXp[key] || 0) + weaponEarned.byWeapon[key];
+    const newWeaponSpecificLevels = {};
+    for (const key in weaponEarned.byWeapon)
+      newWeaponSpecificLevels[key] = this.levelFromTotalXp(p.weaponSpecificXp[key] || 0);
     for (const cat of this.PRIMARY_CATEGORIES) p.weaponXp[cat] = p.primaryClassXp[cat] || 0;
     for (const cat of this.SECONDARY_CATEGORIES) p.weaponXp[cat] = p.secondaryXp || 0;
     p.stats.totalXpEarned += earned;
@@ -439,6 +448,8 @@ const Profile = {
       newLevel: p.level,
       oldWeaponLevels,
       newWeaponLevels,
+      oldWeaponSpecificLevels,
+      newWeaponSpecificLevels,
       leveledUp: p.level > oldLevel,
       totalXp: p.xp,
       progress: this.progressToNext(p.xp),

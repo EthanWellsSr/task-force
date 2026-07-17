@@ -332,6 +332,62 @@ const WEAPON_TRACK_UNLOCK_TABLE = [
   { level: 18, id: 'camoGold',     name: 'GOLD CAMO',           pool: 'camo' },
 ].sort((a, b) => (a.level - b.level) || a.name.localeCompare(b.name));
 
+// A weapon-track reward (attachment/camo/reticle) is worth announcing for a
+// weapon only if it can actually mount on it. Attachments and camos carry
+// category lists; ACOG reticles ride the ACOG, so gate them on its mount list.
+function weaponTrackRewardFits(row, w) {
+  const att = ATTACHMENTS[row.id];
+  if (att) return attachmentAllowed(att, w);
+  if (row.pool === 'reticle') return !ATTACHMENTS.acog || attachmentAllowed(ATTACHMENTS.acog, w);
+  return true;
+}
+
+// End-screen unlock recap: every reward this match crossed, across all three
+// progression tracks — account level (perks/throwables/killstreaks), weapon-
+// category level (weapons), and weapon-specific level (attachments/camos/
+// reticles). `commit` is the object from Profile.commitMatch. Returns an
+// ordered list of display strings; empty when nothing new unlocked.
+function unlocksFromCommit(commit) {
+  const out = [];
+  if (!commit) return out;
+
+  // 1) Account-level rewards.
+  const oldLvl = commit.oldLevel || 1, newLvl = commit.newLevel || 1;
+  for (const row of UNLOCK_TABLE)
+    if (row.level > oldLvl && row.level <= newLvl) out.push(row.name);
+
+  // 2) Weapon unlocks — gated by the weapon's category track. Primaries key off
+  //    their own category; secondaries share one track (currentSecondaryLevel
+  //    reads the Handgun slot), so compare all secondaries against that entry.
+  const oldW = commit.oldWeaponLevels || {}, newW = commit.newWeaponLevels || {};
+  for (const id in WEAPONS) {
+    const w = WEAPONS[id];
+    let track = null, rank = 0;
+    if (w.categoryUnlockRank) { track = w.cat; rank = w.categoryUnlockRank; }
+    else if (w.secondaryUnlockRank) { track = 'Handgun'; rank = w.secondaryUnlockRank; }
+    if (!track || rank <= 1) continue;
+    if (rank > (oldW[track] || 1) && rank <= (newW[track] || 1)) out.push(w.name);
+  }
+
+  // 3) Attachment / camo / reticle unlocks — gated by each weapon's own level.
+  //    Only weapons that earned XP appear in the level maps; for each, list the
+  //    weapon-track rewards it crossed that actually mount on it.
+  const oldWS = commit.oldWeaponSpecificLevels || {}, newWS = commit.newWeaponSpecificLevels || {};
+  for (const key in newWS) {
+    const from = oldWS[key] || 1, to = newWS[key] || 1;
+    if (to <= from) continue;
+    const w = WEAPONS[key];
+    if (!w) continue;
+    for (const row of WEAPON_TRACK_UNLOCK_TABLE) {
+      if (row.pool === 'weapon' || row.pool === 'secondary') continue; // handled above
+      if (row.level <= from || row.level > to) continue;
+      if (!weaponTrackRewardFits(row, w)) continue;
+      out.push(w.name + ' — ' + row.name);
+    }
+  }
+  return out;
+}
+
 // ============================================================
 // ATTACHMENTS — one pick per slot category, per weapon.
 // mods = stat multipliers applied to the base def by resolveWeaponDef.

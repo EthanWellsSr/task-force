@@ -492,8 +492,11 @@ function buildNuketown(scene, colliders) {
     k.blocker(BUSX + zc * busSin, top / 2, BUSZ + zc * busCos, wx * 2, top, wz * 2);
   };
   for (let i = 0; i < 12; i++) busSlab(-3.85 + i * 0.7, 0.36, 3.12, 1.26); // body
-  busSlab(4.35, 0.16, 3.12, 1.16);  // windshield / cab front — full height so
-  // the hood is not a vault stair onto the roof (rise from hood apex > 0.6)
+  // windshield / cab front — a climbable ledge (top 2.1) instead of a full
+  // wall, so the hood is a two-hop route onto the roof: hood (1.24) -> ledge
+  // (2.1, one jump) -> roof (3.12, a second jump). Both hops are jumps; there
+  // is no walk-up staircase, so bots and casual movement don't drift up.
+  busSlab(4.35, 0.2, 2.1, 1.16);
   busSlab(4.5, 0.46, 1.24, 1.16);   // hood — top 1.24 keeps the designed
   busSlab(5.4, 0.46, 1.24, 1.16);   // over-hood shooting lane; + bumper
 

@@ -330,6 +330,7 @@ window.addEventListener('resize', () => {
 const vmRoot = new THREE.Group();
 G.camera.add(vmRoot);
 let vmGun = null, vmMuzzle = new THREE.Vector3();
+const _vmCorner = new THREE.Vector3(); // scratch: prone ground-clamp corner probe
 const _laserOrigin = new THREE.Vector3(), _laserDir = new THREE.Vector3();
 const _laserPt = new THREE.Vector3(), _laserMid = new THREE.Vector3(), _laserSeg = new THREE.Vector3();
 const _laserUpY = new THREE.Vector3(0, 1, 0);
@@ -1105,6 +1106,7 @@ function buildViewModel(w) {
   // prone ground clamp in updateCameraAndViewmodel
   {
     const bb = new THREE.Box3();
+    const solid = new THREE.Box3().makeEmpty();
     const laser = g.userData.laser;
     let minY = 0;
     for (const c of g.children) {
@@ -1113,9 +1115,14 @@ function buildViewModel(w) {
       // per-frame update places them — the unit beam would read as -0.5
       if (laser && (c === laser.beam || c === laser.dot)) continue;
       bb.setFromObject(c);
+      solid.union(bb);
       if (bb.min.y < minY) minY = bb.min.y;
     }
     g.userData.vmMinY = minY;
+    // Full solid AABB in the gun's local frame — the prone ground clamp
+    // transforms its corners to world space to find the muzzle-first low
+    // point once the camera pitch tilts the weapon toward the deck.
+    g.userData.vmSolidBox = solid;
   }
   g.position.copy(VM_POS.hip);
   vmGun = g;
@@ -3711,6 +3718,7 @@ const KILLCAM_EYE_HEIGHT = 1.62; // killer eye height used by the chase camera a
 const KILLCAM_CHASE_DIST = 3.15;
 const KILLCAM_CHASE_HEIGHT = 0.65;
 const KILLCAM_SHOULDER_OFFSET = 0.48;
+const KILLCAM_CAM_MARGIN = 0.28; // pull-in gap so the near plane clears a wall the chase cam backs into
 let _killCamVictim = null;
 let _killCamHiddenBots = null; // live bot visibility restored after replay
 const _killCamMarker = new THREE.Vector3();
@@ -3720,6 +3728,8 @@ const _killCamFlatForward = new THREE.Vector3();
 const _killCamRight = new THREE.Vector3();
 const _killCamEye = new THREE.Vector3();
 const _killCamLook = new THREE.Vector3();
+const _killCamDesired = new THREE.Vector3(); // uncollided chase-camera target
+const _killCamOffset = new THREE.Vector3();  // eye -> desired, for the collision sweep
 
 function killCamCleanupVictim() {
   if (_killCamVictim) {
@@ -4072,10 +4082,26 @@ function updateKillCam(dt) {
     if (victimFrame) _killCamLook.set(victimFrame.x, victimFrame.y + 1.2, victimFrame.z);
     else if (_killCam.aim) _killCamLook.copy(_killCam.aim);
     else _killCamLook.copy(_killCamEye).addScaledVector(_killCamForward, 12);
-    G.camera.position.copy(_killCamEye)
+    // Where the chase camera wants to sit: behind the killer, shouldered,
+    // raised. Left uncollided this pushes straight through walls, so the
+    // "killer's view" ends up staring into geometry — negating the killcam.
+    _killCamDesired.copy(_killCamEye)
       .addScaledVector(_killCamFlatForward, -KILLCAM_CHASE_DIST)
       .addScaledVector(_killCamRight, KILLCAM_SHOULDER_OFFSET);
-    G.camera.position.y += KILLCAM_CHASE_HEIGHT;
+    _killCamDesired.y += KILLCAM_CHASE_HEIGHT;
+    // Third-person camera collision: sweep from the killer's eye out to the
+    // desired spot and pull the lens in to just short of the nearest surface,
+    // so it always stays on the killer's side of any wall.
+    _killCamOffset.subVectors(_killCamDesired, _killCamEye);
+    const camDist = _killCamOffset.length();
+    if (camDist > 1e-4) {
+      _killCamOffset.divideScalar(camDist);
+      const camHit = rayWorld(_killCamEye, _killCamOffset, camDist, G.colliders);
+      const reach = camHit ? Math.max(0, camHit.dist - KILLCAM_CAM_MARGIN) : camDist;
+      G.camera.position.copy(_killCamEye).addScaledVector(_killCamOffset, reach);
+    } else {
+      G.camera.position.copy(_killCamDesired);
+    }
     G.camera.lookAt(_killCamLook);
     G.camera.fov = f.fov || UI.settings.fov;
     G.camera.updateProjectionMatrix();
@@ -4932,15 +4958,6 @@ function updateCameraAndViewmodel(dt) {
         rt.y + bReach * 0.115,
         rt.z + bReach * 0.04 + (boltMode ? pOut * 0.06 : 0));
     }
-    // ground clamp: with a low eye (prone is 0.35) the gun's body would sink
-    // below the surface the player lies on and be depth-buried by it — hold
-    // the receiver's lowest point just above that plane so it reads as
-    // resting on the ground. Standing/crouch eye heights never bind, and the
-    // clamp fades out with ADS: the calibrated reticle anchor always wins.
-    if (vmGun.userData.vmMinY !== undefined && player.adsAmt < 0.999) {
-      const minTargetY = 0.02 - eyeHeight() - vmGun.userData.vmMinY;
-      if (target.y < minTargetY) target.y += (minTargetY - target.y) * (1 - player.adsAmt);
-    }
     // while the knife is out the gun hides lowered, so the return lerp
     // reads as re-raising it (past the clamp — hiding in the ground is fine)
     if (melee) target.y -= 0.3;
@@ -4953,6 +4970,35 @@ function updateCameraAndViewmodel(dt) {
     // the camera instead of hiding behind the receiver; bolt work rolls
     // positive so the right-side handle comes up into view
     vmGun.rotation.z = dip * 0.5 - rTilt * 0.42 + bReach * 0.18;
+    // Prone ground recognition: with the low prone eye (0.35), the camera
+    // pitch tilts the weapon muzzle-first into the deck and it sinks through
+    // the surface the player lies on. Pose the gun first, then measure its
+    // lowest solid corner in world space and lift it back onto that surface so
+    // it rests on the ground instead of merging with it. Skipped for the knife
+    // hide (gun deliberately buried) and faded out with ADS so the calibrated
+    // reticle anchor always wins. Standing/crouch eye heights never bind.
+    const solidBox = vmGun.userData.vmSolidBox;
+    if (solidBox && !melee && player.adsAmt < 0.999) {
+      G.camera.updateMatrixWorld(true);
+      let lowY = Infinity;
+      for (let xi = 0; xi < 2; xi++)
+        for (let yi = 0; yi < 2; yi++)
+          for (let zi = 0; zi < 2; zi++) {
+            _vmCorner.set(xi ? solidBox.max.x : solidBox.min.x,
+                          yi ? solidBox.max.y : solidBox.min.y,
+                          zi ? solidBox.max.z : solidBox.min.z)
+              .applyMatrix4(vmGun.matrixWorld);
+            if (_vmCorner.y < lowY) lowY = _vmCorner.y;
+          }
+      const restY = player.pos.y + 0.02;
+      if (lowY < restY) {
+        // convert the world-space deficit into a local-Y lift (the camera
+        // pitch shrinks how much local Y maps to world Y); clamp the divisor
+        // so a near-straight-down look can't blow the lift up
+        const cp = Math.max(0.4, Math.cos(player.pitch));
+        vmGun.position.y += ((restY - lowY) / cp) * (1 - player.adsAmt);
+      }
+    }
     // laser (#19c): each frame land the dot on the crosshair's world point
     // and converge the beam onto it from the offset emitter. Hidden at ADS
     // (COD-style) so it never clutters the sight, and while sprinting (the
