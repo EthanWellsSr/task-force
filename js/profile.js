@@ -70,6 +70,9 @@ const Profile = {
       primaryClassXp: this.defaultPrimaryClassXp(),
       secondaryXp: 0,
       weaponSpecificXp: {},
+      // Maps on which a Tactical Nuke was earned at Hardened enemy difficulty or
+      // higher (mapId -> true). Gates the Daring David reward class.
+      nukeMapsHardened: {},
       stats: this.defaultStats(),
     };
   },
@@ -113,6 +116,11 @@ const Profile = {
     }
     for (const cat of this.PRIMARY_CATEGORIES) p.weaponXp[cat] = p.primaryClassXp[cat] || 0;
     for (const cat of this.SECONDARY_CATEGORIES) p.weaponXp[cat] = p.secondaryXp || 0;
+    if (raw.nukeMapsHardened && typeof raw.nukeMapsHardened === 'object') {
+      for (const k in raw.nukeMapsHardened) {
+        if (typeof k === 'string' && k.length <= 40 && raw.nukeMapsHardened[k]) p.nukeMapsHardened[k] = true;
+      }
+    }
     const s = raw.stats;
     if (s && typeof s === 'object')
       for (const k in p.stats) p.stats[k] = this._int(s[k], 0, 0);
@@ -454,6 +462,46 @@ const Profile = {
       totalXp: p.xp,
       progress: this.progressToNext(p.xp),
     };
+  },
+
+  // ---------- Daring David reward gate ----------
+
+  // "Hardened or better" = XP multiplier at least Hardened's (hardened/veteran).
+  isHardenedOrBetter(difficulty) {
+    const m = this.XP_DIFFICULTY_MULTIPLIERS;
+    return (m[difficulty] || 0) >= m.hardened;
+  },
+
+  // Every playable map must be nuked for the gate to open. Read the live MAPS
+  // registry at call time (maps.js loads after this file); fall back to the
+  // known ship list if it isn't available yet.
+  requiredNukeMaps() {
+    if (typeof MAPS !== 'undefined' && MAPS) return Object.keys(MAPS);
+    return ['nuketown', 'rust', 'shipment', 'killhouse', 'vacant', 'crash'];
+  },
+
+  // Record a nuke earned on `mapId`. Only counts at Hardened enemy difficulty or
+  // higher (the match difficulty locked in at startMatch). One localStorage
+  // write per newly-cleared map. Returns the saved (or current) profile.
+  recordNukeMap(mapId) {
+    if (!mapId || !this.isHardenedOrBetter(this._matchDifficulty)) return this.load();
+    const p = this.load();
+    if (!p.nukeMapsHardened) p.nukeMapsHardened = {};
+    if (!p.nukeMapsHardened[mapId]) { p.nukeMapsHardened[mapId] = true; this.save(p); }
+    return p;
+  },
+
+  daringDavidProgress(profile) {
+    const p = profile || this.load();
+    const done = p.nukeMapsHardened || {};
+    const req = this.requiredNukeMaps();
+    const missing = req.filter(m => !done[m]);
+    return { got: req.length - missing.length, total: req.length, missing };
+  },
+
+  daringDavidUnlocked(profile) {
+    const pr = this.daringDavidProgress(profile);
+    return pr.total > 0 && pr.got >= pr.total;
   },
 
   // ---------- self-test (PROFILE_DEBUG only) ----------

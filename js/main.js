@@ -1091,6 +1091,13 @@ function buildViewModel(w) {
     cyl(0.017, 0.02, 0x0d0e10, 0, 0.005, -len - 0.205); // dark bore cap
     muzzleZ = -len - 0.21;
     fSize = flashSize * 0.5;
+  } else if (w.attachments && w.attachments.includes('compensator')) {
+    // compensator — a stubby ported muzzle brake. Loud, so the flash stays
+    // full-size; the vents just push it forward off the ports.
+    cyl(0.033, 0.085, 0x26282d, 0, 0.005, -len - 0.045);       // brake body
+    part(0.08, 0.02, 0.052, 0x0e1013, 0, 0.033, -len - 0.05);  // top vent slot
+    part(0.08, 0.02, 0.052, 0x0e1013, 0, -0.02, -len - 0.05);  // bottom vent slot
+    muzzleZ = -len - 0.09;
   }
   // muzzle flash quad
   const flash = new THREE.Mesh(
@@ -1883,6 +1890,7 @@ function deployNuke() {
   AudioSys.nukeSiren();
   Profile.onNukeCalled();        // P5: immediate lifetime stat
   Profile.MatchXP.onNukeCalled(); // P4: flat +1000, no per-kill XP
+  Profile.recordNukeMap(G.mapId); // Daring David gate: nuke-per-map at Hardened+
 }
 
 function updateNuke(dt) {
@@ -3636,8 +3644,14 @@ function startMatch(mapId, modeId = 'tdm') {
 
 function deploy() {
   if (player.respawnT > 0) return;
-  const cls = UI.classes[UI.selectedClass];
-  sanitizeClassForLevel(cls);
+  // Daring David (class 5) is a fixed reward preset: skip sanitize (its curated
+  // loadout ignores the normal unlock-level/mount gates) and flag it for the
+  // bottomless-magazine Easter egg. If it's selected while still locked, fall
+  // back to the first class.
+  const daring = UI.selectedClass === DARING_DAVID_INDEX && Profile.daringDavidUnlocked();
+  if (UI.selectedClass === DARING_DAVID_INDEX && !daring) UI.selectedClass = 0;
+  const cls = daring ? DARING_DAVID : UI.classes[UI.selectedClass];
+  if (!daring) sanitizeClassForLevel(cls);
   if (isGunGameMode()) {
     // P75-P77: Gun Game owns the whole loadout. Custom-class perks and
     // streak selections must not leak into forced ladder tiers.
@@ -3661,10 +3675,12 @@ function deploy() {
     const w = resolveWeaponDef(cls[slot], cls.attachments && cls.attachments[slot],
       cls.attachments && cls.attachments[slot + 'DotColor'],
       cls.attachments && cls.attachments[slot + 'LaserColor'],
-      cls.attachments && cls.attachments[slot + 'AcogReticle']);
+      cls.attachments && cls.attachments[slot + 'AcogReticle'],
+      daring); // allowAll: the reward preset mounts cross-category attachments
     // SCAVENGER no longer doubles reserve here (#6) — it resupplies off
-    // corpses in updateScavenger(); everyone spawns with normal reserve
-    return { def: w, mag: w.mag, reserve: w.reserve };
+    // corpses in updateScavenger(); everyone spawns with normal reserve.
+    // bottomless: Daring David's hidden unlimited-ammo Easter egg (see fire path)
+    return { def: w, mag: w.mag, reserve: w.reserve, bottomless: daring };
   };
   if (isGunGameMode()) {
     setPlayerGunGameWeapon();
@@ -4724,7 +4740,10 @@ const _collatHits = []; // #18f: per-pellet list of enemies the shot passes thro
 function firePlayerShot(w) {
   const def = w.def;
   player.spawnProtectT = 0; // #18a: firing ends spawn invuln immediately
-  w.mag--;
+  // Daring David Easter egg: a bottomless magazine never spends a round, so the
+  // mag stays full — it never empties, so the auto/manual reload paths (which
+  // gate on mag <= 0 / mag < def.mag) never fire. Unlimited ammo, no reload.
+  if (!w.bottomless) w.mag--;
   noteShot(player);
   AudioSys.shot(def.model, 0, 0, def.suppressed); // P55: suppressed defs report the quiet voice
 

@@ -312,6 +312,7 @@ const WEAPON_TRACK_UNLOCK_TABLE = [
   { level: 4,  id: 'laser',        name: 'LASER SIGHT',         pool: 'attachment' },
   { level: 5,  id: 'camoDesert',   name: 'DESERT CAMO',         pool: 'camo' },
   { level: 6,  id: 'camoWoodland', name: 'WOODLAND CAMO',       pool: 'camo' },
+  { level: 6,  id: 'compensator',  name: 'COMPENSATOR',         pool: 'attachment' },
   { level: 7,  id: 'holo',         name: 'HOLOGRAPHIC SIGHT',   pool: 'attachment' },
   { level: 7,  id: 'camoUrban',    name: 'URBAN CAMO',          pool: 'camo' },
   { level: 8,  id: 'camoArctic',   name: 'ARCTIC CAMO',         pool: 'camo' },
@@ -427,6 +428,14 @@ const ATTACHMENTS = {
   // no snipers (a quiet one-shot-kill erases the positional trade). The
   // doc's 'Pistol' cat maps to this sandbox's 'Handgun' + 'Machine
   // Pistol' (the suppressed USP is the archetype — same call as P56).
+  // Compensator — the muzzle slot's recoil-control option, unlocked before the
+  // suppressor. A ported brake bleeds off muzzle climb (strong recoil cut +
+  // tighter sustained bloom); the trade is it's loud and flashy (no
+  // suppression) and it shares the muzzle slot, so it's mutually exclusive with
+  // the suppressor. Mounts on every firearm category.
+  compensator: { id:'compensator', name:'COMPENSATOR', slot:'muzzle',
+    cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'],
+    mods:{ recoil:.75, bloom:.9 }, unlockLevel:6 },
   suppressor: { id:'suppressor', name:'SUPPRESSOR', slot:'muzzle',
     cats:['Assault Rifle','SMG','LMG','Handgun','Machine Pistol'],
     mods:{ rangeMult:.75, recoil:.9 }, suppressed:true, unlockLevel:10 },
@@ -535,9 +544,12 @@ function attachmentDesc(att) {
 // apply modifiers ad hoc. Returns the base def itself when nothing valid
 // is attached; otherwise a copy carrying `attachments` (valid ids, for the
 // viewmodel to branch on) with mods multiplied in.
-function resolveWeaponDef(key, attIds, dotColor, laserColor, acogReticle) {
+// allowAll bypasses the category-fit filter — used only by fixed reward presets
+// (Daring David) whose curated loadout is allowed to mount cross-category (e.g.
+// a red dot + laser on a machine pistol) regardless of the normal mount rules.
+function resolveWeaponDef(key, attIds, dotColor, laserColor, acogReticle, allowAll = false) {
   const base = WEAPONS[key];
-  const ids = (attIds || []).filter(id => ATTACHMENTS[id] && attachmentAllowed(ATTACHMENTS[id], base));
+  const ids = (attIds || []).filter(id => ATTACHMENTS[id] && (allowAll || attachmentAllowed(ATTACHMENTS[id], base)));
   if (!ids.length) return base;
   const def = Object.assign({}, base);
   def.range = base.range.slice();
@@ -726,6 +738,31 @@ const DEFAULT_CLASSES = [
   { name:'RAVENFALL',   primary:'m14',   secondary:'usp', perks:['soh','stopping','steadyaim'], lethal:'frag', tactical:'stun', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
   { name:'DUSTKNIFE',   primary:'aa12',  secondary:'usp', perks:['soh','stopping','steadyaim'], lethal:'frag', tactical:'stun', killstreaks:DEFAULT_KILLSTREAK_IDS.slice(), attachments:{ primary:[], secondary:[] } },
 ];
+
+// Daring David — a fixed reward class (class 5, beyond the five editable slots).
+// It only unlocks after earning a Tactical Nuke on every map at Hardened enemy
+// difficulty or higher (Profile.daringDavidUnlocked). The loadout is fixed and
+// bypasses the normal unlock-level and mount-category gates: resolveWeaponDef is
+// called with allowAll for it, and deploy() never sanitizes it. Its weapons also
+// carry a hidden bottomless-magazine Easter egg (unlimited ammo, no reload) that
+// is deliberately NOT surfaced in the unlock description.
+const DARING_DAVID = {
+  name: 'DARING DAVID',
+  preset: true,
+  primary: 'm4a1', secondary: 'g18',
+  perks: ['soh', 'stopping', 'steadyaim'], // sleight of hand / stopping power / steady aim
+  lethal: 'frag', tactical: 'stun',
+  killstreaks: ['uav', 'napalm', 'airstrike'],
+  attachments: {
+    primary: ['acog', 'foregrip', 'compensator', 'extmags', 'laser', 'camoTiger'],
+    primaryAcogReticle: 'cross', primaryDotColor: 'green', primaryLaserColor: 'green',
+    secondary: ['reddot', 'laser'],
+    secondaryDotColor: 'green', secondaryLaserColor: 'green',
+  },
+  unlockDesc: 'Earn a Tactical Nuke (25-kill streak) on every map at Hardened enemy difficulty or higher.',
+};
+// class-select index for Daring David: it sits just past the editable classes.
+const DARING_DAVID_INDEX = DEFAULT_CLASSES.length; // 5
 
 // Loadout pool bots draw from. #16b: each carries a `lethal` throwable pick
 // (mirroring the class `lethal` field) so bots can arc a frag — one per life,

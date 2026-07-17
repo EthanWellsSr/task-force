@@ -690,6 +690,7 @@ const UI = {
       div.onclick = () => { AudioSys.uiClick(); this.selectedClass = i; this.renderSpawnScreen(deathInfo); };
       wrap.appendChild(div);
     });
+    this.renderDaringDavidCard(wrap, deathInfo);
     const di = this.$('deathInfo');
     if (deathInfo) {
       di.classList.remove('hidden');
@@ -699,6 +700,48 @@ const UI = {
       di.classList.add('hidden');
       this.$('spawnTitle').textContent = 'CHOOSE YOUR LOADOUT';
     }
+  },
+
+  // Daring David reward card on the class-select screen (class 5). Locked: shows
+  // what's needed to unlock it + map progress. Unlocked: a normal, selectable
+  // loadout card. Lines are built by hand (never via classStreakLine, which
+  // sanitizes) so the shared preset constant is never mutated.
+  renderDaringDavidCard(wrap, deathInfo) {
+    const dd = DARING_DAVID;
+    const unlocked = Profile.daringDavidUnlocked();
+    if (this.selectedClass === DARING_DAVID_INDEX && !unlocked) this.selectedClass = 0;
+    const div = document.createElement('div');
+    div.className = 'spawn-class daring'
+      + (this.selectedClass === DARING_DAVID_INDEX ? ' active' : '')
+      + (unlocked ? '' : ' locked');
+    if (unlocked) {
+      const perkNames = dd.perks.map(id => { const p = perkById(id); return p ? p.name : id; }).join(' / ');
+      const eq = [dd.lethal, dd.tactical].filter(k => k && k !== 'none' && THROWABLES[k])
+        .map(k => THROWABLES[k].name).join(' / ') || 'NO EQUIPMENT';
+      const streaks = dd.killstreaks.map(id => (KILLSTREAKS[id] && KILLSTREAKS[id].name) || id).join(' / ');
+      const camoParts = [];
+      for (const [slot, tag] of [['primary', 'P'], ['secondary', 'S']]) {
+        const cid = (dd.attachments[slot] || []).find(id => ATTACHMENTS[id] && ATTACHMENTS[id].slot === 'camo');
+        if (cid) camoParts.push(tag + ': ' + ATTACHMENTS[cid].name);
+      }
+      const camos = camoParts.join(' / ') || 'NO CAMO';
+      div.innerHTML = `<div class="sc-name">${dd.name}<span class="sc-reward">REWARD</span></div>
+        <div class="sc-weap">${WEAPONS[dd.primary].name} + ${WEAPONS[dd.secondary].name}</div>
+        <div class="sc-perks">${perkNames}</div>
+        <div class="sc-perks">${eq}</div>
+        <div class="sc-streaks">${streaks}</div>
+        <div class="sc-camos">${camos}</div>`;
+      div.onclick = () => { AudioSys.uiClick(); this.selectedClass = DARING_DAVID_INDEX; this.renderSpawnScreen(deathInfo); };
+    } else {
+      const pr = Profile.daringDavidProgress();
+      const remaining = pr.missing.length
+        ? '  ·  Remaining: ' + pr.missing.map(m => m.toUpperCase()).join(', ')
+        : '';
+      div.innerHTML = `<div class="sc-name">${dd.name}<span class="sc-lock-tag">LOCKED</span></div>
+        <div class="sc-unlock">${dd.unlockDesc}</div>
+        <div class="sc-progress">${pr.got} / ${pr.total} maps nuked${remaining}</div>`;
+    }
+    wrap.appendChild(div);
   },
 
   setRespawnCountdown(t) {

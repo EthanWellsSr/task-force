@@ -253,6 +253,14 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
 .spawn-class .sc-perks { font-size:9px; color:#6a7060; margin-top:3px; letter-spacing:.5px; }
 .spawn-class .sc-streaks { font-size:9px; color:#d0a653; margin-top:3px; letter-spacing:0; }
 .spawn-class .sc-camos { font-size:9px; color:#b08a45; margin-top:3px; letter-spacing:0; }
+.spawn-class.daring { border-color:#c9a24a; }
+.spawn-class.daring.active { border-color:#f0c04a; background:rgba(240,192,74,.12); }
+.spawn-class.locked { opacity:.62; cursor:not-allowed; border-style:dashed; max-width:230px; }
+.spawn-class.locked:hover { border-color:#8a4a30; }
+.spawn-class .sc-reward { font-size:8px; color:#1a1508; background:#f0c04a; border-radius:3px; padding:1px 5px; letter-spacing:1px; vertical-align:middle; margin-left:6px; font-weight:800; }
+.spawn-class .sc-lock-tag { font-size:8px; color:#e0b48a; border:1px solid #8a4a30; border-radius:3px; padding:1px 5px; letter-spacing:1px; vertical-align:middle; margin-left:6px; }
+.spawn-class .sc-unlock { font-size:9px; color:#aab097; margin-top:7px; line-height:1.45; letter-spacing:.3px; }
+.spawn-class .sc-progress { font-size:9px; color:#d0a653; margin-top:5px; letter-spacing:.3px; }
 #deathInfo { margin-bottom:16px; }
 #killedByText { font-size:15px; color:#d05040; letter-spacing:2px; margin-bottom:6px; }
 #respawnCountdown { font-size:26px; font-weight:800; color:#e8a33d; }
