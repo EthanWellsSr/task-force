@@ -327,8 +327,11 @@ function buildNuketown(scene, colliders) {
     t.wall('z', 3, 7.4, -18, H1, T, wallC);
     t.wall('x', -18, -9.5, 7.4, H1, T, wallC);
     t.wall('z', 3, 7.4, -9.5, H1, T, wallC, [{ a: 3.7, b: 6.7, top: 2.35 }]); // garage door
-    t.box(-13.75, GROOF, 5.3, 8.9, 0.2, 5.4, roofC);
-    t.box(-13.75, GROOF - 0.03, 5.3, 9.1, 0.12, 5.6, TRIM, ns);   // eave
+    // roof ends inside the rear wall (z 7.5), not overhanging it: the crate
+    // climb runs up the outside of that wall (z 7.55..8.55) and a rear eave
+    // put a ceiling over the upper steps, head-blocking the route
+    t.box(-13.75, GROOF, 5.05, 8.9, 0.2, 4.9, roofC);
+    t.box(-13.75, GROOF - 0.03, 5.0, 9.1, 0.12, 5.0, TRIM, ns);   // eave
     // ---- rear deck at second-floor level + exterior staircase down
     // deck + stairs stop at the wall's outer face (x -18.15): wider spans
     // used to punch 0.15 through into the garage/kitchen interiors
