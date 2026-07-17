@@ -330,12 +330,14 @@ function buildNuketown(scene, colliders) {
     t.box(-13.75, GROOF, 5.3, 8.9, 0.2, 5.4, roofC);
     t.box(-13.75, GROOF - 0.03, 5.3, 9.1, 0.12, 5.6, TRIM, ns);   // eave
     // ---- rear deck at second-floor level + exterior staircase down
-    t.box(-19.1, 2.7, -0.15, 3.0, 0.2, 3.7, 0x9a7a55);
+    // deck + stairs stop at the wall's outer face (x -18.15): wider spans
+    // used to punch 0.15 through into the garage/kitchen interiors
+    t.box(-19.375, 2.7, -0.15, 2.45, 0.2, 3.7, 0x9a7a55);
     for (const pz of [-1.6, 1.3]) t.box(-20.3, 1.3, pz, 0.16, 2.6, 0.16, 0x9a7a55);
     t.box(-20.55, 3.2, -0.15, 0.1, 0.8, 3.7, TRIM);
     t.box(-19.3, 3.2, -2.0, 2.6, 0.8, 0.1, TRIM);
     for (let i = 0; i < 7; i++)
-      t.box(-19.1, 0.2 * (i + 1), 4.9 - 0.52 * i, 2.8, 0.4 * (i + 1), 0.56, 0x7a6248);
+      t.box(-19.325, 0.2 * (i + 1), 4.9 - 0.52 * i, 2.35, 0.4 * (i + 1), 0.56, 0x7a6248);
     k.beam(s * -20.45, 1.0, s * 4.95, s * -20.45, 3.15, s * 1.65, 0.12, 0x7a6248, ns);
     k.beam(s * -20.45, 0.55, s * 4.95, s * -20.45, 2.45, s * 1.65, 0.08, 0x7a6248, ns);
     // ---- furniture (kept against walls so bots keep clean lanes)
@@ -452,6 +454,8 @@ function buildNuketown(scene, colliders) {
   bpart(0, 3.02, 0, 2.55, 0.2, 8.5, 0xf0eee4);      // white roof
   bpart(0, 1.05, 4.9, 2.3, 1.1, 1.5, 0xe8b820);     // hood
   bpart(0, 0.62, 5.75, 2.3, 0.5, 0.2, 0x3a3d42);    // bumper
+  bpart(0, 0.26, 0, 2.3, 0.48, 8.2, 0x22242a);      // undercarriage skirt: closes the
+  // ground gap so a prone camera (eye 0.35) can't see under/into the bus
   bpart(0, 2.32, 4.24, 2.2, 1.0, 0.1, GLASS);       // windshield
   for (const sx of [-1, 1]) {
     bpart(sx * 1.28, 2.35, -0.4, 0.06, 0.85, 6.8, GLASS);
@@ -470,7 +474,7 @@ function buildNuketown(scene, colliders) {
   scene.add(busG);
   const busSin = Math.sin(BUSA), busCos = Math.cos(BUSA);
   for (const off of [-2.7, 0, 2.7])
-    k.blocker(BUSX + off * busSin, 1.25, BUSZ + off * busCos, 2.55, 2.5, 2.35);
+    k.blocker(BUSX + off * busSin, 1.56, BUSZ + off * busCos, 2.55, 3.12, 2.35);
   k.blocker(BUSX + 4.85 * busSin, 0.62, BUSZ + 4.85 * busCos, 2.35, 1.24, 1.55);
 
   // ---- moving truck beside the bus (open cargo hold facing the bus)
