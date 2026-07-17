@@ -391,6 +391,8 @@ function buildNuketown(scene, colliders) {
     t.box(-26.2, 0.5, 3.2, 1.0, 1.0, 1.0, 0x6e5e40);
     // corner-lawn dressing on the side lane
     t.box(-20.5, 1.45, 14.5, 2.3, 2.5, 5.6, s > 0 ? 0xd8d5c8 : 0xcfd4c4); // camper
+    t.box(-20.5, 0.11, 14.5, 2.1, 0.18, 5.4, 0x2a2c30);   // skirt: bottom floats
+    // at 0.2 — close the prone-height see/shoot-under gap
     t.box(-19.32, 1.9, 14.5, 0.06, 0.6, 4.2, GLASS, ns);
     t.box(-8.6, 0.85, 12.4, 1.3, 1.7, 3.2, hedge);
     t.box(-13.5, 0.85, 11.0, 3.0, 1.7, 1.2, hedge);
@@ -438,6 +440,7 @@ function buildNuketown(scene, colliders) {
   k.box(0, 1.7, 16.8, 11, 0.04, 0.04, 0x3a3a38, ns);
   k.blocker(0, 3, 16.8, 13, 6, 1.6);
   k.box(0.5, 1.3, 18.4, 2.4, 2.2, 3.2, 0x4a5240);           // truck behind the wire
+  k.box(0.5, 0.11, 18.4, 2.2, 0.18, 3.0, 0x2a2c30);         // skirt: floating bottom
   k.box(0, 0.5, 11.0, 1.8, 1.0, 4.0, 0x2e2f33);             // burnt wreck, secondary cover
   k.box(0, 1.25, 11.2, 1.7, 0.55, 1.9, 0x232529);
 
@@ -456,6 +459,7 @@ function buildNuketown(scene, colliders) {
   bpart(0, 0.62, 5.75, 2.3, 0.5, 0.2, 0x3a3d42);    // bumper
   bpart(0, 0.26, 0, 2.3, 0.48, 8.2, 0x22242a);      // undercarriage skirt: closes the
   // ground gap so a prone camera (eye 0.35) can't see under/into the bus
+  bpart(0, 0.26, 4.9, 2.2, 0.48, 1.6, 0x22242a);    // ...and under the hood
   bpart(0, 2.32, 4.24, 2.2, 1.0, 0.1, GLASS);       // windshield
   for (const sx of [-1, 1]) {
     bpart(sx * 1.28, 2.35, -0.4, 0.06, 0.85, 6.8, GLASS);
@@ -473,13 +477,28 @@ function buildNuketown(scene, colliders) {
   busG.rotation.y = BUSA;
   scene.add(busG);
   const busSin = Math.sin(BUSA), busCos = Math.cos(BUSA);
-  for (const off of [-2.7, 0, 2.7])
-    k.blocker(BUSX + off * busSin, 1.56, BUSZ + off * busCos, 2.55, 3.12, 2.35);
-  k.blocker(BUSX + 4.85 * busSin, 0.62, BUSZ + 4.85 * busCos, 2.35, 1.24, 1.55);
+  // AABB colliders can't rotate, so hug the yawed hull with thin slabs —
+  // a few fat boxes leave stand-in pockets at the staircase corners (players
+  // could walk into the windshield at the nose). Slab at local z centre `zc`,
+  // half-depth hd, half-width hx, from the ground up to `top`.
+  const busSlab = (zc, hd, top, hx) => {
+    const wx = hx * busCos + hd * Math.abs(busSin);
+    const wz = hx * Math.abs(busSin) + hd * busCos;
+    k.blocker(BUSX + zc * busSin, top / 2, BUSZ + zc * busCos, wx * 2, top, wz * 2);
+  };
+  for (let i = 0; i < 12; i++) busSlab(-3.85 + i * 0.7, 0.36, 3.12, 1.26); // body
+  busSlab(4.35, 0.16, 3.12, 1.16);  // windshield / cab front — full height so
+  // the hood is not a vault stair onto the roof (rise from hood apex > 0.6)
+  busSlab(4.5, 0.46, 1.24, 1.16);   // hood — top 1.24 keeps the designed
+  busSlab(5.4, 0.46, 1.24, 1.16);   // over-hood shooting lane; + bumper
 
   // ---- moving truck beside the bus (open cargo hold facing the bus)
   const TRUCKX = 3.0;
   k.box(TRUCKX, 1.85, -1.5, 2.2, 3.0, 6.6, 0xd8d5cc);                   // trailer
+  k.box(TRUCKX, 0.185, -1.5, 2.0, 0.33, 6.5, 0x2a2c30);                 // skirt: trailer
+  // floor is at 0.35 == prone eye height — close the see-under gap. Solid
+  // (footprint strictly inside the trailer's) so sight and fire agree.
+  k.box(TRUCKX, 0.11, 3.1, 1.9, 0.18, 2.4, 0x2a2c30);                   // cab skirt
   k.box(TRUCKX, 3.42, -1.5, 2.3, 0.14, 6.7, 0xe8e6df, ns);              // roof cap
   k.box(TRUCKX, 1.85, -4.82, 2.1, 2.8, 0.08, 0xb9b6ad, ns);             // rear doors
   k.box(TRUCKX, 1.15, 3.1, 2.1, 1.9, 2.6, 0xb03028);                    // cab
@@ -593,7 +612,7 @@ function buildNuketown(scene, colliders) {
     windows: k.windows,
     debugCollisionProbes: [
       { name: 'school_bus_hood_clearance', from: [-4.8, 1.35, -1.2], to: [-0.6, 1.35, 3.8] },
-      { name: 'bus_truck_gap', from: [-1.4, 1.15, -3.6], to: [2.2, 1.15, 1.6] },
+      { name: 'bus_truck_gap', from: [-0.2, 1.15, -3.6], to: [1.6, 1.15, 1.6] },
       { name: 'upstairs_window_lane', from: [-9.2, 3.55, -0.2], to: [9.2, 3.55, 0.2] },
     ],
   };

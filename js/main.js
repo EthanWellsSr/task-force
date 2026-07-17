@@ -1100,6 +1100,23 @@ function buildViewModel(w) {
   g.add(flash);
   g.userData.flash = flash;
   g.userData.muzzleLocal = new THREE.Vector3(0, 0, muzzleZ);
+  // lowest solid point of the gun relative to its anchor (arms excluded —
+  // sleeves lying in the ground read correctly when prone): drives the
+  // prone ground clamp in updateCameraAndViewmodel
+  {
+    const bb = new THREE.Box3();
+    const laser = g.userData.laser;
+    let minY = 0;
+    for (const c of g.children) {
+      if (c === g.userData.armTrigger || c === g.userData.armSupport || c === flash) continue;
+      // laser beam/dot are pooled meshes parked at the origin until the
+      // per-frame update places them — the unit beam would read as -0.5
+      if (laser && (c === laser.beam || c === laser.dot)) continue;
+      bb.setFromObject(c);
+      if (bb.min.y < minY) minY = bb.min.y;
+    }
+    g.userData.vmMinY = minY;
+  }
   g.position.copy(VM_POS.hip);
   vmGun = g;
   vmRoot.add(g);
@@ -1355,12 +1372,16 @@ function buildMinimapBg() {
   const half = Math.max(G.map.bounds.x, G.map.bounds.z) + 1;
   mmScale = 150 / (half * 2);
   c.fillStyle = 'rgba(200,200,190,0.45)';
+  // one path for all prints: overlapping colliders (the bus hull slabs) must
+  // not stack alpha into a darker blotch
+  c.beginPath();
   for (const b of G.colliders) {
     const h = b.max.y - b.min.y;
     if (h < 1.2 || b.max.y < 1.2 || b.min.y > 1.8) continue;
     const x = (b.min.x + half) * mmScale, y = (b.min.z + half) * mmScale;
-    c.fillRect(x, y, (b.max.x - b.min.x) * mmScale, (b.max.z - b.min.z) * mmScale);
+    c.rect(x, y, (b.max.x - b.min.x) * mmScale, (b.max.z - b.min.z) * mmScale);
   }
+  c.fill();
 }
 let _jamTagShown = false; // P61: tag-line refresh fires on jam start/end transitions
 function drawMinimap() {
@@ -2592,12 +2613,17 @@ function applyThrowableGroundFriction(v, dt) {
 function stepThrowableMotion(p, v, dt, colliders) {
   let result = 0;
   v.y -= GREN_GRAVITY * dt;
+  // resolve out the NEAREST face, not the face behind the velocity: colliders
+  // may overlap (e.g. the bus hull slabs), and after the first box flips v a
+  // velocity-sign resolve against the second box would eject the grenade out
+  // its FAR side — tunneling it through the hull.
   p.x += v.x * dt;
   for (const c of colliders) {
     if (c.max.y <= 0.02) continue;
     if (_boxOverlap(c, p, GREN_R, GREN_H)) {
-      p.x = v.x > 0 ? c.min.x - GREN_R - 0.001 : c.max.x + GREN_R + 0.001;
-      v.x *= -GREN_BOUNCE;
+      const lo = c.min.x - GREN_R - 0.001, hi = c.max.x + GREN_R + 0.001;
+      if (p.x - lo <= hi - p.x) { p.x = lo; v.x = -Math.abs(v.x) * GREN_BOUNCE; }
+      else { p.x = hi; v.x = Math.abs(v.x) * GREN_BOUNCE; }
       result |= GREN_STEP_BOUNCED;
     }
   }
@@ -2605,8 +2631,9 @@ function stepThrowableMotion(p, v, dt, colliders) {
   for (const c of colliders) {
     if (c.max.y <= 0.02) continue;
     if (_boxOverlap(c, p, GREN_R, GREN_H)) {
-      p.z = v.z > 0 ? c.min.z - GREN_R - 0.001 : c.max.z + GREN_R + 0.001;
-      v.z *= -GREN_BOUNCE;
+      const lo = c.min.z - GREN_R - 0.001, hi = c.max.z + GREN_R + 0.001;
+      if (p.z - lo <= hi - p.z) { p.z = lo; v.z = -Math.abs(v.z) * GREN_BOUNCE; }
+      else { p.z = hi; v.z = Math.abs(v.z) * GREN_BOUNCE; }
       result |= GREN_STEP_BOUNCED;
     }
   }
@@ -4824,11 +4851,11 @@ function updateCameraAndViewmodel(dt) {
     }
     vmKick = Math.max(0, vmKick - dt * 7);
     target.z += vmKick * 0.05;
-    // Prone hip fire settles the gun lower/pulled in, but ADS must fade that
-    // offset out. The ADS anchor is calibrated so optic reticles sit at camera
-    // center; keeping a full prone offset made shots miss the visible dot.
+    // Prone hip fire pulls the gun in; the ground clamp below (not a fixed
+    // dip) sets its height. The ADS anchor is calibrated so optic reticles
+    // sit at camera center, so ADS fades the pull-in out.
     const proneHipAmt = player.proneAmt * (1 - player.adsAmt);
-    if (proneHipAmt > 0.001) { target.y -= proneHipAmt * 0.05; target.z += proneHipAmt * 0.03; }
+    if (proneHipAmt > 0.001) target.z += proneHipAmt * 0.03;
     // grenade: the gun holds dipped down-right while cooking, and the
     // release plays the same dip as a quick lob swing
     cookDip += ((player.cooking !== null ? 1 : 0) - cookDip) * Math.min(1, dt * 10);
@@ -4905,8 +4932,17 @@ function updateCameraAndViewmodel(dt) {
         rt.y + bReach * 0.115,
         rt.z + bReach * 0.04 + (boltMode ? pOut * 0.06 : 0));
     }
+    // ground clamp: with a low eye (prone is 0.35) the gun's body would sink
+    // below the surface the player lies on and be depth-buried by it — hold
+    // the receiver's lowest point just above that plane so it reads as
+    // resting on the ground. Standing/crouch eye heights never bind, and the
+    // clamp fades out with ADS: the calibrated reticle anchor always wins.
+    if (vmGun.userData.vmMinY !== undefined && player.adsAmt < 0.999) {
+      const minTargetY = 0.02 - eyeHeight() - vmGun.userData.vmMinY;
+      if (target.y < minTargetY) target.y += (minTargetY - target.y) * (1 - player.adsAmt);
+    }
     // while the knife is out the gun hides lowered, so the return lerp
-    // reads as re-raising it
+    // reads as re-raising it (past the clamp — hiding in the ground is fine)
     if (melee) target.y -= 0.3;
     vmGun.position.lerp(target, Math.min(1, dt * 16));
     // pump yank tips the muzzle up a touch (bolt pOut skips it — the
