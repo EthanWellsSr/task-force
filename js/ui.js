@@ -108,11 +108,23 @@ const UI = {
   normalizeKeybinds() {
     const src = this.settings.keybinds && typeof this.settings.keybinds === 'object'
       ? this.settings.keybinds : {};
-    this.settings.keybinds = { ...DEFAULT_KEYBINDS };
-    for (const action in DEFAULT_KEYBINDS) {
-      if (typeof src[action] === 'string' && !RESERVED_KEY_CODES.has(src[action]))
-        this.settings.keybinds[action] = src[action];
-    }
+    // Rebuild with a uniqueness guarantee so a hand-edited or corrupted save
+    // can never load two actions onto the same key. Pass 1 keeps each valid,
+    // non-reserved, not-yet-claimed custom bind; pass 2 fills the rest from the
+    // (unique) defaults, skipping any default a custom already took; a final
+    // pass gives any still-unbound action its default as a last resort.
+    const used = new Set();
+    const binds = {};
+    const claim = (action, code) => {
+      if (typeof code === 'string' && !RESERVED_KEY_CODES.has(code) && !used.has(code)) {
+        binds[action] = code; used.add(code); return true;
+      }
+      return false;
+    };
+    for (const action in DEFAULT_KEYBINDS) claim(action, src[action]);
+    for (const action in DEFAULT_KEYBINDS) if (!binds[action]) claim(action, DEFAULT_KEYBINDS[action]);
+    for (const action in DEFAULT_KEYBINDS) if (!binds[action]) binds[action] = DEFAULT_KEYBINDS[action];
+    this.settings.keybinds = binds;
   },
   loadClasses() {
     try {
@@ -293,9 +305,16 @@ const UI = {
   actionMatches(action, code) { return this.codeFor(action) === code; },
   actionDown(action, keyState) { return !!keyState[this.codeFor(action)]; },
 
+  // Binds `action` to `code`. Uniqueness is enforced by swapping: any other
+  // action already holding `code` takes this action's previous key, so no two
+  // actions ever share a code (given the dup-free invariant normalizeKeybinds
+  // guarantees on load). Returns the swapped action's display label when a swap
+  // happened, '' for a clean bind, or false if the code can't be bound.
   setKeybind(action, code) {
     if (!DEFAULT_KEYBINDS[action] || RESERVED_KEY_CODES.has(code)) return false;
     const oldCode = this.codeFor(action);
+    // No early-out when code === oldCode: the list still needs to re-render so
+    // the row leaves its "PRESS KEY" capture state and shows the key again.
     const other = Object.keys(DEFAULT_KEYBINDS).find(a => a !== action && this.codeFor(a) === code);
     if (other) this.settings.keybinds[other] = oldCode;
     this.settings.keybinds[action] = code;
@@ -303,7 +322,8 @@ const UI = {
     this.renderKeybinds();
     this.renderControlHints();
     this._hudCache.lethalKey = this._hudCache.tacKey = null;
-    return true;
+    const row = other && KEYBIND_ACTIONS.find(r => r[0] === other);
+    return row ? row[1] : '';
   },
 
   captureKeybind(e) {
@@ -322,9 +342,16 @@ const UI = {
       if (status) status.textContent = keyLabel(e.code) + ' is reserved.';
       return;
     }
-    this.setKeybind(this.capturingBind, e.code);
+    // Clear the capture flag BEFORE setKeybind: it re-renders the list, and
+    // while capturingBind still points here the row would redraw as "PRESS
+    // KEY" and never show the key that was just bound (the old bug — the user
+    // had to leave settings and come back for the change to appear).
+    const action = this.capturingBind;
     this.capturingBind = null;
-    if (status) status.textContent = 'Saved.';
+    const swapped = this.setKeybind(action, e.code);
+    if (status) status.textContent = swapped
+      ? keyLabel(e.code) + ' was on ' + swapped + ' — the two were swapped.'
+      : 'Bound to ' + keyLabel(e.code) + '.';
   },
 
   renderKeybinds() {

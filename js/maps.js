@@ -307,9 +307,22 @@ function buildNuketown(scene, colliders) {
     t.box(-13.75, H1 - 0.075, -2.2, 8.5, 0.15, 10.4, fC);
     t.box(-16.0, H1 - 0.075, -8.2, 4.0, 0.15, 1.6, fC);
     t.box(-11.85, H1 + 0.42, -7.35, 4.7, 0.85, 0.1, innerC); // rail at the hole
-    // ---- interior staircase (0.4 m risers: bots follow, stepUp is 0.55)
+    // ---- interior staircase (0.4 m risers: bots follow, stepUp is 0.55).
+    // Pulled ~0.4 m off the street wall (x0 was -10.6): the bottom tread used
+    // to leave only a sub-body-width slot against the front wall, so there was
+    // no room to stand at the foot of the run and start the climb.
+    const stairX0 = -11.0;
     for (let i = 0; i < 7; i++)
-      t.box(-10.6 - 0.53 * i, 0.2 * (i + 1), -8.225, 0.56, 0.4 * (i + 1), 1.55, 0x7a6248);
+      t.box(stairX0 - 0.53 * i, 0.2 * (i + 1), -8.225, 0.56, 0.4 * (i + 1), 1.55, 0x7a6248);
+    // ---- open-side banister: a stepped guard rail down the room side of the
+    // run (the wall side, z -9, is already closed). Sits on the outer lip of
+    // each tread ~0.9 m proud and meets the floor-hole rail at the top, so you
+    // can't walk off the open edge of the stairs.
+    const stairRailC = 0x5a4632;
+    for (let i = 0; i < 7; i++) {
+      const tread = 0.4 * (i + 1);
+      t.box(stairX0 - 0.53 * i, tread + 0.45, -7.52, 0.56, 0.9, 0.12, stairRailC);
+    }
     // ---- roof + chimney (stepped slabs fake a gable, wide eaves)
     t.box(-13.75, TOP + 0.14, -3, 9.9, 0.28, 13.4, roofC);
     t.box(-13.75, TOP + 0.42, -3, 6.6, 0.28, 13.4, roofC);
@@ -591,7 +604,8 @@ function buildNuketown(scene, colliders) {
     [2.2, 8.0], [1.4, -6.4],               // mid-street lane (truck side)
     [-0.2, 14.6],                           // blockade front
     // upstairs — three routes in: interior stair, rear deck stair, roof
-    [-10.55, -8.55, 0.4], [-14.6, -8.55, 2.8],
+    // (stair foot/head shifted -0.4 x with the run that moved off the wall)
+    [-10.95, -8.55, 0.4], [-15.0, -8.55, 2.8],
     [-11.6, -6.4, 2.8], [-11.6, -0.2, 2.8], // street-window room
     [-14.6, -6.6, 2.8],                     // hall, clear of the stair rail
     [-15.8, -4.9, 2.8], [-15.8, -6.1, 2.8], // bedroom door out / in
