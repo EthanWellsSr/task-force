@@ -360,10 +360,10 @@ function buildNuketown(scene, colliders) {
     // front pickets: ONE collider per run (rayWorld is O(colliders))
     t.picket('z', -9.5, 2.6, -6.5, TRIM, [{ a: -1.35, b: -0.35 }]);   // gate to the walk
     t.picket('x', -9.5, -6.5, -9.5, TRIM);
-    // porch: posts joined by rails, so they read as a porch not as posts
+    // porch: slab, posts, and a header beam — no mid-height rails (they were
+    // non-solid and players walked straight through them at the front door)
     t.box(-8.6, 0.05, -0.9, 1.8, 0.1, 3.0, CONCRETE, ns);
     for (const pz of [-2.2, 0.4]) t.box(-7.8, 1.2, pz, 0.16, 2.4, 0.16, TRIM);
-    for (const ry of [0.55, 1.02]) t.box(-7.8, ry, -0.9, 0.1, 0.1, 2.6, TRIM, ns);
     t.box(-7.8, 2.28, -0.9, 0.14, 0.14, 2.8, TRIM, ns);      // porch beam
     t.box(-8.6, 2.5, -0.9, 2.0, 0.16, 3.4, roofC);
     t.box(-8.0, 0.02, -0.85, 3.0, 0.02, 1.2, CONCRETE, nsf); // front walk
