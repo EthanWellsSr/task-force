@@ -1432,6 +1432,21 @@ function drawMinimap() {
       mmCtx.beginPath(); mmCtx.arc(x, y, 2.5, 0, 7); mmCtx.fill();
     }
   }
+  // friendly care packages: a gold crate marker at the drop point so you can
+  // actually find where it came down (dashed while still parachuting in)
+  for (const pkg of _carePackages) {
+    if (pkg.ownerTeam !== player.team) continue;
+    const [x, y] = toMap(pkg.drop.x, pkg.drop.z);
+    mmCtx.strokeStyle = '#1a1508'; mmCtx.lineWidth = 2;
+    mmCtx.strokeRect(x - 3.5, y - 3.5, 7, 7);
+    mmCtx.fillStyle = pkg.landed ? '#e8c34a' : 'rgba(232,195,74,.55)';
+    mmCtx.fillRect(x - 3, y - 3, 6, 6);
+    mmCtx.strokeStyle = '#7a5a18'; mmCtx.lineWidth = 1;
+    mmCtx.beginPath();
+    mmCtx.moveTo(x, y - 3); mmCtx.lineTo(x, y + 3);
+    mmCtx.moveTo(x - 3, y); mmCtx.lineTo(x + 3, y);
+    mmCtx.stroke();
+  }
   if (player.alive) {
     const [x, y] = toMap(player.pos.x, player.pos.z);
     mmCtx.save();
@@ -1656,6 +1671,20 @@ function makeCareCrate() {
   g.add(carePkgBox(0.9, 0.55, 0.9, 0x53603d, 0, 0.28, 0));
   g.add(carePkgBox(0.96, 0.08, 0.18, 0x303826, 0, 0.58, 0));
   g.add(carePkgBox(0.18, 0.08, 0.96, 0x303826, 0, 0.59, 0));
+  // parachute — a canopy dome on four risers above the crate, hidden once the
+  // crate lands (drawn separately so the descent reads clearly from any angle)
+  const chute = new THREE.Group();
+  const canopy = new THREE.Mesh(
+    new THREE.SphereGeometry(1.55, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshLambertMaterial({ color: 0xcf5b3a, side: THREE.DoubleSide }));
+  canopy.position.y = 3.0;
+  canopy.scale.y = 0.5;
+  canopy.castShadow = true;
+  chute.add(canopy);
+  for (const [sx, sz] of [[-0.42, -0.42], [0.42, -0.42], [-0.42, 0.42], [0.42, 0.42]])
+    chute.add(carePkgBox(0.035, 2.5, 0.035, 0x241f1a, sx, 1.75, sz)); // risers
+  g.add(chute);
+  g.userData.chute = chute;
   return g;
 }
 
@@ -1717,26 +1746,73 @@ function claimCarePackage(pkg, ent) {
   _carePackages.splice(_carePackages.indexOf(pkg), 1);
 }
 
+const CARE_FLY_DUR = 7.5;  // slow fly-over (was ~3.2 s) so the drop reads
+const CARE_DROP_DUR = 4.5; // slow parachute descent (was ~1.25 s)
+
 function updateCarePackages(dt) {
   for (let i = _carePackages.length - 1; i >= 0; i--) {
     const pkg = _carePackages[i];
     pkg.t += dt;
     const side = G.map.bounds.x + 12;
-    const flyT = Math.min(1, pkg.t / 3.2);
-    pkg.heli.position.x = THREE.MathUtils.lerp(-side, side, flyT);
-    pkg.heli.position.z = pkg.drop.z + Math.sin(pkg.t * 2.8) * 0.2;
-    if (pkg.t > 1.15) {
-      pkg.dropped = true;
-      pkg.crate.visible = true;
-      const dropT = Math.min(1, (pkg.t - 1.15) / 1.25);
-      pkg.crate.position.y = THREE.MathUtils.lerp(pkg.drop.y + 8.8, pkg.drop.y, dropT);
-      pkg.landed = dropT >= 1;
+    const flyT = Math.min(1, pkg.t / CARE_FLY_DUR);
+    if (pkg.heli) {
+      pkg.heli.position.x = THREE.MathUtils.lerp(-side, side, flyT);
+      pkg.heli.position.z = pkg.drop.z + Math.sin(pkg.t * 1.5) * 0.25;
+      if (flyT >= 1) { G.scene.remove(pkg.heli); pkg.heli = null; }
     }
-    if (flyT >= 1) G.scene.remove(pkg.heli);
+    // release the crate the moment the heli is over the drop point (position-
+    // based so it fires even if the heli mesh has already flown off)
+    const dropFlyT = (pkg.drop.x + side) / (2 * side);
+    if (!pkg.dropped && flyT >= dropFlyT) {
+      pkg.dropped = true;
+      pkg.dropStartT = pkg.t;
+      pkg.crate.visible = true;
+      pkg.crate.position.set(pkg.drop.x, pkg.drop.y + 8.8, pkg.drop.z);
+    }
+    if (pkg.dropped && !pkg.landed) {
+      const dropT = Math.min(1, (pkg.t - pkg.dropStartT) / CARE_DROP_DUR);
+      pkg.crate.position.y = THREE.MathUtils.lerp(pkg.drop.y + 8.8, pkg.drop.y, dropT);
+      // gentle sway under the canopy, damped as it settles
+      pkg.crate.position.x = pkg.drop.x + Math.sin(pkg.t * 1.3) * 0.4 * (1 - dropT);
+      pkg.crate.rotation.z = Math.sin(pkg.t * 1.1) * 0.12 * (1 - dropT);
+      if (dropT >= 1) {
+        pkg.landed = true;
+        pkg.crate.position.set(pkg.drop.x, pkg.drop.y, pkg.drop.z);
+        pkg.crate.rotation.z = 0;
+        const chute = pkg.crate.userData && pkg.crate.userData.chute;
+        if (chute) chute.visible = false; // canopy collapses on landing
+      }
+    }
     if (!pkg.landed) continue;
     const claimants = [player, ...G.bots].filter(e => e.alive && e.pos.distanceTo(pkg.drop) < 1.35);
     if (claimants.length) claimCarePackage(pkg, claimants[0]);
   }
+}
+
+// Nearest friendly care package for the on-screen locator (mirrors
+// fragDangerInfo): angle relative to the camera facing + live distance.
+function carePackageLocatorInfo() {
+  if (G.state !== 'playing' || !player.alive) return null;
+  let best = null;
+  for (const pkg of _carePackages) {
+    if (pkg.ownerTeam !== player.team) continue;
+    const dist = Math.hypot(pkg.drop.x - player.pos.x, pkg.drop.z - player.pos.z);
+    if (!best || dist < best.dist) best = { pkg, dist };
+  }
+  if (!best) return null;
+  G.camera.getWorldDirection(_fragDangerForward);
+  _fragDangerForward.y = 0;
+  if (_fragDangerForward.lengthSq() < 1e-5) _fragDangerForward.set(0, 0, -1);
+  else _fragDangerForward.normalize();
+  _fragDangerRight.crossVectors(_fragDangerForward, _grenWorldUp).normalize();
+  _fragDangerDelta.set(best.pkg.drop.x - player.pos.x, 0, best.pkg.drop.z - player.pos.z);
+  if (_fragDangerDelta.lengthSq() < 1e-5) _fragDangerDelta.copy(_fragDangerForward);
+  else _fragDangerDelta.normalize();
+  return {
+    angle: Math.atan2(_fragDangerDelta.dot(_fragDangerRight), _fragDangerDelta.dot(_fragDangerForward)),
+    distance: best.dist,
+    landed: best.pkg.landed,
+  };
 }
 
 // ---- napalm strike (#7b): random bombardment across the map ----
@@ -1882,6 +1958,7 @@ function updateNapalm(dt) {
 const NUKE_COUNTDOWN = 10;
 let _nukeT = -1;   // seconds until the cinematic; <0 = none in the air
 let _cine = null;  // nuke cinematic state (G.state === 'nukecine')
+let _daringUnlockedThisMatch = false; // set when a nuke completes the Daring David unlock; drives the end-screen banner
 const _cineCamPos = new THREE.Vector3();
 const _cineLook = new THREE.Vector3();
 
@@ -1890,7 +1967,13 @@ function deployNuke() {
   AudioSys.nukeSiren();
   Profile.onNukeCalled();        // P5: immediate lifetime stat
   Profile.MatchXP.onNukeCalled(); // P4: flat +1000, no per-kill XP
-  Profile.recordNukeMap(G.mapId); // Daring David gate: nuke-per-map at Hardened+
+  // Daring David gate: recording this veteran nuke may complete the unlock. If
+  // it's the map that finishes it, celebrate in-game now and flag the end
+  // screen to show the reward banner after the match.
+  if (Profile.recordNukeMap(G.mapId)) {
+    _daringUnlockedThisMatch = true;
+    UI.showDaringUnlockBanner();
+  }
 }
 
 function updateNuke(dt) {
@@ -1943,6 +2026,7 @@ function buildNukeBomb() {
   part(0.5, 0.4, 0.4, 0x272a24, 1.1, 0, 0);
   part(0.5, 0.14, 1.1, 0x272a24, -0.85, 0, 0); // tail fins
   part(0.5, 1.1, 0.14, 0x272a24, -0.85, 0, 0);
+  g.scale.set(2, 2, 2); // twice the size for a heavier, more readable drop
   return g;
 }
 
@@ -1991,6 +2075,68 @@ function buildMushroomCloud(B) {
   return { group: g, light };
 }
 
+// Desert diorama grown around the map for the nuke pull-back: a vast sand
+// floor out past the fog plus scattered saguaro cacti, tumbleweeds, dune
+// bands and rock buttes, so the zoomed-out map reads as a small town in the
+// middle of nowhere instead of a lone square floating in the sky. Cosmetic,
+// cinematic-only (no colliders); removed when the cinematic ends.
+function buildNukeDiorama(B) {
+  const g = new THREE.Group();
+  const mat = c => new THREE.MeshLambertMaterial({ color: c });
+  const sand = 0xc9a86a, sandDark = 0xbb9a5a, cactus = 0x406b3b, cactusDk = 0x33552f;
+  // vast sand floor, well past the cinematic fog (near B*7, far B*16)
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(B * 44, B * 44), mat(sand));
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.62;
+  ground.receiveShadow = true;
+  g.add(ground);
+  // faint dune bands for texture
+  for (let i = 0; i < 12; i++) {
+    const a = Math.random() * Math.PI * 2, r = B * (3 + Math.random() * 9);
+    const dune = new THREE.Mesh(new THREE.CircleGeometry(B * (1.4 + Math.random() * 2.4), 18), mat(sandDark));
+    dune.rotation.x = -Math.PI / 2;
+    dune.position.set(Math.sin(a) * r, -0.6, Math.cos(a) * r);
+    g.add(dune);
+  }
+  // saguaro cacti: a trunk + up to two arms, scattered outside the town
+  const cactusAt = (x, z, s) => {
+    const gg = new THREE.Group();
+    const bx = (w, h, d, c, px, py, pz) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c));
+      m.position.set(px, py, pz); m.castShadow = true; gg.add(m);
+    };
+    bx(0.5 * s, 3.2 * s, 0.5 * s, cactus, 0, 1.6 * s, 0);
+    if (Math.random() < 0.8) { bx(0.34 * s, 0.85 * s, 0.34 * s, cactusDk, 0.52 * s, 1.4 * s, 0); bx(0.34 * s, 1.1 * s, 0.34 * s, cactus, 0.7 * s, 2.0 * s, 0); }
+    if (Math.random() < 0.6) { bx(0.34 * s, 0.8 * s, 0.34 * s, cactusDk, -0.5 * s, 1.7 * s, 0); bx(0.32 * s, 1.0 * s, 0.32 * s, cactus, -0.66 * s, 2.3 * s, 0); }
+    gg.position.set(x, 0, z);
+    gg.rotation.y = Math.random() * Math.PI * 2;
+    g.add(gg);
+  };
+  for (let i = 0; i < 54; i++) {
+    const a = Math.random() * Math.PI * 2, r = B * (1.7 + Math.random() * 10);
+    cactusAt(Math.sin(a) * r, Math.cos(a) * r, 0.8 + Math.random() * 1.1);
+  }
+  // tumbleweeds: spiky brown wire balls resting near the ground
+  for (let i = 0; i < 44; i++) {
+    const a = Math.random() * Math.PI * 2, r = B * (1.5 + Math.random() * 10);
+    const tw = new THREE.Mesh(new THREE.IcosahedronGeometry(0.4 + Math.random() * 0.45, 0),
+      new THREE.MeshBasicMaterial({ color: 0x7a6438, wireframe: true }));
+    tw.position.set(Math.sin(a) * r, 0.42, Math.cos(a) * r);
+    g.add(tw);
+  }
+  // rock buttes / mesas on the mid-distance for a horizon silhouette
+  for (let i = 0; i < 11; i++) {
+    const a = Math.random() * Math.PI * 2, r = B * (6 + Math.random() * 8);
+    const h = B * (0.4 + Math.random() * 1.2), w = B * (0.6 + Math.random() * 1.4);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w * (0.7 + Math.random() * 0.6)),
+      mat(Math.random() < 0.5 ? 0x9a6a4a : 0x8a5a40));
+    m.position.set(Math.sin(a) * r, h / 2 - 0.5, Math.cos(a) * r);
+    m.castShadow = true;
+    g.add(m);
+  }
+  return g;
+}
+
 // endWin (optional): when set (true/false/null), this is the end-of-match
 // Nuketown nuke — cosmetic, and the held result is shown afterwards.
 // When omitted it's the killstreak nuke: everyone dies, owner's team wins.
@@ -2009,8 +2155,10 @@ function startNukeCinematic(endWin) {
   const plane = buildNukePlane();
   plane.position.set(-span, B * 1.5, -B * 0.4);
   G.scene.add(plane);
+  const diorama = buildNukeDiorama(B);
+  G.scene.add(diorama);
   _cine = {
-    t: 0, B,
+    t: 0, B, diorama,
     // camera glides from the player's eyes to a vantage over the map
     camFrom: G.camera.position.clone(),
     lookFrom: G.camera.position.clone()
@@ -2150,6 +2298,7 @@ function updateNukeCine(dt) {
       G.scene.fog.far = c.fogFar;
       G.camera.far = c.camFarPlane;
       G.camera.updateProjectionMatrix();
+      if (c.diorama) G.scene.remove(c.diorama);
       // end-of-match nuke shows the held result; the killstreak nuke
       // wins for the owner's team no matter the score
       const win = c.endWin !== undefined ? c.endWin : true;
@@ -3529,6 +3678,7 @@ function registerKill(killer, victim, weaponName, headshot) {
 function startMatch(mapId, modeId = 'tdm') {
   Profile.onMatchStart(); // P5: matchesPlayed++ and resets MatchXP/MatchStats
   Profile.setMatchDifficulty(UI.settings.enemyDifficulty || UI.settings.difficulty);
+  _daringUnlockedThisMatch = false; // fresh match: no Daring David unlock yet
   G.mapId = mapId;
   G.modeId = modeById(modeId).id;
   G.mode = modeById(G.modeId);
@@ -4227,7 +4377,7 @@ function finishMatch(win) {
   G.lastCommit = Profile.commitMatch(win === true ? 'win' : win === false ? 'loss' : 'draw');
   document.exitPointerLock && document.exitPointerLock();
   AudioSys.matchEnd(win !== false);
-  UI.showEnd(G.mode, win, G.scores, G.combatants, G.lastCommit);
+  UI.showEnd(G.mode, win, G.scores, G.combatants, G.lastCommit, _daringUnlockedThisMatch);
 }
 
 function quitMatch() {
@@ -5127,6 +5277,7 @@ function loop() {
     fxUpdate(dt);
     updateThrowables(dt);
     UI.updateFragDanger(fragDangerInfo());
+    UI.updateCarePackageLocator(carePackageLocatorInfo());
     updateGrenadePreview();
     updateTomahawks(dt); // #16c
     updateSmokeClouds(dt);

@@ -883,6 +883,25 @@ const UI = {
     el.classList.remove('hidden');
   },
 
+  // Friendly care-package locator: directional arrow + live distance, styled
+  // gold vs the frag danger's red. Mirrors updateFragDanger's cache/DOM gating.
+  updateCarePackageLocator(info) {
+    const c = this._hudCache;
+    const el = this.$('carePkgLoc');
+    if (!el) return;
+    if (!info) {
+      if (c.carePkgLoc !== 'hidden') { c.carePkgLoc = 'hidden'; el.classList.add('hidden'); }
+      return;
+    }
+    const dist = Math.max(0, Math.round(info.distance));
+    const key = dist + ':' + info.angle.toFixed(2) + ':' + (info.landed ? 1 : 0);
+    if (c.carePkgLoc === key) return;
+    c.carePkgLoc = key;
+    el.style.setProperty('--care-angle', info.angle.toFixed(3) + 'rad');
+    el.querySelector('.care-label').textContent = (info.landed ? 'CARE PKG ' : 'INBOUND ') + dist + 'm';
+    el.classList.remove('hidden');
+  },
+
   updateModeLabels(mode, scoreLimit) {
     if (!mode) return;
     if (mode.structure === 'ffa') {
@@ -971,6 +990,17 @@ const UI = {
     el.classList.remove('hidden');
     clearTimeout(this._sbT);
     this._sbT = setTimeout(() => el.classList.add('hidden'), 2500);
+  },
+
+  // Special in-game banner the moment a nuke completes the Daring David unlock.
+  // Lives in the HUD, so it clears itself when the nuke cinematic hides the HUD.
+  showDaringUnlockBanner() {
+    const el = this.$('daringBanner');
+    el.innerHTML = 'CLASS UNLOCKED &mdash; DARING DAVID'
+      + '<span class="db-sub">Nuke earned on every map on Veteran &middot; new class ready in Choose Loadout</span>';
+    el.classList.remove('hidden');
+    clearTimeout(this._ddT);
+    this._ddT = setTimeout(() => el.classList.add('hidden'), 6000);
   },
 
   // tactical nuke countdown, big and red under the scorebar (null hides it);
@@ -1132,8 +1162,17 @@ const UI = {
     el.classList.remove('hidden');
   },
 
-  showEnd(mode, win, scores, combatants, commit) {
+  showEnd(mode, win, scores, combatants, commit, daringUnlocked) {
     this.renderEndXp(commit);
+    // Victory-screen reward banner when this match completed the Daring David unlock.
+    const dd = this.$('endDaringBanner');
+    if (daringUnlocked) {
+      dd.innerHTML = 'NEW CLASS UNLOCKED &mdash; DARING DAVID'
+        + '<span class="db-sub">You earned a Tactical Nuke on every map on Veteran. The reward class is now in Choose Loadout.</span>';
+      dd.classList.remove('hidden');
+    } else {
+      dd.classList.add('hidden');
+    }
     if (mode && mode.structure === 'ffa') {
       const res = this.$('endResult');
       res.textContent = win === null ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT';

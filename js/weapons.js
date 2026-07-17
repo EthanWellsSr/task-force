@@ -754,12 +754,12 @@ const DARING_DAVID = {
   lethal: 'frag', tactical: 'stun',
   killstreaks: ['uav', 'napalm', 'airstrike'],
   attachments: {
-    primary: ['acog', 'foregrip', 'compensator', 'extmags', 'laser', 'camoTiger'],
+    primary: ['acog', 'foregrip', 'compensator', 'extmags', 'laser', 'camoRedline'],
     primaryAcogReticle: 'cross', primaryDotColor: 'green', primaryLaserColor: 'green',
     secondary: ['reddot', 'laser'],
     secondaryDotColor: 'green', secondaryLaserColor: 'green',
   },
-  unlockDesc: 'Earn a Tactical Nuke (25-kill streak) on every map at Hardened enemy difficulty or higher.',
+  unlockDesc: 'Earn a Tactical Nuke (25-kill streak) on every map on Veteran enemy difficulty.',
 };
 // class-select index for Daring David: it sits just past the editable classes.
 const DARING_DAVID_INDEX = DEFAULT_CLASSES.length; // 5

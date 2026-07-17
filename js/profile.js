@@ -70,9 +70,9 @@ const Profile = {
       primaryClassXp: this.defaultPrimaryClassXp(),
       secondaryXp: 0,
       weaponSpecificXp: {},
-      // Maps on which a Tactical Nuke was earned at Hardened enemy difficulty or
-      // higher (mapId -> true). Gates the Daring David reward class.
-      nukeMapsHardened: {},
+      // Maps on which a Tactical Nuke was earned at Veteran enemy difficulty
+      // (mapId -> true). Gates the Daring David reward class.
+      nukeMapsVeteran: {},
       stats: this.defaultStats(),
     };
   },
@@ -116,9 +116,9 @@ const Profile = {
     }
     for (const cat of this.PRIMARY_CATEGORIES) p.weaponXp[cat] = p.primaryClassXp[cat] || 0;
     for (const cat of this.SECONDARY_CATEGORIES) p.weaponXp[cat] = p.secondaryXp || 0;
-    if (raw.nukeMapsHardened && typeof raw.nukeMapsHardened === 'object') {
-      for (const k in raw.nukeMapsHardened) {
-        if (typeof k === 'string' && k.length <= 40 && raw.nukeMapsHardened[k]) p.nukeMapsHardened[k] = true;
+    if (raw.nukeMapsVeteran && typeof raw.nukeMapsVeteran === 'object') {
+      for (const k in raw.nukeMapsVeteran) {
+        if (typeof k === 'string' && k.length <= 40 && raw.nukeMapsVeteran[k]) p.nukeMapsVeteran[k] = true;
       }
     }
     const s = raw.stats;
@@ -466,12 +466,6 @@ const Profile = {
 
   // ---------- Daring David reward gate ----------
 
-  // "Hardened or better" = XP multiplier at least Hardened's (hardened/veteran).
-  isHardenedOrBetter(difficulty) {
-    const m = this.XP_DIFFICULTY_MULTIPLIERS;
-    return (m[difficulty] || 0) >= m.hardened;
-  },
-
   // Every playable map must be nuked for the gate to open. Read the live MAPS
   // registry at call time (maps.js loads after this file); fall back to the
   // known ship list if it isn't available yet.
@@ -480,20 +474,25 @@ const Profile = {
     return ['nuketown', 'rust', 'shipment', 'killhouse', 'vacant', 'crash'];
   },
 
-  // Record a nuke earned on `mapId`. Only counts at Hardened enemy difficulty or
-  // higher (the match difficulty locked in at startMatch). One localStorage
-  // write per newly-cleared map. Returns the saved (or current) profile.
+  // Record a nuke earned on `mapId`. Only counts at Veteran enemy difficulty
+  // (the match difficulty locked in at startMatch). One localStorage write per
+  // newly-cleared map. Returns true only when THIS call newly completes the
+  // Daring David unlock (locked before, unlocked after) — the banners key off
+  // that transition.
   recordNukeMap(mapId) {
-    if (!mapId || !this.isHardenedOrBetter(this._matchDifficulty)) return this.load();
+    if (!mapId || this._matchDifficulty !== 'veteran') return false;
     const p = this.load();
-    if (!p.nukeMapsHardened) p.nukeMapsHardened = {};
-    if (!p.nukeMapsHardened[mapId]) { p.nukeMapsHardened[mapId] = true; this.save(p); }
-    return p;
+    if (!p.nukeMapsVeteran) p.nukeMapsVeteran = {};
+    if (p.nukeMapsVeteran[mapId]) return false; // already had this map
+    const wasUnlocked = this.daringDavidUnlocked(p);
+    p.nukeMapsVeteran[mapId] = true;
+    this.save(p);
+    return !wasUnlocked && this.daringDavidUnlocked(p);
   },
 
   daringDavidProgress(profile) {
     const p = profile || this.load();
-    const done = p.nukeMapsHardened || {};
+    const done = p.nukeMapsVeteran || {};
     const req = this.requiredNukeMaps();
     const missing = req.filter(m => !done[m]);
     return { got: req.length - missing.length, total: req.length, missing };

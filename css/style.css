@@ -342,6 +342,26 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
   font-size:17px; font-weight:800; letter-spacing:4px; color:#e8a33d;
   text-shadow:0 0 14px rgba(232,163,61,.55), 0 1px 3px #000;
 }
+#daringBanner {
+  position:absolute; top:150px; left:50%; transform:translateX(-50%);
+  padding:10px 26px; text-align:center; white-space:nowrap;
+  border:1px solid #f0c04a; background:rgba(40,30,8,.82);
+  color:#ffe08a; font-weight:800; letter-spacing:3px; font-size:16px;
+  text-shadow:0 0 16px rgba(240,192,74,.7), 0 1px 3px #000;
+  box-shadow:0 0 30px rgba(240,192,74,.35);
+  animation:daringGlow 1.1s ease-in-out infinite; z-index:22;
+}
+#daringBanner .db-sub, #endDaringBanner .db-sub {
+  display:block; margin-top:4px; font-size:11px; letter-spacing:2px;
+  color:#e0b46a; font-weight:600;
+}
+@keyframes daringGlow { 50% { box-shadow:0 0 46px rgba(240,192,74,.62); border-color:#ffe08a; } }
+#endDaringBanner {
+  margin:10px auto 6px; padding:10px 24px; max-width:560px; text-align:center;
+  border:1px solid #f0c04a; background:rgba(40,30,8,.55);
+  color:#ffe08a; font-weight:800; letter-spacing:3px; font-size:15px;
+  text-shadow:0 0 14px rgba(240,192,74,.6), 0 1px 3px #000;
+}
 #nukeCountdown {
   position:absolute; top:118px; left:50%; transform:translateX(-50%);
   font-size:22px; font-weight:800; letter-spacing:5px; color:#ff4a3a;
@@ -408,6 +428,21 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
   animation:fragDangerPulse .28s steps(2, end) infinite;
 }
 @keyframes fragDangerPulse { 50% { opacity:.35; } }
+#carePkgLoc {
+  position:absolute; left:50%; top:44%; transform:translate(-50%, -50%);
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  color:#f0c04a; text-shadow:0 0 12px rgba(240,192,74,.7), 0 1px 3px #000;
+  z-index:19;
+}
+#carePkgLoc .care-arrow {
+  width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+  font-size:22px; line-height:1; transform:rotate(var(--care-angle, 0rad));
+  transform-origin:center;
+}
+#carePkgLoc .care-label {
+  padding:3px 7px; border:1px solid rgba(240,192,74,.5);
+  background:rgba(28,20,4,.6); font-size:10px; font-weight:800; letter-spacing:2px;
+}
 #killMsg {
   position:absolute; left:50%; top:64%; transform:translateX(-50%);
   font-size:14px; font-weight:700; letter-spacing:2px; color:#e8a33d; text-shadow:0 1px 3px #000;
