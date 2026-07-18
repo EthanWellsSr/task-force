@@ -2075,27 +2075,23 @@ function buildMushroomCloud(B) {
   return { group: g, light };
 }
 
-// Desert diorama grown around the map for the nuke pull-back: a vast sand
-// floor out past the fog plus scattered saguaro cacti, tumbleweeds, dune
-// bands and rock buttes, so the zoomed-out map reads as a small town in the
-// middle of nowhere instead of a lone square floating in the sky. Cosmetic,
-// cinematic-only (no colliders); removed when the cinematic ends.
+// Nuketown-only desert dressing for the nuke pull-back: scattered saguaro
+// cacti, tumbleweeds, sand-tone dune patches and rock buttes strewn across the
+// (now map-sized) desert floor, so the zoomed-out town reads as a small town in
+// the middle of nowhere. The ground itself is the map's own enlarged desert
+// plane — this only adds props on top of it, so there's no color seam. Cosmetic
+// and cinematic-only (no colliders); removed when the cinematic ends.
+const NUKE_GROUND_Y = -0.05; // top of the map's -0.55-centred ground box
 function buildNukeDiorama(B) {
   const g = new THREE.Group();
   const mat = c => new THREE.MeshLambertMaterial({ color: c });
-  const sand = 0xc9a86a, sandDark = 0xbb9a5a, cactus = 0x406b3b, cactusDk = 0x33552f;
-  // vast sand floor, well past the cinematic fog (near B*7, far B*16)
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(B * 44, B * 44), mat(sand));
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.62;
-  ground.receiveShadow = true;
-  g.add(ground);
-  // faint dune bands for texture
+  const cactus = 0x406b3b, cactusDk = 0x33552f;
+  // faint dune patches for texture — sit just above the desert floor
   for (let i = 0; i < 12; i++) {
-    const a = Math.random() * Math.PI * 2, r = B * (3 + Math.random() * 9);
-    const dune = new THREE.Mesh(new THREE.CircleGeometry(B * (1.4 + Math.random() * 2.4), 18), mat(sandDark));
+    const a = Math.random() * Math.PI * 2, r = B * (2.5 + Math.random() * 9);
+    const dune = new THREE.Mesh(new THREE.CircleGeometry(B * (1.4 + Math.random() * 2.4), 18), mat(0xbe9c6a));
     dune.rotation.x = -Math.PI / 2;
-    dune.position.set(Math.sin(a) * r, -0.6, Math.cos(a) * r);
+    dune.position.set(Math.sin(a) * r, NUKE_GROUND_Y + 0.02, Math.cos(a) * r);
     g.add(dune);
   }
   // saguaro cacti: a trunk + up to two arms, scattered outside the town
@@ -2108,7 +2104,7 @@ function buildNukeDiorama(B) {
     bx(0.5 * s, 3.2 * s, 0.5 * s, cactus, 0, 1.6 * s, 0);
     if (Math.random() < 0.8) { bx(0.34 * s, 0.85 * s, 0.34 * s, cactusDk, 0.52 * s, 1.4 * s, 0); bx(0.34 * s, 1.1 * s, 0.34 * s, cactus, 0.7 * s, 2.0 * s, 0); }
     if (Math.random() < 0.6) { bx(0.34 * s, 0.8 * s, 0.34 * s, cactusDk, -0.5 * s, 1.7 * s, 0); bx(0.32 * s, 1.0 * s, 0.32 * s, cactus, -0.66 * s, 2.3 * s, 0); }
-    gg.position.set(x, 0, z);
+    gg.position.set(x, NUKE_GROUND_Y, z);
     gg.rotation.y = Math.random() * Math.PI * 2;
     g.add(gg);
   };
@@ -2121,7 +2117,7 @@ function buildNukeDiorama(B) {
     const a = Math.random() * Math.PI * 2, r = B * (1.5 + Math.random() * 10);
     const tw = new THREE.Mesh(new THREE.IcosahedronGeometry(0.4 + Math.random() * 0.45, 0),
       new THREE.MeshBasicMaterial({ color: 0x7a6438, wireframe: true }));
-    tw.position.set(Math.sin(a) * r, 0.42, Math.cos(a) * r);
+    tw.position.set(Math.sin(a) * r, NUKE_GROUND_Y + 0.42, Math.cos(a) * r);
     g.add(tw);
   }
   // rock buttes / mesas on the mid-distance for a horizon silhouette
@@ -2130,7 +2126,7 @@ function buildNukeDiorama(B) {
     const h = B * (0.4 + Math.random() * 1.2), w = B * (0.6 + Math.random() * 1.4);
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w * (0.7 + Math.random() * 0.6)),
       mat(Math.random() < 0.5 ? 0x9a6a4a : 0x8a5a40));
-    m.position.set(Math.sin(a) * r, h / 2 - 0.5, Math.cos(a) * r);
+    m.position.set(Math.sin(a) * r, NUKE_GROUND_Y + h / 2, Math.cos(a) * r);
     m.castShadow = true;
     g.add(m);
   }
@@ -2155,8 +2151,14 @@ function startNukeCinematic(endWin) {
   const plane = buildNukePlane();
   plane.position.set(-span, B * 1.5, -B * 0.4);
   G.scene.add(plane);
-  const diorama = buildNukeDiorama(B);
-  G.scene.add(diorama);
+  // Desert dressing (cacti/tumbleweeds/mesas) is Nuketown's identity only —
+  // other maps keep their own theme, which their enlarged ground plane already
+  // carries out to the horizon.
+  let diorama = null;
+  if (G.mapId === 'nuketown') {
+    diorama = buildNukeDiorama(B);
+    G.scene.add(diorama);
+  }
   _cine = {
     t: 0, B, diorama,
     // camera glides from the player's eyes to a vantage over the map

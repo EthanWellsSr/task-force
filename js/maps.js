@@ -218,7 +218,7 @@ function buildNuketown(scene, colliders) {
   scene.fog = new THREE.Fog(0x9fc4e0, 70, 160);
 
   // ---- ground: desert beyond, lawn inside
-  k.box(0, -0.55, 0, 160, 1, 160, DESERT, nsf);
+  k.box(0, -0.55, 0, 1200, 1, 1200, DESERT, nsf); // extends past the nuke-cutscene fog so the map isn't a floating square
   k.box(0, -0.5, 0, W * 2 + 2, 1, D * 2 + 2, LAWN);
   function disc(x, y, z, r, h, color) {                  // flat cylinder, visual only
     const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 40), k.mat(color));
@@ -667,7 +667,7 @@ function buildRust(scene, colliders) {
   scene.fog = new THREE.Fog(0xdcb887, 70, 150);
 
   // sand: desert plain beyond the dunes, solid slab inside
-  k.box(0, -0.55, 0, 160, 1, 160, 0xbf9f68, { solid: false, shadow: false });
+  k.box(0, -0.55, 0, 1200, 1, 1200, 0xbf9f68, { solid: false, shadow: false }); // fills the nuke-cutscene horizon
   k.box(0, -0.5, 0, W * 2 + 4, 1, W * 2 + 4, 0xc2a36b);
 
   // ---- perimeter: two-tier sand dunes (low foothill inside, taller
@@ -1014,7 +1014,7 @@ function buildShipment(scene, colliders) {
   scene.fog = new THREE.Fog(0x8f9aa6, 55, 120);
 
   // ground: gravel yard slab over a wider dirt plain
-  k.box(0, -0.55, 0, 120, 1, 120, 0x6f6a60, { solid: false, shadow: false });
+  k.box(0, -0.55, 0, 1200, 1, 1200, 0x6f6a60, { solid: false, shadow: false }); // fills the nuke-cutscene horizon
   k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, 0x7c766a);
   // faded painted deck lines + oil stains for texture
   for (const sx of [-1, 1]) k.box(sx * 5.5, 0.02, 0, 0.18, 0.02, D * 2 - 2, 0x8a8474, { solid: false, shadow: false });
@@ -1318,7 +1318,7 @@ function buildKillhouse(scene, colliders) {
   scene.fog = new THREE.Fog(0x9aa4ae, 50, 110);
 
   // ground: concrete training floor over a wider grass plain
-  k.box(0, -0.55, 0, 120, 1, 120, PLAIN, nsf);
+  k.box(0, -0.55, 0, 1200, 1, 1200, PLAIN, nsf); // fills the nuke-cutscene horizon
   k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, FLOOR);
 
   // ---- perimeter warehouse shell: corrugated steel, no exits.
@@ -1583,7 +1583,7 @@ function buildVacant(scene, colliders) {
   scene.fog = new THREE.Fog(0xa8b0b8, 55, 120);
 
   // ground: office slab + asphalt lot strip over a wider plain
-  k.box(0, -0.55, 0, 130, 1, 130, PLAIN, nsf);
+  k.box(0, -0.55, 0, 1200, 1, 1200, PLAIN, nsf); // fills the nuke-cutscene horizon
   k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, FLOOR);
   k.box(-3.5, 0.012, -8, 27, 0.024, 8, ASPHALT, nsf);      // parking lot paving
   k.box(13.5, 0.012, 0, 7, 0.024, D * 2, 0x74716a, nsf);   // yard concrete
@@ -1854,7 +1854,7 @@ function buildCrash(scene, colliders) {
 
   // ground: sun-bleached town floor over a wider desert plain, with
   // dust/track decals (#23k)
-  k.box(0, -0.55, 0, 140, 1, 140, PLAIN, nsf);
+  k.box(0, -0.55, 0, 1200, 1, 1200, PLAIN, nsf); // fills the nuke-cutscene horizon
   k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, SAND);
   k.box(-2, 0.012, -13.6, 30, 0.02, 2.2, 0xb59767, nsf);   // alley dust ribbon
   k.box(0, 0.012, 12.8, 36, 0.02, 3.6, 0x9a8a6c, nsf);     // street grime
