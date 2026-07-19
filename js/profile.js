@@ -19,10 +19,10 @@ const Profile = {
   LEVEL_CAP: 20,
   WEAPON_CATEGORIES: [
     'Assault Rifle', 'SMG', 'LMG', 'Shotgun', 'Sniper Rifle',
-    'Handgun', 'Machine Pistol', 'Melee',
+    'Handgun', 'Machine Pistol', 'Melee', 'Crossbow',
   ],
   PRIMARY_CATEGORIES: ['Assault Rifle', 'SMG', 'LMG', 'Shotgun', 'Sniper Rifle'],
-  SECONDARY_CATEGORIES: ['Handgun', 'Machine Pistol', 'Shotgun', 'Melee'],
+  SECONDARY_CATEGORIES: ['Handgun', 'Machine Pistol', 'Shotgun', 'Melee', 'Crossbow'],
 
   // Grounded arcade ranks, index 0 = Level 1. Spec pins SERGEANT
   // at Level 7 and the ladder tops out at COMMANDER (Level 20).

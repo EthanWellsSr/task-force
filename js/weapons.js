@@ -168,6 +168,17 @@ const WEAPONS = {
     dmg:135, minDmg:135, head:1, rpm:60, mag:1, reserve:0, reload:0, mode:'throw',
     spreadHip:0, spreadAds:0, recoil:0, bloom:0, zoom:1.0, adsTime:.16,
     speed:1.0, range:[8,30], model:'tomahawk', throwWeapon:true },
+  // Crossbow — the final secondary unlock. Its own category, so no firearm
+  // attachments mount (a clean bow). `mode:'bolt'` gives a single shot per
+  // pull with a ~1.1 s re-cock cycle; the viewmodel racks a fresh bolt onto
+  // the rail each shot (buildViewModel/updateCameraAndViewmodel). Hitscan like
+  // every gun, but firePlayerShot flies a real cosmetic arrow to the hit point
+  // and swaps the muzzle flash/report for a bow thunk. A precise, slow one-shot
+  // body at close range (headshot one-shots at any range).
+  crossbow: { slot:'secondary', cat:'Crossbow', name:'CROSSBOW',
+    dmg:100, minDmg:60, head:1.5, rpm:55, mag:15, reserve:45, reload:2.4, mode:'bolt',
+    spreadHip:.02, spreadAds:.001, recoil:.015, bloom:.003, zoom:1.5, adsTime:.32,
+    speed:.96, range:[22,48], model:'crossbow' },
 };
 
 // T1: category-local weapon progression. Each weapon class starts with its
@@ -181,7 +192,7 @@ const WEAPON_UNLOCK_ORDER_BY_CATEGORY = {
   'Shotgun': ['aa12', 'r870'],
   'Sniper Rifle': ['m14', 'intervention', 'barrett'],
 };
-const SECONDARY_UNLOCK_ORDER = ['usp', 'deagle', 'm9', 'g18', 'spas12', 'tomahawk'];
+const SECONDARY_UNLOCK_ORDER = ['usp', 'deagle', 'm9', 'g18', 'spas12', 'tomahawk', 'crossbow'];
 
 // Annotate each def with its own key/progression metadata so per-weapon
 // systems can branch on identity and unlock order without reverse lookups.

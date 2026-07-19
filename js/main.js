@@ -345,7 +345,7 @@ const VM_POS = {
 };
 
 // Muzzle-flash quad size per weapon class (#15b tuning)
-const VM_FLASH = { ar: 0.12, smg: 0.1, lmg: 0.15, sniper: 0.13, shotgun: 0.14, pistol: 0.08 };
+const VM_FLASH = { ar: 0.12, smg: 0.1, lmg: 0.15, sniper: 0.13, shotgun: 0.14, pistol: 0.08, crossbow: 0 };
 
 const VM_RETICLE = {
   reddot: 0.005,
@@ -440,6 +440,7 @@ const VM_HANDS = {
   ar: { trig: [-0.088, -0.06] }, smg: { trig: [-0.09, -0.02] },
   lmg: { trig: [-0.088, -0.05] }, sniper: { trig: [-0.08, -0.08], sup: [-0.055, -0.45] },
   shotgun: { trig: [-0.085, -0.03] }, pistol: { trig: [-0.068, 0], sup: [-0.096, 0.012, 'grip'] },
+  crossbow: { trig: [-0.078, -0.02], sup: [-0.02, -0.42] }, // grip hand rear, support cups the fore-rail
 };
 
 // Mag pull (#10b): gun-local travel of the mag part + support hand when
@@ -525,6 +526,31 @@ function camoShade(orig, shades) {
 // go through `k` so the cycle anim (#10c) can slide them.
 // Weapons without a recipe fall back to the generic per-class body below.
 const VM_RECIPES = {
+  // Crossbow: stock + grip + receiver toward the camera, a flight rail the bolt
+  // rides forward on, and a bow (riser + two limbs + tip caps) at the front.
+  // The bolt (a) and bowstring (str) go into their own groups so the reload
+  // animation can slide/hide them. Rest pose = string cocked (drawn back), bolt
+  // loaded on the rail.
+  crossbow({ p, a, str, dark, mid, wood, black }) {
+    const limb = 0x2a2c30, steel = 0x8a8f98, shaftC = 0x7a6a48, fletch = 0xbb3b2f;
+    p(0.05, 0.05, 0.17, wood, 0, -0.008, 0.055);       // shoulder stock
+    p(0.05, 0.055, 0.12, dark, 0, 0.006, -0.055);      // receiver / trigger housing
+    p(0.032, 0.08, 0.045, black, 0, -0.062, -0.02);    // pistol grip
+    p(0.016, 0.026, 0.02, mid, 0, -0.02, -0.078);      // trigger-guard nub
+    p(0.03, 0.03, 0.6, dark, 0, 0.03, -0.34);          // flight rail
+    p(0.013, 0.016, 0.6, mid, 0, 0.052, -0.34);        // top groove rib (bolt channel)
+    p(0.055, 0.062, 0.05, mid, 0, 0.03, -0.6);         // front riser (limb mount)
+    p(0.3, 0.024, 0.03, limb, -0.16, 0.032, -0.6);     // left limb
+    p(0.3, 0.024, 0.03, limb, 0.16, 0.032, -0.6);      // right limb
+    p(0.028, 0.032, 0.03, black, -0.305, 0.032, -0.6); // left tip cap
+    p(0.028, 0.032, 0.03, black, 0.305, 0.032, -0.6);  // right tip cap
+    str(0.64, 0.006, 0.006, black, 0, 0.052, -0.34);   // bowstring (cocked over the latch)
+    a(0.011, 0.011, 0.34, shaftC, 0, 0.052, -0.5);     // bolt shaft
+    a(0.03, 0.03, 0.055, steel, 0, 0.052, -0.69);      // broadhead tip
+    a(0.004, 0.032, 0.05, fletch, 0, 0.068, -0.35);    // top fletch
+    a(0.032, 0.004, 0.05, fletch, 0, 0.052, -0.35);    // side fletch
+    return 0.72;
+  },
   m4a1({ p, s, m, dark, mid, black }) {
     p(0.055, 0.085, 0.46, dark, 0, 0, -0.23);        // receiver
     p(0.058, 0.068, 0.24, mid, 0, -0.005, -0.55);    // round handguard
@@ -843,13 +869,19 @@ function buildViewModel(w) {
   const magp = (...a) => { const m = part(...a); magParts.push(m); return m; };
   const cycleParts = [];
   const cyclep = (...a) => { const m = part(...a); cycleParts.push(m); return m; };
+  // crossbow: the loaded bolt + the bowstring re-parent into their own groups
+  // so updateCameraAndViewmodel can slide/hide them for the per-shot reload.
+  const arrowParts = [];
+  const arrowp = (...a) => { const m = part(...a); arrowParts.push(m); return m; };
+  const stringParts = [];
+  const stringp = (...a) => { const m = part(...a); stringParts.push(m); return m; };
   const dark = 0x26282c, mid = 0x3a3d42, wood = 0x6e5637, black = 0x1a1c1f;
   const type = w.model;
   const flashSize = VM_FLASH[type] || 0.12;
   let len = 0.62;
   const recipe = VM_RECIPES[w.key];
   if (recipe) {
-    len = recipe({ p: part, s: sight, o: opticClearance, u: ugrip, m: magp, k: cyclep, cyl, dark, mid, wood, black });
+    len = recipe({ p: part, s: sight, o: opticClearance, u: ugrip, m: magp, k: cyclep, a: arrowp, str: stringp, cyl, dark, mid, wood, black });
   } else if (type === 'ar') {
     part(0.055, 0.085, 0.62, dark, 0, 0, -0.31);
     part(0.03, 0.03, 0.3, mid, 0, 0.005, -0.68);         // barrel
@@ -1021,6 +1053,18 @@ function buildViewModel(w) {
     g.add(pg);
     for (const pm of cycleParts) pg.add(pm);
     g.userData.pumpPart = pg;
+  }
+  if (arrowParts.length) {
+    const ag = new THREE.Group();
+    g.add(ag);
+    for (const pm of arrowParts) ag.add(pm);
+    g.userData.arrow = ag;
+  }
+  if (stringParts.length) {
+    const sg = new THREE.Group();
+    g.add(sg);
+    for (const pm of stringParts) sg.add(pm);
+    g.userData.bowString = sg;
   }
   // hands (#10a): box-built arms as children of the gun group, so bob/
   // kick/sprint pose carries them for free. Two hand styles: 'grip'
@@ -1341,6 +1385,45 @@ function fxSmoke(at, ttl, size, tint) {
   s.sp.material.color.setHex(tint || 0xffffff);
   s.sp.visible = true;
 }
+// ---- crossbow bolts: cosmetic arrows that fly from the muzzle to the
+// hitscan-resolved impact point, stick briefly, then despawn. Purely visual —
+// the hit/damage is already decided by firePlayerShot's raycast.
+const _flyingArrows = [];
+function buildArrowMesh() {
+  const g = new THREE.Group();
+  const mat = c => new THREE.MeshLambertMaterial({ color: c });
+  const box = (w, h, d, c, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c)); m.position.z = z; g.add(m); };
+  // built pointing +z (Object3D.lookAt aims a mesh's +z at the target)
+  box(0.02, 0.02, 0.5, 0x7a6a48, 0);      // shaft
+  box(0.05, 0.05, 0.08, 0x8a8f98, 0.28);  // broadhead tip (front)
+  box(0.006, 0.06, 0.09, 0xbb3b2f, -0.22); // fletch (back)
+  box(0.06, 0.006, 0.09, 0xbb3b2f, -0.22);
+  return g;
+}
+function spawnFlyingArrow(from, to) {
+  if (!G.scene) return;
+  const mesh = buildArrowMesh();
+  mesh.position.copy(from);
+  mesh.lookAt(to);
+  G.scene.add(mesh);
+  const dist = from.distanceTo(to);
+  _flyingArrows.push({ mesh, from: from.clone(), to: to.clone(),
+    t: 0, flightT: THREE.MathUtils.clamp(dist / 130, 0.05, 0.32), life: 0 });
+}
+function updateFlyingArrows(dt) {
+  for (let i = _flyingArrows.length - 1; i >= 0; i--) {
+    const a = _flyingArrows[i];
+    if (a.t < a.flightT) {
+      a.t += dt;
+      a.mesh.position.lerpVectors(a.from, a.to, Math.min(1, a.t / a.flightT));
+    } else {
+      a.mesh.position.copy(a.to); // stuck in the target/wall
+      a.life += dt;
+      if (a.life > 2.5) { G.scene.remove(a.mesh); _flyingArrows.splice(i, 1); }
+    }
+  }
+}
+
 function fxUpdate(dt) {
   for (const t of FX.tracers) if (t.ttl > 0) { t.ttl -= dt; if (t.ttl <= 0) t.line.visible = false; }
   for (const s of FX.sparks) if (s.ttl > 0) {
@@ -4891,24 +4974,30 @@ const _collatHits = []; // #18f: per-pellet list of enemies the shot passes thro
 
 function firePlayerShot(w) {
   const def = w.def;
+  const isCrossbow = def.model === 'crossbow';
   player.spawnProtectT = 0; // #18a: firing ends spawn invuln immediately
   // Daring David Easter egg: a bottomless magazine never spends a round, so the
   // mag stays full — it never empties, so the auto/manual reload paths (which
   // gate on mag <= 0 / mag < def.mag) never fire. Unlimited ammo, no reload.
   if (!w.bottomless) w.mag--;
   noteShot(player);
-  AudioSys.shot(def.model, 0, 0, def.suppressed); // P55: suppressed defs report the quiet voice
+  // crossbow: a bow thunk, not a gunshot (the re-cock cycle animation is
+  // driven by fireCooldown in updateCameraAndViewmodel)
+  if (isCrossbow) AudioSys.bow();
+  else AudioSys.shot(def.model, 0, 0, def.suppressed); // P55: suppressed defs report the quiet voice
 
-  // muzzle flash
-  muzzleLight.intensity = 1.4;
-  if (vmGun) {
-    const fl = vmGun.userData.flash;
-    fl.visible = true;
-    fl.rotation.z = Math.random() * 3;
-    fl.scale.setScalar(0.75 + Math.random() * 0.5);
-    setTimeout(() => { if (vmGun) vmGun.userData.flash.visible = false; }, 45);
+  // muzzle flash — a crossbow has none; the arrow launch is the whole event
+  if (!isCrossbow) {
+    muzzleLight.intensity = 1.4;
+    if (vmGun) {
+      const fl = vmGun.userData.flash;
+      fl.visible = true;
+      fl.rotation.z = Math.random() * 3;
+      fl.scale.setScalar(0.75 + Math.random() * 0.5);
+      setTimeout(() => { if (vmGun) vmGun.userData.flash.visible = false; }, 45);
+    }
   }
-  vmKick = Math.min(1, vmKick + 0.6);
+  vmKick = Math.min(1, vmKick + (isCrossbow ? 0.3 : 0.6));
 
   // recoil
   player.pitch += def.recoil * (0.8 + Math.random() * 0.4);
@@ -4970,7 +5059,10 @@ function firePlayerShot(w) {
     // sniper shot, otherwise the first body (or the wall if the pellet whiffs)
     const stopDist = (penetrates || _collatHits.length === 0) ? wallDist : _collatHits[0].dist;
     const end = _shotEnd.copy(_shotOrigin).addScaledVector(_shotDir, stopDist);
-    if (pellets === 1 || p % 2 === 0) fxTracer(_muzzleWorld, end);
+    // crossbow flies a real bolt to the hit point (hitscan resolves the hit,
+    // the arrow is the visible-travel flourish); every other gun draws a tracer
+    if (isCrossbow) spawnFlyingArrow(_muzzleWorld, end);
+    else if (pellets === 1 || p % 2 === 0) fxTracer(_muzzleWorld, end);
 
     for (const v of victims) {
       const fall = THREE.MathUtils.clamp((v.dist - def.range[0]) / (def.range[1] - def.range[0]), 0, 1);
@@ -5088,7 +5180,8 @@ function updateCameraAndViewmodel(dt) {
     // gate keeps a residual fireCooldown from the PREVIOUS gun (it's
     // per-player) from playing a cycle tail on a freshly switched one.
     let pOut = 0, bReach = 0;
-    const boltMode = def.mode === 'bolt';
+    const isCrossbow = def.model === 'crossbow';
+    const boltMode = def.mode === 'bolt' && !isCrossbow; // the crossbow re-cocks its own way (below)
     if (player.reloadT <= 0 && player.switchT <= 0 && player.fireCooldown > 0 &&
         (def.mode === 'pump' || boltMode)) {
       const ct = 1 - player.fireCooldown / (boltMode ? 60 / def.rpm : def.pumpTime);
@@ -5109,6 +5202,23 @@ function updateCameraAndViewmodel(dt) {
     }
     const cyc = vmGun.userData.pumpPart;
     if (cyc) cyc.position.z = pOut * (boltMode ? 0.06 : 0.075);
+    // crossbow reload: after each shot the string snaps forward (released), then
+    // re-cocks (draws back) while a fresh bolt slides onto the rail and seats.
+    // Driven by the per-shot re-cock cycle (fireCooldown) or a full mag reload.
+    if (isCrossbow) {
+      let ct; // 0 = just fired (string forward, no bolt) → 1 = ready (cocked + loaded)
+      if (player.reloadT > 0) ct = 1 - player.reloadT / (def.reload * (player.perks.has('soh') ? 0.5 : 1));
+      else if (player.fireCooldown > 0 && player.switchT <= 0) ct = 1 - player.fireCooldown / (60 / def.rpm);
+      else ct = 1; // idle & ready
+      ct = THREE.MathUtils.clamp(ct, 0, 1);
+      const bstr = vmGun.userData.bowString;
+      if (bstr) bstr.position.z = THREE.MathUtils.lerp(-0.26, 0, _ss(ct / 0.55)); // forward(released) → back(cocked)
+      const arrow = vmGun.userData.arrow;
+      if (arrow) {
+        arrow.position.z = THREE.MathUtils.lerp(0.13, 0, _ss((ct - 0.5) / 0.4)); // slides in from behind → seated
+        arrow.visible = ct > 0.44 && (curW().mag > 0 || player.reloadT > 0);
+      }
+    }
     const armS = vmGun.userData.armSupport;
     if (armS && armS.userData.rest) {
       const rest = armS.userData.rest;
@@ -5277,6 +5387,7 @@ function loop() {
     if (G.state === 'killcam') updateKillCam(dt);
 
     fxUpdate(dt);
+    updateFlyingArrows(dt);
     updateThrowables(dt);
     UI.updateFragDanger(fragDangerInfo());
     UI.updateCarePackageLocator(carePackageLocatorInfo());

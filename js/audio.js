@@ -98,6 +98,34 @@ const AudioSys = {
     osc.start(t); osc.stop(t + 0.12);
   },
 
+  // crossbow release — a taut string "thwip" (noise sweeping high→low) over a
+  // short low limb "thunk"; no gunpowder crack.
+  bow(dist = 0, pan = 0) {
+    if (!this.ensure()) return;
+    if (dist > 0 && !this._allowShot()) return;
+    const atten = dist <= 0 ? 1 : Math.max(0.04, 1 - dist / 85);
+    const t = this.ctx.currentTime;
+    const out = this._dest(pan);
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(2200, t);
+    bp.frequency.exponentialRampToValueAtTime(600, t + 0.07);
+    const g = this.ctx.createGain();
+    this._env(g, 0.34 * atten, 0.08);
+    src.connect(bp); bp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + 0.12);
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(60, t + 0.09);
+    const g2 = this.ctx.createGain();
+    this._env(g2, 0.3 * atten, 0.1);
+    osc.connect(g2); g2.connect(out);
+    osc.start(t); osc.stop(t + 0.13);
+  },
+
   hit(kill = false) {
     if (!this.ensure()) return;
     const t = this.ctx.currentTime;
