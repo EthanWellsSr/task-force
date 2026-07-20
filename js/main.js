@@ -2328,7 +2328,7 @@ function buildMushroomCloud(B) {
   return { group: g, light };
 }
 
-// Nuketown-only desert dressing for the nuke pull-back: scattered saguaro
+// Tsar Taverns-only desert dressing for the nuke pull-back: scattered saguaro
 // cacti, tumbleweeds, sand-tone dune patches and rock buttes strewn across the
 // (now map-sized) desert floor, so the zoomed-out town reads as a small town in
 // the middle of nowhere. The ground itself is the map's own enlarged desert
@@ -2387,7 +2387,7 @@ function buildNukeDiorama(B) {
 }
 
 // endWin (optional): when set (true/false/null), this is the end-of-match
-// Nuketown nuke — cosmetic, and the held result is shown afterwards.
+// Tsar Taverns nuke — cosmetic, and the held result is shown afterwards.
 // When omitted it's the killstreak nuke: everyone dies, owner's team wins.
 function startNukeCinematic(endWin) {
   G.state = 'nukecine';
@@ -2404,11 +2404,11 @@ function startNukeCinematic(endWin) {
   const plane = buildNukePlane();
   plane.position.set(-span, B * 1.5, -B * 0.4);
   G.scene.add(plane);
-  // Desert dressing (cacti/tumbleweeds/mesas) is Nuketown's identity only —
+  // Desert dressing (cacti/tumbleweeds/mesas) is Tsar Taverns' identity only —
   // other maps keep their own theme, which their enlarged ground plane already
   // carries out to the horizon.
   let diorama = null;
-  if (G.mapId === 'nuketown') {
+  if (G.mapId === 'tsartaverns') {
     diorama = buildNukeDiorama(B);
     G.scene.add(diorama);
   }
@@ -4128,7 +4128,7 @@ function deploy() {
   player.vel.set(0, 0, 0);
   player.yaw = G.mode && G.mode.structure === 'ffa'
     ? Math.random() * Math.PI * 2
-    : player.team === 'tf' ? (G.mapId === 'rust' ? Math.PI * 1.25 : Math.PI) : 0;
+    : player.team === 'tf' ? (G.mapId === 'derrickdunes' ? Math.PI * 1.25 : Math.PI) : 0;
   player.pitch = 0;
   player.alive = true;
   vmRoot.visible = true;
@@ -4601,7 +4601,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect, shot) 
     Profile.onDeath();           // P5: immediate lifetime stat
     if (attacker) attacker.kills++;
     registerKill(attacker, player, weaponName, headshot);
-    // that kill may have ended the match (or started the Nuketown
+    // that kill may have ended the match (or started the Tsar Taverns
     // end-of-match nuke) — don't clobber the state with 'dead'
     if (G.state === 'end' || G.state === 'nukecine') return;
     if (!startKillCam(attacker, weaponName, shot)) {
@@ -4616,7 +4616,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect, shot) 
 
 // forcedWin (optional): true/false forces the result regardless of score —
 // the tactical nuke ends the match as a win for its owner's team.
-// On Nuketown every match ends with the test-site nuke going off: the
+// On Tsar Taverns every match ends with the test-site nuke going off: the
 // result is computed here, then the cinematic plays (cosmetic — no stat
 // changes) and hands the held result to finishMatch. A no-op while the
 // cinematic is already running (the killstreak nuke's mass kill would
@@ -4624,7 +4624,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect, shot) 
 function endMatch(forcedWin) {
   if (G.state === 'end' || G.state === 'nukecine') return;
   const win = modeWinResult(forcedWin);
-  if (G.mapId === 'nuketown') { startNukeCinematic(win); return; }
+  if (G.mapId === 'tsartaverns') { startNukeCinematic(win); return; }
   finishMatch(win);
 }
 

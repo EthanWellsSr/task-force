@@ -736,7 +736,7 @@ const UI = {
     } else {
       const pr = Profile.daringDavidProgress();
       const remaining = pr.missing.length
-        ? '  ·  Remaining: ' + pr.missing.map(m => m.toUpperCase()).join(', ')
+        ? '  ·  Remaining: ' + pr.missing.map(m => MAP_NAMES[m] || m.toUpperCase()).join(', ')
         : '';
       div.innerHTML = `<div class="sc-name">${dd.name}<span class="sc-lock-tag">LOCKED</span></div>
         <div class="sc-unlock">${dd.unlockDesc}</div>

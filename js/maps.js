@@ -187,7 +187,7 @@ class MapKit {
 }
 
 // ============================================================
-// NUKETOWN — reworked against docs/nuketown-reference.md (#17).
+// TSAR TAVERNS — reworked against docs/tsar-taverns-reference.md (#17).
 // Compass: +x = north, +z = east (top-down renders +x up, +z right).
 // A straight two-lane street runs west-east between the two houses and
 // dead-ends both ways: a pink house + lone car close the west end, a
@@ -203,7 +203,7 @@ class MapKit {
 // Point-symmetric about the origin except the street ends and the two
 // backyard signature props.
 // ============================================================
-function buildNuketown(scene, colliders) {
+function buildTsarTaverns(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 28, D = 20; // half extents: x = across the street, z = along it
   const T = 0.3;
@@ -550,7 +550,7 @@ function buildNuketown(scene, colliders) {
   lamp(5.9, 12.6, -1);
   lamp(-5.9, -4.8, 1);
 
-  // ---- "WELCOME TO NUKETOWN" sign + population counter, by the bulb
+  // ---- "WELCOME TO TSAR TAVERNS" sign + population counter, by the bulb
   (function sign(x, z) {
     for (const dz of [-1.7, 1.7]) k.box(x, 1.35, z + dz, 0.16, 2.7, 0.16, wood);
     k.box(x, 2.5, z, 0.14, 1.5, 4.0, 0xe8e2cc);            // board
@@ -622,7 +622,7 @@ function buildNuketown(scene, colliders) {
   for (const [x, z, y] of half) extra.push([x, z, y], [-x, -z, y]);
 
   return {
-    name: 'NUKETOWN',
+    name: 'TSAR TAVERNS',
     bounds: { x: W, z: D },
     sun: { color: 0xfff2d8, intensity: 1.0, pos: [30, 45, 20] },
     hemi: { sky: 0xbcd8ec, ground: 0x4e6a3a, intensity: 0.75 },
@@ -641,7 +641,7 @@ function buildNuketown(scene, colliders) {
 }
 
 // ============================================================
-// RUST — desert oil yard, MW2 layout per docs/rust-reference.md.
+// DERRICK DUNES — desert oil yard per docs/derrick-dunes-reference.md.
 // Compass: +x = north, +z = east (top-down renders +x up). Zones:
 // central multi-level tower, Pipeline along the north edge (over/
 // under + spur), Oil Derrick NW, Front Gate NE (sp spawn) with the
@@ -656,10 +656,10 @@ function buildNuketown(scene, colliders) {
 // crate chain + rail gap feeding seeds on the derrick deck and the
 // pipeline top.
 // ============================================================
-function buildRust(scene, colliders) {
+function buildDerrickDunes(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 26; // 52×52 m playable square
-  const rust = 0x8a5a3a, DECK = 0x6e4a2e, PIPE = 0x9a7a5a,
+  const oxide = 0x8a5a3a, DECK = 0x6e4a2e, PIPE = 0x9a7a5a,
         DUNE = 0xa9885a, DUNE2 = 0xb59767, SHED = 0x7a6a55,
         MACHINE = 0x5a5e52, SANDBAG = 0x8f8060;
 
@@ -704,15 +704,15 @@ function buildRust(scene, colliders) {
   //   rail gap (the reference's "pathways winding around the tower"),
   //   south exhaust chute: stepped duct, ground -> top (south rail gap).
   for (const [lx, lz] of [[-2.8, -2.8], [2.8, -2.8], [-2.8, 2.8], [2.8, 2.8]])
-    k.box(lx, 4.8, lz, 0.55, 9.6, 0.55, rust);
+    k.box(lx, 4.8, lz, 0.55, 9.6, 0.55, oxide);
   k.box(0, 3.3, 0, 6.6, 0.3, 6.6, DECK);            // mid platform
   k.box(0, 9.6, 0, 5.8, 0.3, 5.8, DECK);            // top platform
-  k.box(0, 10.05, 2.9, 5.8, 0.6, 0.15, rust);       // top rails: east full,
-  k.box(2.9, 10.05, 0, 0.15, 0.6, 5.8, rust);       // north full,
-  k.box(-0.8, 10.05, -2.9, 4.2, 0.6, 0.15, rust);   // west (stair gap x 1.3..2.9 —
+  k.box(0, 10.05, 2.9, 5.8, 0.6, 0.15, oxide);       // top rails: east full,
+  k.box(2.9, 10.05, 0, 0.15, 0.6, 5.8, oxide);       // north full,
+  k.box(-0.8, 10.05, -2.9, 4.2, 0.6, 0.15, oxide);   // west (stair gap x 1.3..2.9 —
                                                     // open to the corner, so an
                                                     // arrival onto a leg top self-recovers),
-  k.box(-2.9, 10.05, -1.25, 0.15, 0.6, 3.3, rust);  // south (chute gap z 0.4..2.9)
+  k.box(-2.9, 10.05, -1.25, 0.15, 0.6, 3.3, oxide);  // south (chute gap z 0.4..2.9)
   // east crate-step chain: ground -> mid platform (risers 0.5, last 0.45)
   for (let i = 0; i < 6; i++) {
     const top = 0.5 * (i + 1);
@@ -727,12 +727,12 @@ function buildRust(scene, colliders) {
   for (let i = 2; i <= 11; i++)
     k.box(-1.22 + 0.36 * (i - 2), 3.45 + 0.2625 * i, -3.65, 0.36, 0.525 * i, 1.1, DECK);
   for (const px of [-1.6, 0.2, 1.8])
-    k.box(px, 1.725, -3.65, 0.35, 3.45, 0.35, rust);
+    k.box(px, 1.725, -3.65, 0.35, 3.45, 0.35, oxide);
   // south exhaust chute: stepped duct from the ground to the top platform;
   // thin non-solid lips along both edges read as the duct walls
   for (let i = 1; i <= 18; i++) {
     const top = 0.53 * i, cx = -3.175 - 0.5 * (18 - i);
-    k.box(cx, top / 2, 1.5, 0.5, top, 2.0, rust);
+    k.box(cx, top / 2, 1.5, 0.5, top, 2.0, oxide);
     k.box(cx, top + 0.2, 0.57, 0.5, 0.4, 0.14, DECK, { solid: false });
     k.box(cx, top + 0.2, 2.43, 0.5, 0.4, 0.14, DECK, { solid: false });
   }
@@ -761,10 +761,10 @@ function buildRust(scene, colliders) {
   pipeRun(14.5, -2, 14, false);                      // spur toward the tower
   pipeRun(24, 8, 5.5, false);                        // spur into the north dune
   for (const pz of [-22, -14, -6, 2, 10, 18])
-    k.box(21.5, 1.15, pz, 0.5, 2.3, 0.5, rust);      // supports (walk-under stays clear)
+    k.box(21.5, 1.15, pz, 0.5, 2.3, 0.5, oxide);      // supports (walk-under stays clear)
   for (const px of [11.5, 18])
-    k.box(px, 1.15, -2, 0.5, 2.3, 0.5, rust);
-  k.box(24.2, 1.15, 8, 0.5, 2.3, 0.5, rust);         // dune-spur support
+    k.box(px, 1.15, -2, 0.5, 2.3, 0.5, oxide);
+  k.box(24.2, 1.15, 8, 0.5, 2.3, 0.5, oxide);         // dune-spur support
 
   // ---- Oil Derrick (NW): raised platform with top/ground/under levels.
   // Crate-step chain up the east face (#8e — the platform had no access;
@@ -773,11 +773,11 @@ function buildRust(scene, colliders) {
   // deck steps across onto the pipeline top (3.35 -> 3.75, riser 0.4;
   // the 0.3 m horizontal gap is bridged by the 0.76 body width)
   for (const [lx, lz] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]])
-    k.box(17.5 + lx, 1.6, -17.5 + lz, 0.45, 3.2, 0.45, rust);
+    k.box(17.5 + lx, 1.6, -17.5 + lz, 0.45, 3.2, 0.45, oxide);
   k.box(17.5, 3.2, -17.5, 5.4, 0.3, 5.4, DECK);
-  k.box(17.5, 3.65, -20.1, 5.4, 0.6, 0.15, rust);    // rail on the perimeter faces
-  k.box(20.1, 3.65, -19.3, 0.15, 0.6, 1.8, rust);    // pipeline-side rail, split:
-  k.box(20.1, 3.65, -15.7, 0.15, 0.6, 1.8, rust);    // step-across gap z -18.4..-16.6
+  k.box(17.5, 3.65, -20.1, 5.4, 0.6, 0.15, oxide);    // rail on the perimeter faces
+  k.box(20.1, 3.65, -19.3, 0.15, 0.6, 1.8, oxide);    // pipeline-side rail, split:
+  k.box(20.1, 3.65, -15.7, 0.15, 0.6, 1.8, oxide);    // step-across gap z -18.4..-16.6
   k.box(16.8, 0.75, -16.8, 1.6, 1.5, 1.4, MACHINE);  // machinery underneath
   for (let i = 0; i < 6; i++) {
     const top = 0.5 * (i + 1);
@@ -955,7 +955,7 @@ function buildRust(scene, colliders) {
     [1.2, 2.2, 3.45],
     [-1.95, -3.65, 3.975],          // west stair mount landing
     [2.02, -3.65, 9.225],           // west stair top tread (one link per flight,
-                                    // Nuketown-stair style)
+                                    // Tsar Taverns-stair style)
     [1.8, -1.8, 9.75], [-1.8, 1.8, 9.75], // top platform (stair / chute rail gaps)
     [-13.3, 1.5],                   // chute ground apron
     // south chute, columns 1/6/11/16 — each seed sits 0.2 down-slope of
@@ -973,7 +973,7 @@ function buildRust(scene, colliders) {
   ];
 
   return {
-    name: 'RUST',
+    name: 'DERRICK DUNES',
     bounds: { x: W, z: W },
     sun: { color: 0xffd9a8, intensity: 1.1, pos: [-25, 38, 15] },
     hemi: { sky: 0xe8c8a0, ground: 0x8a6a45, intensity: 0.7 },
@@ -987,9 +987,9 @@ function buildRust(scene, colliders) {
 }
 
 // ============================================================
-// SHIPMENT — CoD4 container yard, per docs/shipment-reference.md (#21) as
-// corrected by docs/shipment-overhaul.md (#21b). Compass: +x = north,
-// +z = east (top-down +x up). A tiny 26×24 m walled yard, the smallest map
+// FREIGHTLOCK — container yard, per docs/freightlock-reference.md (#21) as
+// corrected by docs/freightlock-overhaul.md (#21b). Compass: +x = north,
+// +z = east (top-down +x up). A compact 31×29 m walled yard
 // here. The identity is a central CROSSROADS formed by a 2×2 of shipping
 // containers (two hollow walk-throughs on the NW+SE diagonal, two solid
 // climb-on-top perches on the NE+SW diagonal). Hollow walk-through
@@ -1001,12 +1001,14 @@ function buildRust(scene, colliders) {
 // The engine is AABB-only, so leaned containers rotate the visible mesh but
 // collide via a stepped axis-aligned hull; see leanedContainer/steppedHull.
 // ============================================================
-function buildShipment(scene, colliders) {
+function buildFreightlock(scene, colliders) {
   const k = new MapKit(scene, colliders);
-  const W = 13, D = 12;    // 26 × 24 m playable (square-ish, real Shipment)
+  const OLD_W = 13, OLD_D = 12, W = 15.5, D = 14.5; // 31 × 29 m playable
+  const X_SCALE = W / OLD_W, Z_SCALE = D / OLD_D;
+  const px = x => x * X_SCALE, pz = z => z * Z_SCALE;
   const H = 2.6, CL = 6;   // container height (tops walkable) + long-axis length
   // weathered container palette (desaturated, oxidised — not primaries)
-  const BLUE = 0x3a5670, GREEN = 0x4a6540, YELL = 0x9c8636, RUST = 0x8a4b34,
+  const BLUE = 0x3a5670, GREEN = 0x4a6540, YELL = 0x9c8636, OXIDE = 0x8a4b34,
         GREY = 0x565a5c, TEAL = 0x3d6b64, MAROON = 0x6e3d38, CRATE = 0x6f5f3f,
         FRAME = 0x2b2f31;   // dark corten steel frame/corrugation shadow
 
@@ -1017,7 +1019,7 @@ function buildShipment(scene, colliders) {
   k.box(0, -0.55, 0, 1200, 1, 1200, 0x6f6a60, { solid: false, shadow: false }); // fills the nuke-cutscene horizon
   k.box(0, -0.5, 0, W * 2 + 4, 1, D * 2 + 4, 0x7c766a);
   // faded painted deck lines + oil stains for texture
-  for (const sx of [-1, 1]) k.box(sx * 5.5, 0.02, 0, 0.18, 0.02, D * 2 - 2, 0x8a8474, { solid: false, shadow: false });
+  for (const sx of [-1, 1]) k.box(sx * px(5.5), 0.02, 0, 0.18, 0.02, D * 2 - 2, 0x8a8474, { solid: false, shadow: false });
   k.box(0, 0.02, 0, 3.2, 0.02, 2.0, 0x5f5a52, { solid: false, shadow: false });
 
   const shade = (hex, f) => {
@@ -1156,18 +1158,18 @@ function buildShipment(scene, colliders) {
     }
   }
 
-  // ---- perimeter (S3): double-stacked container wall, no exits. N/S walls
-  // run along z at x = ±W (4 units, cover z −12..12), E/W walls along x at
-  // z = ±D (4 units at x = ±9, ±3, cover x −12..12; the ±12..13 ends are
-  // wrapped by the N/S walls). Invisible blockers seal + cap the box so a
-  // player on an inner container can't peek or slip out.
-  const wallCols = [BLUE, RUST, GREEN, YELL, GREY, TEAL, MAROON];
+  // ---- perimeter: five standard 6 m containers per side, double-stacked,
+  // with no exits. The N/S walls wrap the final half-metre at the E/W ends.
+  // Invisible blockers seal + cap the box so a player on an inner container
+  // cannot peek or slip out.
+  const wallCols = [BLUE, OXIDE, GREEN, YELL, GREY, TEAL, MAROON];
+  const wallCenters = [-12, -6, 0, 6, 12];
   for (const s of [-1, 1]) {
     let ci = 0;
-    for (const z of [-9, -3, 3, 9])
+    for (const z of wallCenters)
       for (let lvl = 0; lvl < 2; lvl++)
         container(s * W, 1.3 + lvl * H, z, 'z', wallCols[(ci++ + (s > 0 ? 2 : 0)) % wallCols.length]);
-    for (const x of [-9, -3, 3, 9])
+    for (const x of wallCenters)
       for (let lvl = 0; lvl < 2; lvl++)
         container(x, 1.3 + lvl * H, s * D, 'x', wallCols[(ci++ + (s > 0 ? 1 : 3)) % wallCols.length]);
     k.blocker(s * (W + 0.6), 5, 0, 1, 14, D * 2 + 4);   // N/S containment cap
@@ -1175,36 +1177,40 @@ function buildShipment(scene, colliders) {
   }
 
   // ---- A. Center 2×2 — the crossroads (S4, the identity). Four x-long
-  // containers with a 2.2 m N–S lane (|z|≲1.1) and a 2.6 m E–W lane (|x|≲1.3)
+  // containers with a 3.2 m N–S lane and a 4.25 m E–W lane
   // meeting at the origin. NW + SE are HOLLOW walk-throughs (open along x);
   // NE + SW are SOLID climb-on-top perches. Point-symmetric.
-  container(4.3, 1.3, 2.4, 'x', RUST);        // NE solid
-  container(-4.3, 1.3, -2.4, 'x', BLUE);      // SW solid (mirror)
-  hollowContainer(4.3, 1.3, -2.4, 'x', GREEN);  // NW hollow
-  hollowContainer(-4.3, 1.3, 2.4, 'x', YELL);   // SE hollow (mirror)
+  const centerX = px(4.3), centerZ = pz(2.4);
+  container(centerX, 1.3, centerZ, 'x', OXIDE);         // NE solid
+  container(-centerX, 1.3, -centerZ, 'x', BLUE);        // SW solid (mirror)
+  hollowContainer(centerX, 1.3, -centerZ, 'x', GREEN);  // NW hollow
+  hollowContainer(-centerX, 1.3, centerZ, 'x', YELL);   // SE hollow (mirror)
 
   // ---- B. N/S end containers (S4): z-long HOLLOW walk-throughs ~1 m off each
   // end wall, open along z (E/W ends). Team spawns tuck behind/beside them.
-  hollowContainer(10.5, 1.3, 0, 'z', TEAL);    // N end hollow
-  hollowContainer(-10.5, 1.3, 0, 'z', MAROON); // S end hollow (mirror)
+  hollowContainer(px(10.5), 1.3, 0, 'z', TEAL);    // N end hollow
+  hollowContainer(-px(10.5), 1.3, 0, 'z', MAROON); // S end hollow (mirror)
 
   // ---- C. E/W leaned pairs (S4/D1): two yawed containers each against the
   // side walls, forming a shallow V with a narrow gap on the x = 0 lane.
   // Explicit placements keep the side-wall pairs true 180° point mirrors.
-  const leanZ = 10.25;
-  leanedContainer(3.4, -leanZ, -0.28, GREY);
-  leanedContainer(-3.4, -leanZ, 0.28, GREEN);
-  leanedContainer(-3.4, leanZ, -0.28, GREY);
-  leanedContainer(3.4, leanZ, 0.28, GREEN);
+  const leanX = px(3.4), leanZ = pz(10.25);
+  leanedContainer(leanX, -leanZ, -0.28, GREY);
+  leanedContainer(-leanX, -leanZ, 0.28, GREEN);
+  leanedContainer(-leanX, leanZ, -0.28, GREY);
+  leanedContainer(leanX, leanZ, 0.28, GREEN);
 
   // ---- D. Corners (S4): debris only — junk cars on the NE/SW diagonal,
   // barrel + crate clusters on the NW/SE diagonal. Cover height, nothing
   // tall enough to perch on or peek the world.
   function cornerDebris(sx, sz, withCar) {
-    if (withCar) k.car(sx * 9.6, sz * 10.2, 0x6a6660);
-    else k.crate(sx * 9.4, sz * 10.4, 1.1, 0x6a5a3c);
-    k.barrel(sx * 10.8, sz * 10.6); k.barrel(sx * 8.4, sz * 11.0);
-    k.crate(sx * 11.0, sz * 11.2, 1.0);
+    if (withCar) k.car(sx * px(9.6), sz * pz(10.2), 0x6a6660);
+    else k.crate(sx * px(9.4), sz * pz(10.4), 1.1, 0x6a5a3c);
+    k.barrel(sx * px(10.8), sz * pz(10.6));
+    k.barrel(sx * px(8.4), sz * pz(11.0));
+    k.crate(sx * px(11.0), sz * pz(11.2), 1.0);
+    k.barrel(sx * px(7.6), sz * pz(10.0));
+    k.crate(sx * px(8.2), sz * pz(9.1), 1.0);
   }
   cornerDebris(1, 1, true); cornerDebris(-1, -1, true);    // NE, SW: cars
   cornerDebris(1, -1, false); cornerDebris(-1, 1, false);  // NW, SE: clusters
@@ -1216,21 +1222,19 @@ function buildShipment(scene, colliders) {
   // fails a float compare, so the last crate is 2.5, not 2.05). The hollow
   // center/end roofs are left as player-only parkour (no bot seeds) to avoid
   // cross-gap roof edges in the AABB/LOS nav graph.
-  const climbZs = [6.1, 5.6, 5.1, 4.6, 4.1], climbTops = [0.5, 1.0, 1.5, 2.0, 2.5];
+  // Keep the crate spacing tied to the fixed-size container so the outward
+  // position scaling does not introduce an unjumpable gap at the roof edge.
+  const climbZs = [3.7, 3.2, 2.7, 2.2, 1.7].map(offset => centerZ + offset);
+  const climbTops = [0.5, 1.0, 1.5, 2.0, 2.5];
   for (const s of [-1, 1])
     for (let i = 0; i < climbZs.length; i++)
-      k.box(s * 4.3, climbTops[i] / 2, s * climbZs[i], 0.9, climbTops[i], 0.6, CRATE);
-
-  // ---- scatter garnish in the four quadrant open areas, deliberately OFF the
-  // four lanes and the crossroads (those must stay open) and clear of spawns,
-  // waypoint seeds and the leaned/corner masses.
-  k.barrel(5.8, 5.8); k.barrel(-5.8, -5.8);          // NE / SW quadrant
-  k.crate(5.8, -5.8, 1.0); k.crate(-5.8, 5.8, 1.0);  // NW / SE quadrant
+      k.box(s * centerX, climbTops[i] / 2, s * climbZs[i], 0.9, climbTops[i], 0.6, CRATE);
 
   // ---- spawns (S6): tf south (−x), sp north (+x). Five points per team
   // across the end, tucked to the flanks (the end hollow blocks z≈0) plus
   // one forward lane point. Verified clear of all geometry + leaned hulls.
-  const spN = [[11.2, -7.2], [11.2, -3.8], [11.2, 3.8], [11.2, 7.2], [7.6, 0]];
+  const spN = [[px(11.2), -pz(7.2)], [px(11.2), -pz(3.8)],
+    [px(11.2), pz(3.8)], [px(11.2), pz(7.2)], [px(7.6), 0]];
   const spawns = { sp: spN, tf: spN.map(([x, z]) => [-x, -z]) };
 
   // ---- waypoints (S7): crossroads hub + four lanes + perimeter ring, seeds
@@ -1239,8 +1243,9 @@ function buildShipment(scene, colliders) {
   // symmetric: push2/push3 add a seed and its 180° mirror. buildNavGraph
   // filters any seed that lands inside geometry.
   const seeds = [[0, 0]];               // crossroads hub (self-symmetric)
-  const push2 = (x, z) => { seeds.push([x, z], [-x, -z]); };
-  const push3 = (x, z, y) => { seeds.push([x, z, y], [-x, -z, y]); };
+  const push2 = (x, z) => { seeds.push([px(x), pz(z)], [-px(x), -pz(z)]); };
+  const push3 = (x, z, y) => { seeds.push([px(x), pz(z), y], [-px(x), -pz(z), y]); };
+  const pushElevated = (x, z, y) => { seeds.push([x, z, y], [-x, -z, y]); };
   push2(3.5, 0); push2(7.6, 0);                       // N–S lane
   push2(0, 3.5); push2(0, 7.6);                       // E–W lane
   push2(4.3, 7.2); push2(8.4, 7.2); push2(8.8, 3.6);  // NE-side pockets
@@ -1254,11 +1259,11 @@ function buildShipment(scene, colliders) {
   push2(10.5, 0); push2(10.5, 1.9); push2(10.5, -1.9);
   push2(10.5, 3.9); push2(10.5, -3.9);
   // NE solid perch: crate chain treads + roof top (mirrored → SW perch)
-  for (let i = 0; i < climbZs.length; i++) push3(4.3, climbZs[i], climbTops[i]);
+  for (let i = 0; i < climbZs.length; i++) pushElevated(centerX, climbZs[i], climbTops[i]);
   push3(4.3, 3.0, 2.6); push3(4.3, 2.0, 2.6);
 
   return {
-    name: 'SHIPMENT',
+    name: 'FREIGHTLOCK',
     bounds: { x: W, z: D },
     sun: { color: 0xf2f4f8, intensity: 1.0, pos: [18, 40, -22] },
     hemi: { sky: 0xbcccdc, ground: 0x6a6258, intensity: 0.8 },
@@ -1269,8 +1274,8 @@ function buildShipment(scene, colliders) {
 }
 
 // ============================================================
-// KILLHOUSE — CoD4 SAS training warehouse (Credenhill, UK), per
-// docs/killhouse-reference.md (#23a). Compass: +x = north, +z = east
+// BREACHWORKS — SAS training warehouse (Credenhill, UK), per
+// docs/breachworks-reference.md (#23a). Compass: +x = north, +z = east
 // (top-down +x up). 30 × 20 m playable — bounds { x: 15, z: 10 } —
 // a single rectangular warehouse interior. tf spawns at the south (−x)
 // end, sp at the north (+x) end, 180° point symmetry.
@@ -1280,7 +1285,7 @@ function buildShipment(scene, colliders) {
 // center gap, east gap), the reference's stair + open platform in each
 // end pocket, a central watchtower with a west staircase (risers 0.4 —
 // well under the 0.55 step-up; a rise of exactly 0.55 fails a float
-// compare and strands bots, Shipment's lesson), plywood partition lanes
+// compare and strands bots, Freightlock's lesson), plywood partition lanes
 // on the kill floor killing every straight spawn-to-spawn eye-line, the
 // long target-practice room along the east wall (z 7..10), a two-room
 // dogleg corridor loop along the west wall (z −7..−10), and rough
@@ -1298,7 +1303,7 @@ function buildShipment(scene, colliders) {
 // Every new solid is visible; every new visual is solid or clearly
 // decorative (posters, decals, overhead trusses, out-of-bounds scenery).
 // ============================================================
-function buildKillhouse(scene, colliders) {
+function buildBreachworks(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 15, D = 10;      // half extents: 30 m spawn axis (x) × 20 m (z)
   const SHELL_H = 6, T = 0.4;
@@ -1530,7 +1535,7 @@ function buildKillhouse(scene, colliders) {
   ];
 
   return {
-    name: 'KILLHOUSE',
+    name: 'BREACHWORKS',
     bounds: { x: W, z: D },
     sun: { color: 0xf4f0e4, intensity: 0.9, pos: [20, 40, -15] },
     hemi: { sky: 0xaeb8c4, ground: 0x5a544a, intensity: 0.85 },
@@ -1541,8 +1546,8 @@ function buildKillhouse(scene, colliders) {
 }
 
 // ============================================================
-// VACANT — CoD4 deserted Russian office (Ukraine), per
-// docs/vacant-reference.md (#23e). Compass: +x = north, +z = east
+// DEAD LEASE — deserted Russian office (Ukraine), per
+// docs/dead-lease-reference.md (#23e). Compass: +x = north, +z = east
 // (top-down +x up). 34 × 24 m playable — bounds { x: 17, z: 12 }.
 // ASYMMETRIC by design, like the real map: tf spawns INSIDE the south
 // office end among cubicles/desks, sp spawns OUTSIDE in the north
@@ -1565,7 +1570,7 @@ function buildKillhouse(scene, colliders) {
 // new solid is visible; every new visual is solid or clearly decorative
 // (decals, wall panels, out-of-bounds scenery).
 // ============================================================
-function buildVacant(scene, colliders) {
+function buildDeadLease(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 17, D = 12;      // half extents: 34 m spawn axis (x) × 24 m (z)
   const SHELL_H = 3.6, T = 0.3, BH = 3.2, IH = 3.0;
@@ -1793,7 +1798,7 @@ function buildVacant(scene, colliders) {
   ];
 
   return {
-    name: 'VACANT',
+    name: 'DEAD LEASE',
     bounds: { x: W, z: D },
     sun: { color: 0xe8e4d8, intensity: 0.85, pos: [25, 38, -18] },
     hemi: { sky: 0xaab4bc, ground: 0x565048, intensity: 0.8 },
@@ -1804,13 +1809,13 @@ function buildVacant(scene, colliders) {
 }
 
 // ============================================================
-// CRASH — CoD4 Basrah desert town around a downed Sea Knight, per
-// docs/crash-reference.md (#23h). Compass: +x = north, +z = east
+// CHINOOK'S REST — Basrah desert town around a downed tandem-rotor helicopter,
+// per docs/chinooks-rest-reference.md (#23h). Compass: +x = north, +z = east
 // (top-down +x up). 40 × 30 m playable — bounds { x: 20, z: 15 }.
 // ASYMMETRIC (no 180° mirror): balance comes from route timing and
 // counter-angles; every spawn LOS check runs per-point. Three lanes on
 // the spawn axis: back ALLEY west (z −15..−12, chicaned by the backyard
-// dogleg stub + a west-wall stub), crash COURTYARD center, back STREET
+// dogleg stub + a west-wall stub), helicopter COURTYARD center, back STREET
 // east (z 11..15, staggered stalls/cars/garage). tf south, sp north,
 // both behind 2.6 m shield lines at x = ∓16 with alley/center/street
 // exit gaps.
@@ -1833,7 +1838,7 @@ function buildVacant(scene, colliders) {
 // block. Minimap needs no tuning — buildMinimapBg's y-band filter
 // (1.2..1.8) draws walls/shields/hull/cars and skips roofs/parapets.
 // ============================================================
-function buildCrash(scene, colliders) {
+function buildChinooksRest(scene, colliders) {
   const k = new MapKit(scene, colliders);
   const W = 20, D = 15;      // half extents: 40 m spawn axis (x) × 30 m (z)
   const SHELL_H = 5, T = 0.4, GH = 2.6;   // GH = ground-floor wall height
@@ -1895,7 +1900,7 @@ function buildCrash(scene, colliders) {
   k.box(-24, 5, -2, 6, 10, 12, 0xb0a088, nsf);             // west town mass
   k.box(-23, 4, -11, 5, 8, 7, 0xa89880, nsf);
 
-  // ---- G. spawn shields (Killhouse pattern, 2.6 m): tf line at x = −16,
+  // ---- G. spawn shields (Breachworks pattern, 2.6 m): tf line at x = −16,
   // sp line at x = 16. Gaps are the three lane exits per end (alley /
   // approach / center / street). Asymmetric panel bands per the doc.
   // tf line: the west gap of the doc's four-panel band is MERGED shut
@@ -1907,16 +1912,16 @@ function buildCrash(scene, colliders) {
     k.wall('z', a, b, 16, 2.6, 0.12, SHIELD);              // sp panels
   // forward-spawn screens (#23j): without these the main-building roof
   // sees both forward spawns through the center gaps. Staggered inside
-  // the gap (Killhouse-shield height); exits pass around both ends.
+  // the gap (Breachworks-shield height); exits pass around both ends.
   k.box(-14.4, 1.3, -1.0, 0.12, 2.6, 3.2, SHIELD);         // tf screen (z −2.6..0.6)
   k.box(14.4, 1.3, 1.0, 0.12, 2.6, 3.2, SHIELD);           // sp screen (z −0.6..2.6)
   k.box(-14.3, 1.3, -4.0, 1.4, 2.6, 0.12, SHIELD);         // tf SW screen: blinds the
                                                            // tower to the fwd spawn
 
-  // ---- A. crash courtyard: the Sea Knight (#23j). Visible mesh is a
+  // ---- A. helicopter courtyard: the downed tandem-rotor aircraft (#23j).
   // YAWED group (rotation.y = −0.30, nose SW, tail NE); collision is a
   // 5-box stepped AABB hull marched along the yawed centerline with
-  // padding (over-cover, Shipment's leaned-container lesson — note
+  // padding (over-cover, Freightlock's leaned-container lesson — note
   // rotation.y maps local +x to (cos a, −sin a) in (x,z), so the march
   // direction uses −sin). Separated tail is axis-aligned 1.5+ m NE of
   // the hull — the walkable fuselage–tail CUT is the signature lane.
@@ -1944,7 +1949,7 @@ function buildCrash(scene, colliders) {
     add(7.7, 0.5, 2.9, 0.2, 0.3, 0, 0x6a7256);             // belly band (faded)
     add(2.2, 1.0, 3.1, 0.9, 0.55, 0, OLIVE2);              // sponson stubs
     add(0.9, 0.5, 1.1, 3.9, 1.65, -1.15, 0x8a8478);        // tail-number panel
-    add(2.4, 0.16, 2.92, -2.2, 0.35, 0, 0x8a4b34);         // rust/burn streak
+    add(2.4, 0.16, 2.92, -2.2, 0.35, 0, 0x8a4b34);         // oxide/burn streak
     for (const [hx, hy] of [[-2.6, 3.1], [3.6, 3.35]])     // drooped rotor blades
       for (const ang of [0.5, 2.6, 4.7]) {
         const b = add(5.6, 0.07, 0.42, 0, 0, 0, 0x2e3230);
@@ -2227,7 +2232,7 @@ function buildCrash(scene, colliders) {
   ];
 
   return {
-    name: 'CRASH',
+    name: "CHINOOK'S REST",
     bounds: { x: W, z: D },
     sun: { color: 0xffe2b0, intensity: 1.05, pos: [28, 42, 18] },
     hemi: { sky: 0xe8d4ac, ground: 0x9a7a50, intensity: 0.75 },
@@ -2237,7 +2242,23 @@ function buildCrash(scene, colliders) {
   };
 }
 
-const MAPS = { nuketown: buildNuketown, rust: buildRust, shipment: buildShipment, killhouse: buildKillhouse, vacant: buildVacant, crash: buildCrash };
+const MAP_NAMES = {
+  tsartaverns: 'TSAR TAVERNS',
+  derrickdunes: 'DERRICK DUNES',
+  freightlock: 'FREIGHTLOCK',
+  breachworks: 'BREACHWORKS',
+  deadlease: 'DEAD LEASE',
+  chinooksrest: "CHINOOK'S REST",
+};
+
+const MAPS = {
+  tsartaverns: buildTsarTaverns,
+  derrickdunes: buildDerrickDunes,
+  freightlock: buildFreightlock,
+  breachworks: buildBreachworks,
+  deadlease: buildDeadLease,
+  chinooksrest: buildChinooksRest,
+};
 
 // ============================================================
 // Waypoint graph — filter seeds that land inside geometry, then

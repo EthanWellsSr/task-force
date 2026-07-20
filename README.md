@@ -19,7 +19,7 @@ python3 -m http.server 8642
 
 Then open http://localhost:8642 in Chrome/Safari/Firefox.
 
-Click a map (Nuketown, Rust, or Shipment) to start a Team Deathmatch, pick a class, and hit DEPLOY. Click the game once to capture your mouse.
+Click a map to start a Team Deathmatch, pick a class, and hit DEPLOY. Click the game once to capture your mouse.
 
 ## Controls
 
@@ -68,7 +68,7 @@ Click a map (Nuketown, Rust, or Shipment) to start a Team Deathmatch, pick a cla
 - **Killstreaks** — selectable UAV, Counter-UAV, Care Package, Precision
   Airstrike, Napalm Strike, plus the special Tactical Nuke
 - **Bots** — 4 difficulty levels (Options menu), they patrol, hunt, strafe, and use the killfeed like you do
-- **Maps** — Nuketown, Rust, and Shipment
+- **Maps** — Tsar Taverns, Derrick Dunes, Freightlock, Breachworks, Dead Lease, and Chinook's Rest
 - Health regen, hitmarkers, headshots, killfeed, minimap (enemies show when they fire),
   sniper scope sway (hold Shift to steady), damage direction indicator
 
@@ -87,5 +87,4 @@ Built with Three.js (bundled locally, MIT licensed). Everything else is hand-rol
 
 ---
 
-*This is a non-commercial educational project. It is not affiliated with or endorsed by
-Activision. "Nuketown", "Rust", and "Shipment" are trademarks of Activision Publishing, Inc.*
+*This is a non-commercial educational project.*

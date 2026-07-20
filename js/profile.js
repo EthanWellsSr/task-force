@@ -471,7 +471,7 @@ const Profile = {
   // known ship list if it isn't available yet.
   requiredNukeMaps() {
     if (typeof MAPS !== 'undefined' && MAPS) return Object.keys(MAPS);
-    return ['nuketown', 'rust', 'shipment', 'killhouse', 'vacant', 'crash'];
+    return ['tsartaverns', 'derrickdunes', 'freightlock', 'breachworks', 'deadlease', 'chinooksrest'];
   },
 
   // Record a nuke earned on `mapId`. Only counts at Veteran enemy difficulty

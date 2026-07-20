@@ -42,35 +42,35 @@ h1,h2 { font-weight:800; letter-spacing:2px; }
 }
 .map-card:hover { border-color:#e8a33d; transform:translateY(-3px); box-shadow:0 8px 30px rgba(0,0,0,.5); }
 .map-art { height:120px; position:relative; overflow:hidden; }
-.nuketown-art {
+.tsartaverns-art {
   background: linear-gradient(180deg,#7fb2d9 0%,#a8c8a0 55%,#5d8a4a 55%,#4e7a3a 100%);
 }
-.nuketown-art::before {
+.tsartaverns-art::before {
   content:""; position:absolute; left:22px; bottom:18px; width:70px; height:44px; background:#c8b98a;
   box-shadow: 130px 6px 0 #9fb6c4, 60px 26px 0 -8px #c9a227;
 }
-.rust-art { background: linear-gradient(180deg,#d9a86b 0%,#e0b478 55%,#b98a4e 55%,#a97b42 100%); }
-.rust-art::before {
+.derrickdunes-art { background: linear-gradient(180deg,#d9a86b 0%,#e0b478 55%,#b98a4e 55%,#a97b42 100%); }
+.derrickdunes-art::before {
   content:""; position:absolute; left:100px; bottom:16px; width:14px; height:70px; background:#6e5637;
   box-shadow:-60px 30px 0 10px #8a4a35, 70px 34px 0 6px #4a6a8a;
 }
-.shipment-art { background: linear-gradient(180deg,#9fb2c4 0%,#8f9aa2 55%,#6f6a60 55%,#5c5850 100%); }
-.shipment-art::before {
+.freightlock-art { background: linear-gradient(180deg,#9fb2c4 0%,#8f9aa2 55%,#6f6a60 55%,#5c5850 100%); }
+.freightlock-art::before {
   content:""; position:absolute; left:26px; bottom:20px; width:40px; height:26px; background:#3f6f96;
   box-shadow: 52px -2px 0 #4f7a45, 26px 22px 0 #b59a3a, 78px 20px 0 #9a5a3a;
 }
-.crash-art { background: linear-gradient(180deg,#c9a97c 0%,#bfa070 55%,#a08050 55%,#8f7245 100%); }
-.crash-art::before {
+.chinooksrest-art { background: linear-gradient(180deg,#c9a97c 0%,#bfa070 55%,#a08050 55%,#8f7245 100%); }
+.chinooksrest-art::before {
   content:""; position:absolute; left:44px; bottom:24px; width:78px; height:16px; background:#5a6a55;
   box-shadow: 54px -12px 0 -6px #5a6a55, 20px -26px 0 -2px #6a6a6a, 26px -40px 0 4px #7d7d7d;
 }
-.vacant-art { background: linear-gradient(180deg,#7d8489 0%,#6e747a 55%,#3c3e40 55%,#333537 100%); }
-.vacant-art::before {
+.deadlease-art { background: linear-gradient(180deg,#7d8489 0%,#6e747a 55%,#3c3e40 55%,#333537 100%); }
+.deadlease-art::before {
   content:""; position:absolute; left:30px; bottom:22px; width:120px; height:34px; background:#565c62;
   box-shadow: inset 0 -6px 0 #4a5056, 96px 26px 0 -14px #8a4a35, 122px 28px 0 -16px #3f6f96;
 }
-.killhouse-art { background: linear-gradient(180deg,#4a4642 0%,#5a5148 55%,#7a6a52 55%,#6a5c46 100%); }
-.killhouse-art::before {
+.breachworks-art { background: linear-gradient(180deg,#4a4642 0%,#5a5148 55%,#7a6a52 55%,#6a5c46 100%); }
+.breachworks-art::before {
   content:""; position:absolute; left:34px; bottom:18px; width:16px; height:60px; background:#8a6f4a;
   box-shadow: 60px 24px 0 4px #a08050, 110px 30px 0 14px #b03030;
 }
