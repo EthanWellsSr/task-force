@@ -171,13 +171,13 @@ const WEAPONS = {
   // Crossbow — the final secondary unlock. Its own category, so no firearm
   // attachments mount (a clean bow). One bolt is loaded at a time from a
   // 25-arrow quiver; `perShotReload` starts the visible hand-load immediately
-  // after every shot. Hitscan like every gun, but firePlayerShot flies a real
-  // cosmetic arrow to the hit point and swaps the muzzle flash/report for a
-  // bow thunk. A precise, slow one-shot body at close range (headshot
-  // one-shots at any range).
+  // after every shot. Its bolt is a gravity-driven world projectile that deals
+  // damage on impact and sticks to hit soldiers through their death fall. A
+  // precise, slow one-shot body at close range (headshot one-shots at any
+  // range).
   crossbow: { slot:'secondary', cat:'Crossbow', name:'CROSSBOW',
     dmg:100, minDmg:60, head:1.5, rpm:55, mag:1, reserve:24, reload:1.2, mode:'bolt',
-    perShotReload:true,
+    perShotReload:true, projectileSpeed:85, projectileGravity:9.8,
     spreadHip:.02, spreadAds:.001, recoil:.015, bloom:.003, zoom:1.5, adsTime:.32,
     speed:.96, range:[22,48], model:'crossbow' },
 };

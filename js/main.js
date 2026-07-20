@@ -1385,10 +1385,21 @@ function fxSmoke(at, ttl, size, tint) {
   s.sp.material.color.setHex(tint || 0xffffff);
   s.sp.visible = true;
 }
-// ---- crossbow bolts: cosmetic arrows that fly from the muzzle to the
-// hitscan-resolved impact point, stick briefly, then despawn. Purely visual —
-// the hit/damage is already decided by firePlayerShot's raycast.
-const _flyingArrows = [];
+// ---- crossbow bolts: real projectiles. Each bolt carries velocity and gravity,
+// sweeps its full movement segment every frame, and deals damage only when the
+// broadhead reaches a target. Target hits re-parent the mesh to the soldier so
+// it follows movement and the death fall, then disappears with the corpse.
+const _crossbowBolts = [];
+const _boltRay = new THREE.Ray();
+const _boltFrom = new THREE.Vector3();
+const _boltStep = new THREE.Vector3();
+const _boltDir = new THREE.Vector3();
+const _boltNext = new THREE.Vector3();
+const _boltLook = new THREE.Vector3();
+const _boltImpact = new THREE.Vector3();
+const _boltHitVec = new THREE.Vector3();
+const _boltBodyBox = new THREE.Box3();
+const _boltHeadBox = new THREE.Box3();
 function buildArrowMesh() {
   const g = new THREE.Group();
   const mat = c => new THREE.MeshLambertMaterial({ color: c });
@@ -1400,27 +1411,143 @@ function buildArrowMesh() {
   box(0.06, 0.006, 0.09, 0xbb3b2f, -0.22);
   return g;
 }
-function spawnFlyingArrow(from, to) {
+function removeCrossbowBolt(index) {
+  const bolt = _crossbowBolts[index];
+  if (!bolt) return;
+  if (bolt.mesh.parent) bolt.mesh.parent.remove(bolt.mesh);
+  bolt.mesh.traverse(part => {
+    if (part.geometry) part.geometry.dispose();
+    if (part.material) part.material.dispose();
+  });
+  _crossbowBolts.splice(index, 1);
+}
+function clearCrossbowBolts() {
+  for (let i = _crossbowBolts.length - 1; i >= 0; i--) removeCrossbowBolt(i);
+}
+function spawnCrossbowBolt(from, direction, def) {
   if (!G.scene) return;
   const mesh = buildArrowMesh();
   mesh.position.copy(from);
-  mesh.lookAt(to);
+  _boltDir.copy(direction).normalize();
+  mesh.lookAt(_boltLook.copy(from).add(_boltDir));
   G.scene.add(mesh);
-  const dist = from.distanceTo(to);
-  _flyingArrows.push({ mesh, from: from.clone(), to: to.clone(),
-    t: 0, flightT: THREE.MathUtils.clamp(dist / 130, 0.05, 0.32), life: 0 });
+  _crossbowBolts.push({
+    mesh,
+    velocity: _boltDir.clone().multiplyScalar(def.projectileSpeed),
+    gravity: def.projectileGravity,
+    def,
+    stoppingPower: player.perks.has('stopping'),
+    distance: 0,
+    life: 0,
+    state: 'flying',
+    target: null,
+  });
 }
-function updateFlyingArrows(dt) {
-  for (let i = _flyingArrows.length - 1; i >= 0; i--) {
-    const a = _flyingArrows[i];
-    if (a.t < a.flightT) {
-      a.t += dt;
-      a.mesh.position.lerpVectors(a.from, a.to, Math.min(1, a.t / a.flightT));
-    } else {
-      a.mesh.position.copy(a.to); // stuck in the target/wall
-      a.life += dt;
-      if (a.life > 2.5) { G.scene.remove(a.mesh); _flyingArrows.splice(i, 1); }
+function crossbowBoltHitboxes(bot) {
+  const hitH = typeof bot.hitHeight === 'function' ? bot.hitHeight() : 1.85;
+  const headH = THREE.MathUtils.lerp(0.4, 0.22, bot.proneAmt || 0);
+  const bodyTop = bot.pos.y + Math.max(0.35, hitH - headH);
+  _boltBodyBox.min.set(bot.pos.x - 0.36, bot.pos.y, bot.pos.z - 0.36);
+  _boltBodyBox.max.set(bot.pos.x + 0.36, bodyTop, bot.pos.z + 0.36);
+  _boltHeadBox.min.set(bot.pos.x - 0.2, bodyTop, bot.pos.z - 0.2);
+  _boltHeadBox.max.set(bot.pos.x + 0.2, bot.pos.y + hitH, bot.pos.z + 0.2);
+}
+function attachCrossbowBoltToTarget(bolt, target) {
+  bolt.mesh.updateMatrixWorld(true);
+  target.mesh.updateMatrixWorld(true);
+  target.mesh.attach(bolt.mesh); // preserves the world impact pose
+  bolt.state = 'target';
+  bolt.target = target;
+  bolt.velocity.set(0, 0, 0);
+}
+function updateCrossbowBolts(dt) {
+  for (let i = _crossbowBolts.length - 1; i >= 0; i--) {
+    const bolt = _crossbowBolts[i];
+    if (bolt.state === 'target') {
+      // Bot.update hides the mesh at this exact threshold; removing the child
+      // here keeps the bolt and corpse lifetimes identical and prevents it
+      // reappearing when the same soldier mesh respawns.
+      if (!bolt.target || (!bolt.target.alive && bolt.target.deathAnimT <= 0)) removeCrossbowBolt(i);
+      continue;
     }
+    if (bolt.state === 'world') {
+      bolt.life += dt;
+      if (bolt.life > 2.5) removeCrossbowBolt(i);
+      continue;
+    }
+
+    bolt.life += dt;
+    bolt.velocity.y -= bolt.gravity * dt;
+    _boltFrom.copy(bolt.mesh.position);
+    _boltStep.copy(bolt.velocity).multiplyScalar(dt);
+    const stepDist = _boltStep.length();
+    if (stepDist <= 1e-6) continue;
+    _boltDir.copy(_boltStep).divideScalar(stepDist);
+    _boltNext.copy(_boltFrom).add(_boltStep);
+
+    const wall = rayWorld(_boltFrom, _boltDir, stepDist, G.colliders);
+    let nearestDist = wall ? wall.dist : stepDist;
+    let target = null;
+    let headshot = false;
+    for (const bot of G.bots) {
+      if (!bot.alive || bot.team === player.team) continue;
+      crossbowBoltHitboxes(bot);
+      _boltRay.origin.copy(_boltFrom);
+      _boltRay.direction.copy(_boltDir);
+      let hitDist = Infinity;
+      let hitHead = false;
+      const headHit = _boltRay.intersectBox(_boltHeadBox, _boltHitVec);
+      if (headHit) { hitDist = headHit.distanceTo(_boltFrom); hitHead = true; }
+      const bodyHit = _boltRay.intersectBox(_boltBodyBox, _boltHitVec);
+      if (bodyHit) {
+        const bodyDist = bodyHit.distanceTo(_boltFrom);
+        if (bodyDist < hitDist) { hitDist = bodyDist; hitHead = false; }
+      }
+      if (hitDist <= nearestDist && hitDist <= stepDist) {
+        nearestDist = hitDist;
+        target = bot;
+        headshot = hitHead;
+      }
+    }
+
+    if (target) {
+      bolt.distance += nearestDist;
+      _boltImpact.copy(_boltFrom).addScaledVector(_boltDir, nearestDist);
+      bolt.mesh.position.copy(_boltImpact);
+      bolt.mesh.lookAt(_boltLook.copy(_boltImpact).add(_boltDir));
+      const fall = THREE.MathUtils.clamp(
+        (bolt.distance - bolt.def.range[0]) / (bolt.def.range[1] - bolt.def.range[0]), 0, 1);
+      let dmg = THREE.MathUtils.lerp(bolt.def.dmg, bolt.def.minDmg, fall);
+      if (headshot) dmg *= bolt.def.head;
+      if (bolt.stoppingPower) dmg *= 1.25;
+      const wasAlive = target.alive;
+      const damaged = target.hurt(Math.round(dmg), player, bolt.def.name, headshot);
+      attachCrossbowBoltToTarget(bolt, target);
+      fxSpark(_boltImpact, true);
+      if (damaged) {
+        const killed = wasAlive && !target.alive;
+        UI.showHitmarker(killed);
+        if (!killed) AudioSys.hit(false);
+      } else {
+        UI.showInvulnerableHit();
+      }
+      continue;
+    }
+
+    if (wall) {
+      bolt.distance += wall.dist;
+      bolt.mesh.position.copy(wall.point);
+      bolt.mesh.lookAt(_boltLook.copy(wall.point).add(_boltDir));
+      bolt.state = 'world';
+      bolt.life = 0;
+      fxSpark(wall.point, false);
+      continue;
+    }
+
+    bolt.distance += stepDist;
+    bolt.mesh.position.copy(_boltNext);
+    bolt.mesh.lookAt(_boltLook.copy(_boltNext).add(bolt.velocity));
+    if (bolt.life > 4 || bolt.mesh.position.y < -12) removeCrossbowBolt(i);
   }
 }
 
@@ -3767,6 +3894,7 @@ function startMatch(mapId, modeId = 'tdm') {
   G.mapId = mapId;
   G.modeId = modeById(modeId).id;
   G.mode = modeById(G.modeId);
+  clearCrossbowBolts();
   G.colliders = [];
   G.scene = new THREE.Scene();
   G.scene.add(G.camera);
@@ -4985,8 +5113,8 @@ function firePlayerShot(w) {
   // gate on mag <= 0 / mag < def.mag) never fire. Unlimited ammo, no reload.
   if (!w.bottomless) w.mag--;
   noteShot(player);
-  // crossbow: a bow thunk, not a gunshot (the re-cock cycle animation is
-  // driven by fireCooldown in updateCameraAndViewmodel)
+  // Crossbow launch has its own report; its reload and world bolt continue
+  // independently after this frame.
   if (isCrossbow) AudioSys.bow();
   else AudioSys.shot(def.model, 0, 0, def.suppressed); // P55: suppressed defs report the quiet voice
 
@@ -5017,6 +5145,16 @@ function firePlayerShot(w) {
   }
 
   const spread = currentSpread();
+  if (isCrossbow) {
+    G.camera.getWorldDirection(_shotDir);
+    const s1 = (Math.random() - 0.5) * 2 * spread;
+    const s2 = (Math.random() - 0.5) * 2 * spread;
+    _right.crossVectors(_shotDir, _up).normalize();
+    _realUp.crossVectors(_right, _shotDir).normalize();
+    _shotDir.addScaledVector(_right, s1).addScaledVector(_realUp, s2).normalize();
+    spawnCrossbowBolt(_muzzleWorld, _shotDir, def);
+    return;
+  }
   const pellets = def.pellets || 1;
   let anyHit = false, anyKill = false, protectedHit = false, killCount = 0;
   // #18f: high-zoom snipers punch through stacked bodies at full damage
@@ -5063,10 +5201,7 @@ function firePlayerShot(w) {
     // sniper shot, otherwise the first body (or the wall if the pellet whiffs)
     const stopDist = (penetrates || _collatHits.length === 0) ? wallDist : _collatHits[0].dist;
     const end = _shotEnd.copy(_shotOrigin).addScaledVector(_shotDir, stopDist);
-    // crossbow flies a real bolt to the hit point (hitscan resolves the hit,
-    // the arrow is the visible-travel flourish); every other gun draws a tracer
-    if (isCrossbow) spawnFlyingArrow(_muzzleWorld, end);
-    else if (pellets === 1 || p % 2 === 0) fxTracer(_muzzleWorld, end);
+    if (pellets === 1 || p % 2 === 0) fxTracer(_muzzleWorld, end);
 
     for (const v of victims) {
       const fall = THREE.MathUtils.clamp((v.dist - def.range[0]) / (def.range[1] - def.range[0]), 0, 1);
@@ -5212,7 +5347,7 @@ function updateCameraAndViewmodel(dt) {
     if (cyc) cyc.position.z = pOut * (boltMode ? 0.06 : 0.075);
     // crossbow reload: after each shot the string snaps forward (released), then
     // re-cocks (draws back) while a fresh bolt slides onto the rail and seats.
-    // Driven by the per-shot re-cock cycle (fireCooldown) or a full mag reload.
+    // The crossbow's per-shot reload timer drives the complete sequence.
     if (isCrossbow) {
       let ct; // 0 = just fired (string forward, no bolt) → 1 = ready (cocked + loaded)
       if (player.reloadT > 0) ct = 1 - player.reloadT / (def.reload * (player.perks.has('soh') ? 0.5 : 1));
@@ -5424,7 +5559,7 @@ function loop() {
     if (G.state === 'killcam') updateKillCam(dt);
 
     fxUpdate(dt);
-    updateFlyingArrows(dt);
+    updateCrossbowBolts(dt);
     updateThrowables(dt);
     UI.updateFragDanger(fragDangerInfo());
     UI.updateCarePackageLocator(carePackageLocatorInfo());
@@ -5497,6 +5632,7 @@ window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
   spawnBotThrowable, // #16b
   tomahawks: () => _tomahawks, axePickups: () => _axePickups, throwTomahawk, // #16c
   updateTomahawks, switchWeapon, curW,
+  crossbowBolts: () => _crossbowBolts, updateCrossbowBolts,
   smokeClouds: () => _smokeClouds, smokeBlocked };
 
 UI.init();
