@@ -4937,6 +4937,10 @@ function updatePlayer(dt) {
         } else {
           player.fireCooldown = 60 / def.rpm;
         }
+        // A crossbow carries one loaded bolt. Start drawing the next arrow
+        // from its quiver immediately so every shot is followed by the
+        // visible hand-load instead of behaving like a detachable magazine.
+        if (def.perShotReload && w.mag <= 0 && w.reserve > 0) startReload();
       }
     }
   }
@@ -5163,12 +5167,17 @@ function updateCameraAndViewmodel(dt) {
     // camera while the support hand pulls the mag down/out, phase 2 the
     // hand seats the fresh mag, phase 3 racks the charging handle
     // (quick z-jerk toward the camera).
-    let rTilt = 0, rOut = 0, rRack = 0;
+    const isCrossbow = def.model === 'crossbow';
+    let rTilt = 0, rOut = 0, rRack = 0, crossbowReloadT = -1;
     if (player.reloadT > 0) {
       const t = 1 - player.reloadT / (def.reload * (player.perks.has('soh') ? 0.5 : 1));
-      rTilt = _ss(t / 0.22) - _ss((t - 0.55) / 0.24);   // roll out, hold, roll back
-      rOut = _ss(t / 0.3) - _ss((t - 0.38) / 0.3);      // mag out 0→0.3, back in by 0.68
-      rRack = _ss((t - 0.8) / 0.09) - _ss((t - 0.9) / 0.09); // handle jerk at the end
+      if (isCrossbow) {
+        crossbowReloadT = THREE.MathUtils.clamp(t, 0, 1);
+      } else {
+        rTilt = _ss(t / 0.22) - _ss((t - 0.55) / 0.24);   // roll out, hold, roll back
+        rOut = _ss(t / 0.3) - _ss((t - 0.38) / 0.3);      // mag out 0→0.3, back in by 0.68
+        rRack = _ss((t - 0.8) / 0.09) - _ss((t - 0.9) / 0.09); // handle jerk at the end
+      }
     }
     // pump/bolt cycle (#10c): for pump/bolt weapons fireCooldown IS the
     // cycle window (pumpTime / 60÷rpm), so the anim normalizes against it
@@ -5180,7 +5189,6 @@ function updateCameraAndViewmodel(dt) {
     // gate keeps a residual fireCooldown from the PREVIOUS gun (it's
     // per-player) from playing a cycle tail on a freshly switched one.
     let pOut = 0, bReach = 0;
-    const isCrossbow = def.model === 'crossbow';
     const boltMode = def.mode === 'bolt' && !isCrossbow; // the crossbow re-cocks its own way (below)
     if (player.reloadT <= 0 && player.switchT <= 0 && player.fireCooldown > 0 &&
         (def.mode === 'pump' || boltMode)) {
@@ -5208,27 +5216,56 @@ function updateCameraAndViewmodel(dt) {
     if (isCrossbow) {
       let ct; // 0 = just fired (string forward, no bolt) → 1 = ready (cocked + loaded)
       if (player.reloadT > 0) ct = 1 - player.reloadT / (def.reload * (player.perks.has('soh') ? 0.5 : 1));
-      else if (player.fireCooldown > 0 && player.switchT <= 0) ct = 1 - player.fireCooldown / (60 / def.rpm);
+      else if (!def.perShotReload && player.fireCooldown > 0 && player.switchT <= 0) ct = 1 - player.fireCooldown / (60 / def.rpm);
       else ct = 1; // idle & ready
       ct = THREE.MathUtils.clamp(ct, 0, 1);
       const bstr = vmGun.userData.bowString;
       if (bstr) bstr.position.z = THREE.MathUtils.lerp(-0.26, 0, _ss(ct / 0.55)); // forward(released) → back(cocked)
       const arrow = vmGun.userData.arrow;
       if (arrow) {
-        arrow.position.z = THREE.MathUtils.lerp(0.13, 0, _ss((ct - 0.5) / 0.4)); // slides in from behind → seated
-        arrow.visible = ct > 0.44 && (curW().mag > 0 || player.reloadT > 0);
+        if (crossbowReloadT >= 0) {
+          // The bolt appears beside the hand after it reaches the quiver,
+          // then follows the hand up and forward until it seats on the rail.
+          const seat = _ss((crossbowReloadT - 0.32) / 0.5);
+          arrow.position.set(
+            THREE.MathUtils.lerp(-0.18, 0, seat),
+            THREE.MathUtils.lerp(-0.25, 0, seat),
+            THREE.MathUtils.lerp(0.35, 0, seat));
+          arrow.visible = crossbowReloadT > 0.28;
+        } else {
+          arrow.position.set(0, 0, THREE.MathUtils.lerp(0.13, 0, _ss((ct - 0.5) / 0.4)));
+          arrow.visible = ct > 0.44 && curW().mag > 0;
+        }
       }
     }
     const armS = vmGun.userData.armSupport;
     if (armS && armS.userData.rest) {
       const rest = armS.userData.rest;
-      armS.position.set(
-        rest.x + pull.x * rOut,
-        rest.y + pull.y * rOut + rRack * 0.05,
-        // rack slides the support hand back to the receiver (~z −0.06);
-        // hands already at/behind it (pistols) stay put
-        rest.z + pull.z * rOut + rRack * Math.max(0, -0.06 - rest.z) +
-          (boltMode ? 0 : pOut * 0.075));
+      if (isCrossbow && crossbowReloadT >= 0) {
+        // Reach down-left to the quiver, carry the arrow alongside the hand
+        // to the flight rail, then release it and return to the fore-rail.
+        const grab = _ss(crossbowReloadT / 0.24);
+        const carry = _ss((crossbowReloadT - 0.32) / 0.5);
+        const release = _ss((crossbowReloadT - 0.82) / 0.16);
+        const qx = THREE.MathUtils.lerp(0, -0.18, grab);
+        const qy = THREE.MathUtils.lerp(0, -0.22, grab);
+        const qz = THREE.MathUtils.lerp(0, 0.18, grab);
+        const sx = THREE.MathUtils.lerp(qx, -0.06, carry);
+        const sy = THREE.MathUtils.lerp(qy, 0.1, carry);
+        const sz = THREE.MathUtils.lerp(qz, -0.06, carry);
+        armS.position.set(
+          rest.x + THREE.MathUtils.lerp(sx, 0, release),
+          rest.y + THREE.MathUtils.lerp(sy, 0, release),
+          rest.z + THREE.MathUtils.lerp(sz, 0, release));
+      } else {
+        armS.position.set(
+          rest.x + pull.x * rOut,
+          rest.y + pull.y * rOut + rRack * 0.05,
+          // rack slides the support hand back to the receiver (~z −0.06);
+          // hands already at/behind it (pistols) stay put
+          rest.z + pull.z * rOut + rRack * Math.max(0, -0.06 - rest.z) +
+            (boltMode ? 0 : pOut * 0.075));
+      }
     }
     const armT = vmGun.userData.armTrigger;
     if (armT && armT.userData.rest) {

@@ -656,7 +656,8 @@ const UI = {
       c.attachments[slot + 'DotColor'], c.attachments[slot + 'LaserColor'],
       c.attachments[slot + 'AcogReticle']) : WEAPONS[key];
     const wrap = this.$('weaponStats');
-    let html = `<div style="font-weight:700;letter-spacing:1px;margin-bottom:8px">${w.name} <span style="color:#6a7060;font-size:9px">${w.cat} &middot; ${fireModeLabel(w)} &middot; ${w.mag} RND MAG</span></div>`;
+    const ammoStore = w.perShotReload ? `${w.mag + w.reserve} ARROW QUIVER` : `${w.mag} RND MAG`;
+    let html = `<div style="font-weight:700;letter-spacing:1px;margin-bottom:8px">${w.name} <span style="color:#6a7060;font-size:9px">${w.cat} &middot; ${fireModeLabel(w)} &middot; ${ammoStore}</span></div>`;
     if (slot) {
       const camo = this.classCamo(c, slot);
       html += `<div class="weapon-camo-note">CAMO: ${camo ? camo.name + ' - ' + attachmentDesc(camo) : 'NONE'}</div>`;
