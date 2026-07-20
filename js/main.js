@@ -365,6 +365,8 @@ const VM_RETICLE = {
   acogHair: 0.0017,
   acogArm: 0.008,
   acogChevron: 0.010,
+  scope3xHair: 0.0015,
+  scope3xArm: 0.010,
 };
 
 // Red dot mount points (#9c): rail-top y + mount z per weapon key
@@ -372,6 +374,7 @@ const VM_RETICLE = {
 // 0.039 above y; buildViewModel shifts userData.adsPos so it lands on
 // screen center at full ADS.
 const VM_OPTIC = {
+  crossbow: { y: 0.065, z: -0.16 },
   m4a1: { y: 0.059, z: -0.18 },
   scar: { y: 0.055, z: -0.14 },
   acr: { y: 0.041, z: -0.16 },
@@ -541,14 +544,16 @@ const VM_RECIPES = {
   // The bolt (a) and bowstring (str) go into their own groups so the reload
   // animation can slide/hide them. Rest pose = string cocked (drawn back), bolt
   // loaded on the rail.
-  crossbow({ p, a, str, dark, mid, wood, black }) {
+  crossbow({ p, s, o, a, str, dark, mid, wood, black }) {
     const limb = 0x2a2c30, steel = 0x8a8f98, shaftC = 0x7a6a48, fletch = 0xbb3b2f;
     p(0.05, 0.05, 0.17, wood, 0, -0.008, 0.055);       // shoulder stock
     p(0.05, 0.055, 0.12, dark, 0, 0.006, -0.055);      // receiver / trigger housing
     p(0.032, 0.08, 0.045, black, 0, -0.062, -0.02);    // pistol grip
     p(0.016, 0.026, 0.02, mid, 0, -0.02, -0.078);      // trigger-guard nub
     p(0.03, 0.03, 0.6, dark, 0, 0.03, -0.34);          // flight rail
-    p(0.013, 0.016, 0.6, mid, 0, 0.052, -0.34);        // top groove rib (bolt channel)
+    o(0.013, 0.016, 0.6, mid, 0, 0.052, -0.34);        // top groove rib (clear under optics)
+    s(0.012, 0.03, 0.02, dark, 0, 0.067, -0.55);       // front iron sight
+    s(0.022, 0.025, 0.02, dark, 0, 0.0695, -0.11);     // rear iron sight
     p(0.055, 0.062, 0.05, mid, 0, 0.03, -0.6);         // front riser (limb mount)
     p(0.3, 0.024, 0.03, limb, -0.16, 0.032, -0.6);     // left limb
     p(0.3, 0.024, 0.03, limb, 0.16, 0.032, -0.6);      // right limb
@@ -943,7 +948,8 @@ function buildViewModel(w) {
   g.userData.adsPos = VM_POS.ads.clone();
   const opticId = w.attachments && (w.attachments.includes('reddot') ? 'reddot'
     : w.attachments.includes('holo') ? 'holo'
-    : w.attachments.includes('acog') ? 'acog' : null); // P54
+    : w.attachments.includes('acog') ? 'acog'
+    : w.attachments.includes('scope3x') ? 'scope3x' : null); // P54 + crossbow 3X
   if (opticId) {
     for (const m of irons) m.visible = false;
     for (const m of opticObstructions) m.visible = false;
@@ -981,7 +987,8 @@ function buildViewModel(w) {
         for (const sign of [-1, 1]) {
           const ch = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.acogChevron, hair, 0.003), glow());
           ch.position.set(sign * VM_RETICLE.acogChevron * 0.32, retY - 0.002, mnt.z);
-          ch.rotation.z = sign * 0.72;
+          // The inner ends meet above the outer ends: an upright ^ chevron.
+          ch.rotation.z = -sign * 0.72;
           g.add(ch);
         }
       } else {
@@ -992,6 +999,26 @@ function buildViewModel(w) {
         vbar.position.set(0, retY, mnt.z);
         g.add(vbar);
       }
+    } else if (opticId === 'scope3x') {
+      // Crossbow 3X: a longer, slimmer open tube than the ACOG. The housing
+      // remains box-built, but every center-facing surface stays open so the
+      // exact ×3 sight picture is unobstructed.
+      retY = mnt.y + 0.044;
+      part(0.026, 0.014, 0.05, black, 0, mnt.y + 0.019, mnt.z);       // riser
+      part(0.006, 0.044, 0.18, black, -0.022, retY, mnt.z);           // tube walls
+      part(0.006, 0.044, 0.18, black, 0.022, retY, mnt.z);
+      part(0.05, 0.006, 0.18, black, 0, retY + 0.022, mnt.z);
+      part(0.05, 0.006, 0.18, black, 0, retY - 0.022, mnt.z);
+      part(0.007, 0.056, 0.018, black, -0.028, retY, mnt.z - 0.1);    // objective collar
+      part(0.007, 0.056, 0.018, black, 0.028, retY, mnt.z - 0.1);
+      part(0.064, 0.007, 0.018, black, 0, retY + 0.028, mnt.z - 0.1);
+      part(0.064, 0.007, 0.018, black, 0, retY - 0.028, mnt.z - 0.1);
+      const hbar = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.scope3xArm, VM_RETICLE.scope3xHair, 0.003), glow());
+      hbar.position.set(0, retY, mnt.z);
+      g.add(hbar);
+      const vbar = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.scope3xHair, VM_RETICLE.scope3xArm, 0.003), glow());
+      vbar.position.set(0, retY, mnt.z);
+      g.add(vbar);
     } else {
       // holo: wide flat open window frame with a circle-dot reticle
       retY = mnt.y + 0.046;

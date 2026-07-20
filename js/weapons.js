@@ -172,10 +172,11 @@ const WEAPONS = {
     dmg:135, minDmg:135, head:1, rpm:60, mag:1, reserve:0, reload:0, mode:'throw',
     spreadHip:0, spreadAds:0, recoil:0, bloom:0, zoom:1.0, adsTime:.16,
     speed:1.0, range:[8,30], model:'tomahawk', throwWeapon:true },
-  // Crossbow — the final secondary unlock. Its own category, so no firearm
-  // attachments mount (a clean bow). One bolt is loaded at a time from a
-  // 25-arrow quiver; `perShotReload` starts the visible hand-load immediately
-  // after every shot. Its bolt is a gravity-driven world projectile that deals
+  // Crossbow — the final secondary unlock. Its own category limits it to the
+  // three explicitly supported optics; no muzzle, underbarrel, laser, mag, or
+  // camo attachments mount. One bolt is loaded at a time from a 25-arrow
+  // quiver; `perShotReload` starts the visible hand-load immediately after
+  // every shot. Its bolt is a gravity-driven world projectile that deals
   // damage on impact and sticks to hit soldiers through their death fall. A
   // precise, slow one-shot body at close range (headshot one-shots at any
   // range).
@@ -343,6 +344,7 @@ const WEAPON_TRACK_UNLOCK_TABLE = [
   { level: 10, id: 'suppressor',   name: 'SUPPRESSOR',          pool: 'attachment' },
   { level: 11, id: 'camoTiger',    name: 'TIGER CAMO',          pool: 'camo' },
   { level: 11, id: 'quickdraw',    name: 'QUICKDRAW GRIP',      pool: 'attachment' },
+  { level: 12, id: 'scope3x',      name: '3X SCOPE',             pool: 'attachment' },
   { level: 12, id: 'camoHex',      name: 'HEX CAMO',            pool: 'camo' },
   { level: 13, id: 'camoCarbon',   name: 'CARBON CAMO',         pool: 'camo' },
   { level: 14, id: 'camoRedline',  name: 'REDLINE CAMO',        pool: 'camo' },
@@ -417,7 +419,7 @@ const ATTACH_SLOTS = ['optic', 'muzzle', 'underbarrel', 'laser', 'mag', 'camo'];
 
 const ATTACHMENTS = {
   reddot: { id:'reddot', name:'RED DOT SIGHT', slot:'optic',
-    cats:['Assault Rifle','SMG','LMG','Shotgun'],
+    cats:['Assault Rifle','SMG','LMG','Shotgun','Crossbow'],
     mods:{ adsTime:.85, spreadAds:.9 }, unlockLevel:2 }, // first unlock (P13)
   // Holo identity vs the red dot: the bigger window aims tighter but the
   // bulkier housing aims up slower (still faster than irons). One optic per
@@ -432,8 +434,15 @@ const ATTACHMENTS = {
   // the slowest aim-up of the three optics. No shotguns (zoom is pointless
   // inside a 15 m falloff) and no snipers (they carry real scopes).
   acog: { id:'acog', name:'ACOG SIGHT', slot:'optic',
-    cats:['Assault Rifle','SMG','LMG'],
+    cats:['Assault Rifle','SMG','LMG','Crossbow'],
     mods:{ zoom:1.9, adsTime:1.18, spreadAds:.7 }, unlockLevel:9 },
+  // Crossbow-only long optic. Its ×2 modifier composes with the bow's base
+  // ×1.5 ADS value for an exact ×3 sight picture while staying below the
+  // high-power sniper-overlay gate. It shares the standard weapon-specific
+  // sight-color progression with the red dot and ACOG.
+  scope3x: { id:'scope3x', name:'3X SCOPE', slot:'optic',
+    cats:['Crossbow'],
+    mods:{ zoom:2, adsTime:1.24, spreadAds:.62 }, unlockLevel:12 },
   // P55: suppressor — quiet fire for a shorter falloff band. The teeth:
   // bots' earshot on your shots drops 25 → ~9 m (noteShot ×0.35, composes
   // with ninja) and the minimap fire-flash never writes. The trade:
