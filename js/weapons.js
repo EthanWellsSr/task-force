@@ -10,11 +10,11 @@ const WEAPONS = {
   m4a1: { slot:'primary', cat:'Assault Rifle', name:'M4A1',
     dmg:30, minDmg:20, head:1.4, rpm:780, mag:30, reserve:180, reload:2.05, mode:'auto',
     spreadHip:.030, spreadAds:.0035, recoil:.0135, bloom:.0042, zoom:1.35, adsTime:.24,
-    speed:.95, range:[26,52], model:'ar', unlockLevel:1 },
+    speed:.95, range:[26,52], model:'ar' },
   scar: { slot:'primary', cat:'Assault Rifle', name:'FN SCAR-H',
     dmg:40, minDmg:30, head:1.4, rpm:585, mag:20, reserve:100, reload:2.3, mode:'auto',
     spreadHip:.034, spreadAds:.0038, recoil:.019, bloom:.0055, zoom:1.35, adsTime:.26,
-    speed:.94, range:[30,58], model:'ar', unlockLevel:6 },
+    speed:.94, range:[30,58], model:'ar' },
   acr: { slot:'primary', cat:'Assault Rifle', name:'REMINGTON ACR',
     dmg:28, minDmg:21, head:1.4, rpm:705, mag:30, reserve:120, reload:2.1, mode:'auto',
     spreadHip:.028, spreadAds:.0026, recoil:.0085, bloom:.0030, zoom:1.35, adsTime:.24,
@@ -45,11 +45,11 @@ const WEAPONS = {
   mp5k: { slot:'primary', cat:'SMG', name:'HK MP5K',
     dmg:26, minDmg:16, head:1.4, rpm:900, mag:30, reserve:150, reload:1.85, mode:'auto',
     spreadHip:.024, spreadAds:.0048, recoil:.012, bloom:.0038, zoom:1.25, adsTime:.18,
-    speed:1.0, range:[16,34], model:'smg', unlockLevel:1 },
+    speed:1.0, range:[16,34], model:'smg' },
   ump45: { slot:'primary', cat:'SMG', name:'HK UMP45',
     dmg:34, minDmg:22, head:1.4, rpm:600, mag:32, reserve:128, reload:1.95, mode:'auto',
     spreadHip:.025, spreadAds:.0045, recoil:.013, bloom:.0040, zoom:1.25, adsTime:.18,
-    speed:1.0, range:[20,40], model:'smg', unlockLevel:3 },
+    speed:1.0, range:[20,40], model:'smg' },
   vector: { slot:'primary', cat:'SMG', name:'KRISS VECTOR',
     dmg:21, minDmg:14, head:1.4, rpm:1090, mag:30, reserve:180, reload:1.8, mode:'auto',
     spreadHip:.026, spreadAds:.0050, recoil:.0075, bloom:.0028, zoom:1.25, adsTime:.17,
@@ -57,7 +57,7 @@ const WEAPONS = {
   p90: { slot:'primary', cat:'SMG', name:'FN P90',
     dmg:23, minDmg:15, head:1.4, rpm:855, mag:50, reserve:150, reload:2.4, mode:'auto',
     spreadHip:.027, spreadAds:.0052, recoil:.011, bloom:.0035, zoom:1.25, adsTime:.19,
-    speed:.99, range:[16,36], model:'smg', unlockLevel:14 },
+    speed:.99, range:[16,36], model:'smg' },
   // P27: the ultra-close bullet hose — new rpm ceiling (1250), close TTK
   // .192 edges MP5K/UMP45 (.200) but only inside 10 m; the [10,22] window,
   // worst-in-class recoil/bloom/ADS spread and 96 reserve are the severity.
@@ -95,13 +95,15 @@ const WEAPONS = {
   // ---------- PRIMARY: SHOTGUNS ----------
   // Pellet balance vs 100 HP: r870 one-shots to ~9-10 m (falloff + spread
   // shed pellets past that), aa12 is a 2-shot DPS monster inside 6 m and
-  // useless past 15. rpm on the r870 is bot cadence/HUD only — the player's
+  // useless past 15 (Stopping Power flips the 96 blast to 120 — a full-auto
+  // one-shot inside ~7 m; accepted, R870+SP one-shots even further, ~12 m).
+  // rpm on the r870 is bot cadence/HUD only — the player's
   // cycle is pumpTime, same as the SPAS-12.
   r870: { slot:'primary', cat:'Shotgun', name:'REMINGTON 870 MCS',
     dmg:20, minDmg:5, head:1.2, rpm:60, mag:6, reserve:30, reload:2.7, mode:'pump',
     pellets:8, pumpTime:.8,
     spreadHip:.034, spreadAds:.02, recoil:.048, bloom:.004, zoom:1.15, adsTime:.24,
-    speed:.94, range:[5,16], model:'shotgun', unlockLevel:1 },
+    speed:.94, range:[5,16], model:'shotgun' },
   // P18: true full-auto (was semi-in-practice). The panic-hose identity —
   // hold to fire, mag gone in 1.6 s; heavy recoil/bloom + the [6,15]
   // falloff cliff make sustained fire past point-blank a losing trade.
@@ -109,7 +111,7 @@ const WEAPONS = {
     dmg:12, minDmg:4, head:1.2, rpm:300, mag:8, reserve:40, reload:2.5, mode:'auto',
     pellets:8,
     spreadHip:.05, spreadAds:.034, recoil:.05, bloom:.02, zoom:1.15, adsTime:.22,
-    speed:.93, range:[6,15], model:'shotgun', unlockLevel:11 },
+    speed:.93, range:[6,15], model:'shotgun' },
 
   // ---------- PRIMARY: SNIPERS ----------
   // Sniper balance: body shots one-shot only up close (Intervention) or never
@@ -122,11 +124,13 @@ const WEAPONS = {
   barrett: { slot:'primary', cat:'Sniper Rifle', name:'BARRETT M82',
     dmg:70, minDmg:56, head:1.8, rpm:190, mag:10, reserve:30, reload:3.3, mode:'semi',
     spreadHip:.12, spreadAds:.0012, recoil:.042, bloom:.006, zoom:6.0, adsTime:.4,
-    speed:.9, range:[25,50], model:'sniper', unlockLevel:17 },
+    speed:.9, range:[25,50], model:'sniper' },
   // P33: marksman — zoom 2.8 deliberately ducks the `zoom > 3` scope gates
-  // (no overlay/sway/wheel, faster feel for free). head 2.1 is a new family
+  // (no overlay/sway/wheel, faster feel for free; it also skips the zoom-gated
+  // collateral penetration — part of the same trade). head 2.1 is a new family
   // ceiling by design: one-shot headshot inside ~29 m while the body can
-  // never 2-shot (49 × 2 = 98), so body-spam stays mathematically dead.
+  // never 2-shot without Stopping Power (49 × 2 = 98; SP makes it a .25 s
+  // 2-shot inside ~48 m — accepted perk trade, see sniper-audit).
   m14: { slot:'primary', cat:'Sniper Rifle', name:'M14 EBR',
     dmg:49, minDmg:38, head:2.1, rpm:240, mag:15, reserve:45, reload:2.6, mode:'semi',
     spreadHip:.09, spreadAds:.0018, recoil:.030, bloom:.0075, zoom:2.8, adsTime:.28,
@@ -136,11 +140,11 @@ const WEAPONS = {
   usp: { slot:'secondary', cat:'Handgun', name:'HK USP45',
     dmg:32, minDmg:20, head:1.5, rpm:420, mag:12, reserve:48, reload:1.55, mode:'semi',
     spreadHip:.022, spreadAds:.0060, recoil:.016, bloom:.0050, zoom:1.2, adsTime:.14,
-    speed:1.0, range:[14,32], model:'pistol', unlockLevel:1 },
+    speed:1.0, range:[14,32], model:'pistol' },
   deagle: { slot:'secondary', cat:'Handgun', name:'DESERT EAGLE',
     dmg:52, minDmg:35, head:1.6, rpm:250, mag:7, reserve:28, reload:1.8, mode:'semi',
     spreadHip:.030, spreadAds:.0058, recoil:.036, bloom:.0090, zoom:1.2, adsTime:.16,
-    speed:1.0, range:[16,36], model:'pistol', unlockLevel:9 },
+    speed:1.0, range:[16,36], model:'pistol' },
   // P36: the forgiving service pistol — wins on consistency, not paper
   // speed: ~half the USP's recoil/bloom, tightest pistol cones, fastest
   // ADS in the game, 15-round mag. Close TTK .375 sits between the Deagle
@@ -176,7 +180,10 @@ const WEAPONS = {
   // precise, slow one-shot body at close range (headshot one-shots at any
   // range).
   crossbow: { slot:'secondary', cat:'Crossbow', name:'CROSSBOW',
-    dmg:100, minDmg:60, head:1.5, rpm:55, mag:1, reserve:24, reload:1.2, mode:'bolt',
+    // minDmg 67 keeps the stated rule honest: round(67 × 1.5) = 101, so the
+    // headshot one-shots at ANY range (60 gave 90 past 44 m); far body stays
+    // a 2-shot and the ~22 m body one-shot boundary is untouched.
+    dmg:100, minDmg:67, head:1.5, rpm:55, mag:1, reserve:24, reload:1.2, mode:'bolt',
     perShotReload:true, projectileSpeed:85, projectileGravity:9.8,
     spreadHip:.02, spreadAds:.001, recoil:.015, bloom:.003, zoom:1.5, adsTime:.32,
     speed:.96, range:[22,48], model:'crossbow' },
@@ -459,7 +466,8 @@ const ATTACHMENTS = {
   // with the foregrip: the one-pick-per-slot rule makes sustained-fire
   // control vs first-shot speed a real choice (#P55-design §3). Same
   // mount list as the foregrip. Stacks bounded with optics (reddot ×
-  // quickdraw = .68 adsTime, paying 15% aimed bloom).
+  // quickdraw = .68 adsTime; quickdraw's +15% spreadAds nets +3.5% after
+  // the reddot's ×.9).
   quickdraw: { id:'quickdraw', name:'QUICKDRAW GRIP', slot:'underbarrel',
     cats:['Assault Rifle','SMG','LMG','Shotgun'],
     mods:{ adsTime:.8, spreadAds:1.15 }, unlockLevel:11 },
@@ -686,7 +694,9 @@ function sanitizeClassForLevel(c, level = currentProfileLevel()) {
   }
 
   for (const tier of [1, 2, 3]) {
-    const p = perkById(c.perks[tier - 1]);
+    // tier-scoped lookup: a perk id sitting in the wrong tier slot (hand-edited
+    // save) must fail validation, or two same-tier perks could stack
+    const p = (PERKS[tier] || []).find(x => x.id === c.perks[tier - 1]);
     if (!p || !isUnlocked(p, level)) c.perks[tier - 1] = firstUnlockedPerk(tier, level);
   }
 
@@ -715,11 +725,9 @@ const PERKS = {
     { id:'marathon',  name:'MARATHON',          desc:'Unlimited sprint', unlockLevel:4 },
     { id:'soh',       name:'SLEIGHT OF HAND',   desc:'Reload 50% faster', unlockLevel:1 },
     { id:'scavenger', name:'SCAVENGER',         desc:'Resupply ammo from bodies you pass over', unlockLevel:10 },
-    // P38/P39: killstreak-economy perks — data + UI listing only for now.
-    // Selecting/saving works today; behavior lands with the killstreak
-    // selector (P69: arsenal's fourth slot) and data-driven thresholds
-    // (P70: hardline's discount). Safe as inert data because every perk
-    // check in main.js is an id-keyed player.perks.has('<id>') lookup.
+    // P38/P39 → P69/P70: killstreak-economy perks, both fully live —
+    // arsenal's fourth slot via streakSlotLimit (this file) and hardline's
+    // discount via effKills in main.js (max(2, kills − 1), nuke exempt).
     // Same tier = mutually exclusive by the one-pick-per-tier rule.
     { id:'arsenal',   name:'ARSENAL',           desc:'Equip a fourth killstreak slot', unlockLevel:16 },
     { id:'hardline',  name:'HARDLINE',          desc:'Killstreaks cost 1 less kill', unlockLevel:19 },
@@ -754,8 +762,8 @@ const DEFAULT_CLASSES = [
 ];
 
 // Daring David — a fixed reward class (class 5, beyond the five editable slots).
-// It only unlocks after earning a Tactical Nuke on every map at Hardened enemy
-// difficulty or higher (Profile.daringDavidUnlocked). The loadout is fixed and
+// It only unlocks after earning a Tactical Nuke on every map at Veteran enemy
+// difficulty (Profile.daringDavidUnlocked — the code gate is exactly 'veteran'). The loadout is fixed and
 // bypasses the normal unlock-level and mount-category gates: resolveWeaponDef is
 // called with allowAll for it, and deploy() never sanitizes it. Its weapons also
 // carry a hidden bottomless-magazine Easter egg (unlimited ammo, no reload) that

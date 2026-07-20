@@ -678,6 +678,10 @@ class Bot {
       if (this.onGround && this.velY < 0) this.velY = 0;
       this.speedNow = 0;
       if (this.flashT > 0) { this.flashT -= dt; ud.flash.visible = this.flashT > 0; }
+      // P53: daze/blind clocks keep running while stunned — the early return
+      // below must not extend their real-world duration past the design window
+      if (this.dazeT > 0) this.dazeT -= dt;
+      if (this.blindT > 0) this.blindT -= dt;
       this.mesh.position.copy(this.pos);
       ud.legL.rotation.x *= 0.8;
       ud.legR.rotation.x *= 0.8;
@@ -762,10 +766,12 @@ class Bot {
           if (this.burstPause <= 0) {
             const [bMin, bMax] = this.skill.burst;
             const [pMin, pMax] = this.skill.pause;
-            this.burstLeft = w.mode === 'auto' ? bMin + Math.floor(Math.random() * (bMax - bMin + 1)) : 1;
+            this.burstLeft = w.mode === 'auto' ? bMin + Math.floor(Math.random() * (bMax - bMin + 1))
+              : w.mode === 'burst' ? (w.burstCount || 3) : 1;
             this.burstPause = pMin + Math.random() * (pMax - pMin);
             if (w.mode === 'bolt') this.burstPause += 0.9;
             if (w.mode === 'semi') this.burstPause = Math.min(this.burstPause, 0.25 + Math.random() * 0.3);
+            if (w.mode === 'burst') this.burstPause = Math.max(this.burstPause, w.burstDelay || 0.19);
           }
         }
         if (this.burstLeft > 0 && this.shotT <= 0) {
@@ -809,7 +815,7 @@ class Bot {
     const len = Math.sqrt(moveX * moveX + moveZ * moveZ);
     this._updateMovementAbility(dt, len, targetDist);
     this._updatePose(dt);
-    let speed = 4.6;
+    let speed = 4.6 * ((this.weapon && this.weapon.speed) || 1); // P31: bots pay the weapon mobility tax too
     if (this.sprinting && this.onGround) speed *= BOT_MOVE.sprintMult;
     else if (this.proneAmt > 0.5) speed *= BOT_MOVE.proneMult;
     else if (this.crouchAmt > 0.5) speed *= BOT_MOVE.crouchMult;

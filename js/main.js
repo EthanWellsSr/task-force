@@ -123,9 +123,11 @@ const MODES = {
 // LMG (power/pig) → bolt sniper (precision wall) → tomahawk finale.
 // Every consumer is length-generic (clamps/length reads), so the array IS
 // the ladder. Deliberate skips per the audit docs: FAMAS (bot burst path
-// missing — dead bot tier until P25), Barrett M82 (semi bot path would
-// out-fire the bolt — lobby-clearing sniper bot), M14 EBR (same, plus
-// back-to-back sniper tiers kill flow). 'intervention' is the CheyTac.
+// shipped with P25, but a fifth AR tier bloats the band — 16 tiers stay),
+// Barrett M82 (semi bot path would out-fire the bolt — lobby-clearing
+// sniper bot), M14 EBR (same, plus back-to-back sniper tiers kill flow),
+// CROSSBOW (projectile flight + 1-round re-cock; the hitscan bot cadence
+// path can't drive it honestly). 'intervention' is the CheyTac.
 const GUN_LADDER = ['m9', 'usp', 'deagle', 'g18', 'spas12', 'r870', 'aa12', 'mac10',
   'vector', 'ump45', 'm4a1', 'scar', 'fal', 'm60', 'intervention', 'tomahawk'];
 
@@ -250,7 +252,15 @@ function modeWinResult(forcedWin) {
   if (mode.structure === 'ffa') {
     if (isGunGameMode(mode)) {
       const winner = G.combatants.find(c => c._gunGameComplete);
-      return winner ? winner === player : null;
+      if (winner) return winner === player;
+      // timer expiry with no completed ladder: the tier leader takes it
+      // (documented fallback); a tie at the top including the player is a draw
+      const ranked = G.combatants.slice().sort((a, b) => (b.tier || 0) - (a.tier || 0));
+      if (!ranked.length) return null;
+      const topTier = ranked[0].tier || 0;
+      const tiedTop = ranked.filter(c => (c.tier || 0) === topTier);
+      if (tiedTop.length > 1 && tiedTop.includes(player)) return null;
+      return ranked[0] === player;
     }
     const ranked = rankedCombatants(G.combatants);
     if (!ranked.length) return null;
@@ -1939,7 +1949,13 @@ function refillEntityAmmo(ent) {
 }
 
 function claimCarePackage(pkg, ent) {
-  const reward = pkg.reward;
+  let reward = pkg.reward;
+  // P60 one-copy rule: a streak the player already has banked never earns a
+  // duplicate — the package degrades to the ammo reward instead (kill-path
+  // banking guards at its call site; this is the package path's guard)
+  if (ent.isPlayer && reward.id && KILLSTREAKS[reward.id] &&
+      player._bankedStreaks.some(b => b.id === reward.id))
+    reward = CARE_PACKAGE_REWARDS[0]; // AMMO RESUPPLY
   if (reward.kind === 'ammo') refillEntityAmmo(ent);
   else if (ent.isPlayer && KILLSTREAKS[reward.id]) bankKillstreak(KILLSTREAKS[reward.id], false);
   else ent.lastCarePackageReward = reward.id || reward.kind;
@@ -2936,17 +2952,21 @@ function releaseThrow(slot) {
   // P44: one active claymore per owner — a fresh placement replaces the
   // old one (COD rule; also the only way a mine ever leaves before match
   // end, since claymores persist through their owner's death)
-  if (def.proximity) {
-    for (let i = _throwables.length - 1; i >= 0; i--) {
-      const o = _throwables[i];
-      if (o.def.proximity && (o.owner || player) === player) {
-        G.scene.remove(o.mesh);
-        _throwables.splice(i, 1);
-      }
-    }
-  }
+  if (def.proximity) removePlayerProximityMines();
   spawnThrowable(def, fuse, def.throwSpeed, def.throwUp);
   AudioSys.throwWhoosh();
+}
+
+// P44 cap sweep, shared by releaseThrow and the dying-mid-cook drop so a
+// death-dropped claymore can't sidestep the one-per-owner rule
+function removePlayerProximityMines() {
+  for (let i = _throwables.length - 1; i >= 0; i--) {
+    const o = _throwables[i];
+    if (o.def.proximity && (o.owner || player) === player) {
+      G.scene.remove(o.mesh);
+      _throwables.splice(i, 1);
+    }
+  }
 }
 
 // instant pin-pull + lob in one call (DEBUG / tests)
@@ -3193,7 +3213,10 @@ function updateThrowables(dt) {
       const owner = t.owner || player;
       let rider = null;
       for (const b of G.bots) {
-        if (!b.alive || b === owner) continue;
+        // teammates never ride: the stuckTo fast-path pays full damage at
+        // detonation, and stickies must honor the no-friendly-fire rule —
+        // the grenade pins to the ground beside them instead
+        if (!b.alive || b === owner || b.team === owner.team) continue;
         if (Math.hypot(p.x - b.pos.x, p.z - b.pos.z) < 0.5 &&
             p.y > b.pos.y - 0.1 && p.y < b.pos.y + 1.9) { rider = b; break; }
       }
@@ -4532,6 +4555,7 @@ function damagePlayer(dmg, attacker, weaponName, headshot, bypassProtect, shot) 
       const cdef = THROWABLES[player.cookKind];
       const fuse = player.cooking;
       player.cooking = null;
+      if (cdef.proximity) removePlayerProximityMines(); // P44 cap holds on death-drop too
       spawnThrowable(cdef, fuse, 1.2, 1.2);
     }
     // P43: a dead owner's remote charges despawn — no orphaned C4. This
