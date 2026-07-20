@@ -4636,7 +4636,13 @@ function rematch() { startMatch(G.mapId, G.modeId); }
 // Input
 // ============================================================
 function lockPointer() {
-  try { canvas.requestPointerLock(); } catch (e) {}
+  // requestPointerLock returns a promise in modern Chrome — a denied lock
+  // (rapid re-lock after Esc, automation) rejects and would log an unhandled
+  // WrongDocumentError/SecurityError; swallow both forms
+  try {
+    const p = canvas.requestPointerLock();
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) {}
 }
 
 document.addEventListener('pointerlockchange', () => {
