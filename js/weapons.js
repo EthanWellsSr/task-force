@@ -690,8 +690,10 @@ function sanitizeClassForLevel(c, level = currentProfileLevel()) {
   }
 
   if (typeof THROWABLES !== 'undefined') {
-    if (!THROWABLES[c.lethal] || !isUnlocked(THROWABLES[c.lethal], level)) c.lethal = firstUnlockedThrowable('lethal', level);
-    if (!THROWABLES[c.tactical] || !isUnlocked(THROWABLES[c.tactical], level)) c.tactical = firstUnlockedThrowable('tactical', level);
+    // 'none' is a deliberate unequipped slot (editor offers it, deploy nulls it) —
+    // it needs no unlock and must survive sanitation
+    if (c.lethal !== 'none' && (!THROWABLES[c.lethal] || !isUnlocked(THROWABLES[c.lethal], level))) c.lethal = firstUnlockedThrowable('lethal', level);
+    if (c.tactical !== 'none' && (!THROWABLES[c.tactical] || !isUnlocked(THROWABLES[c.tactical], level))) c.tactical = firstUnlockedThrowable('tactical', level);
   }
 
   const legalStreaks = selectableKillstreakIds()
