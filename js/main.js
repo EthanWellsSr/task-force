@@ -287,7 +287,7 @@ const player = {
   weapons: [], cur: 0,
   reloadT: 0, switchT: 0, fireCooldown: 0, burstQueue: 0,
   adsHeld: false, adsToggle: false, adsAmt: 0, bloom: 0,
-  zoomLevel: 6, // #18e: live sniper zoom (×), wheel-adjustable while scoped
+  zoomLevel: 4, // live variable-scope zoom (x), reset to 4x on each ADS entry
   meleeT: 0, sinceDamage: 99, respawnT: 0, spawnProtectT: 0,
   speedNow: 0, onGround: true,
   airVX: 0, airVZ: 0, airSpeedCap: 0, // #18d: horizontal momentum preserved through a jump
@@ -309,8 +309,8 @@ const player = {
 const keys = {};
 let firing = false, triggerEdge = false;
 
-// #18e: sniper wheel-zoom range/step (×)
-const ZOOM_MIN = 3, ZOOM_MAX = 8, ZOOM_STEP = 0.5;
+// Final-tier variable optic range/step. Fixed sniper scopes stay at 6x.
+const ZOOM_MIN = 4, ZOOM_MAX = 8, ZOOM_STEP = 0.5;
 
 const BOT_NAMES = {
   tf: ['HAVOC', 'FLINT', 'JESTER', 'MUSTANG', 'TALON', 'RATTLER', 'ONYX', 'DRIFTER', 'SABLE', 'VANDAL', 'CUTTER'],
@@ -355,7 +355,7 @@ const VM_POS = {
 };
 
 // Muzzle-flash quad size per weapon class (#15b tuning)
-const VM_FLASH = { ar: 0.12, smg: 0.1, lmg: 0.15, sniper: 0.13, shotgun: 0.14, pistol: 0.08, crossbow: 0 };
+const VM_FLASH = { ar: 0.12, marksman: 0.12, smg: 0.1, lmg: 0.15, sniper: 0.13, shotgun: 0.14, pistol: 0.08, crossbow: 0 };
 
 const VM_RETICLE = {
   reddot: 0.005,
@@ -365,8 +365,8 @@ const VM_RETICLE = {
   acogHair: 0.0017,
   acogArm: 0.008,
   acogChevron: 0.010,
-  scope3xHair: 0.0015,
-  scope3xArm: 0.010,
+  scopeHair: 0.0015,
+  scopeArm: 0.010,
 };
 
 // Red dot mount points (#9c): rail-top y + mount z per weapon key
@@ -389,12 +389,14 @@ const VM_OPTIC = {
   m240: { y: 0.05, z: -0.16 },
   mg4: { y: 0.046, z: -0.14 },
   m14: { y: 0.052, z: -0.22 },
+  marksman: { y: 0.052, z: -0.22 },
   sniper: { y: 0.052, z: -0.22 },
   spas12: { y: 0.04, z: -0.1 },
   r870: { y: 0.038, z: -0.1 },
   aa12: { y: 0.05, z: -0.14 },
   ar: { y: 0.0425, z: -0.14 }, smg: { y: 0.045, z: -0.12 },
   lmg: { y: 0.05, z: -0.15 }, shotgun: { y: 0.04, z: -0.12 },
+  pistol: { y: 0.07, z: -0.1 },
 };
 
 // Foregrip mount points (#9d): y = handguard/body underside (grip top), z =
@@ -415,11 +417,12 @@ const VM_GRIP = {
   rpd: { y: -0.042, z: -0.47 },
   m240: { y: -0.045, z: -0.5 },
   mg4: { y: -0.05, z: -0.5 },
+  m14: { y: -0.045, z: -0.48 },
   spas12: { y: -0.054, z: -0.4 },
   r870: { y: -0.054, z: -0.42 },
   aa12: { y: -0.04, z: -0.36 },
   ar: { y: -0.042, z: -0.45 }, smg: { y: -0.045, z: -0.32 },
-  lmg: { y: -0.05, z: -0.5 }, shotgun: { y: -0.07, z: -0.42 },
+  lmg: { y: -0.05, z: -0.5 }, marksman: { y: -0.045, z: -0.48 }, shotgun: { y: -0.07, z: -0.42 },
 };
 
 // Hand anchors (#10a): trigger-hand fist [y, z] on the pistol grip per
@@ -451,7 +454,8 @@ const VM_HANDS = {
   r870: { trig: [-0.085, -0.02] },
   aa12: { trig: [-0.09, 0.04] },
   ar: { trig: [-0.088, -0.06] }, smg: { trig: [-0.09, -0.02] },
-  lmg: { trig: [-0.088, -0.05] }, sniper: { trig: [-0.08, -0.08], sup: [-0.055, -0.45] },
+  lmg: { trig: [-0.088, -0.05] }, marksman: { trig: [-0.08, -0.08], sup: [-0.055, -0.45] },
+  sniper: { trig: [-0.08, -0.08], sup: [-0.055, -0.45] },
   shotgun: { trig: [-0.085, -0.03] }, pistol: { trig: [-0.068, 0], sup: [-0.096, 0.012, 'grip'] },
   crossbow: { trig: [-0.078, -0.02], sup: [-0.02, -0.42] }, // grip hand rear, support cups the fore-rail
 };
@@ -745,13 +749,34 @@ const VM_RECIPES = {
     s(0.016, 0.032, 0.02, dark, 0, 0.056, -0.06);    // rear
     return 0.92;
   },
+  // M14/M1A iron-sight silhouette: adjustable rear aperture with flanking
+  // windage/elevation knobs, then a narrow front blade protected by ears near
+  // the flash suppressor. The center rail clears whenever an optic mounts.
+  m14({ p, s, o, m, ring, dark, mid, wood, black }) {
+    p(0.052, 0.078, 0.52, dark, 0, 0, -0.25);          // receiver
+    p(0.055, 0.062, 0.34, wood, 0, -0.006, -0.62);     // fore stock
+    p(0.024, 0.024, 0.34, mid, 0, 0.008, -0.92);       // barrel
+    p(0.038, 0.038, 0.1, black, 0, 0.008, -1.13);      // flash suppressor
+    p(0.02, 0.018, 0.12, black, 0, 0.008, -1.19);      // suppressor cage
+    m(0.04, 0.135, 0.095, mid, 0, -0.105, -0.2);       // 15-round box mag
+    p(0.052, 0.082, 0.22, wood, 0, -0.008, 0.12);      // shoulder stock
+    p(0.032, 0.07, 0.045, dark, 0, -0.072, -0.02);     // grip
+    p(0.018, 0.022, 0.42, mid, 0.026, 0.024, -0.47);   // operating rod
+    o(0.046, 0.012, 0.38, black, 0, 0.052, -0.36);     // optic rail
+
+    s(0.054, 0.018, 0.035, black, 0, 0.052, -0.065);   // rear sight base
+    s(0.012, 0.028, 0.028, black, -0.027, 0.065, -0.065); // adjustment knobs
+    s(0.012, 0.028, 0.028, black, 0.027, 0.065, -0.065);
+    ring(0.015, 0.006, black, 0, 0.078, -0.066);        // rear aperture
+    s(0.01, 0.036, 0.014, black, 0, 0.071, -1.02);     // front blade
+    s(0.009, 0.043, 0.014, black, -0.019, 0.071, -1.02); // protective ears
+    s(0.009, 0.043, 0.014, black, 0.019, 0.071, -1.02);
+    return 1.2;
+  },
   intervention({ p, m, k, dark, mid, black }) {
     p(0.045, 0.07, 0.6, dark, 0, 0, -0.3);           // chassis
     p(0.024, 0.024, 0.46, mid, 0, 0.006, -0.83);     // long fluted barrel
     p(0.04, 0.04, 0.08, dark, 0, 0.006, -1.09);      // muzzle brake
-    p(0.008, 0.046, 0.24, black, -0.026, 0.072, -0.26);
-    p(0.008, 0.046, 0.24, black, 0.026, 0.072, -0.26);
-    p(0.06, 0.008, 0.24, black, 0, 0.098, -0.26);
     k(0.055, 0.016, 0.016, mid, 0.048, 0.03, -0.07); // bolt handle arm, right side
     k(0.02, 0.022, 0.022, dark, 0.082, 0.03, -0.07); // bolt knob
     p(0.028, 0.024, 0.22, dark, 0, 0.028, 0.12);     // skeleton stock spine
@@ -769,42 +794,39 @@ const VM_RECIPES = {
     p(0.062, 0.055, 0.14, dark, 0, 0.008, -0.99);    // huge arrow muzzle brake
     p(0.095, 0.035, 0.07, mid, 0, 0.008, -0.97);     // brake side fins
     m(0.042, 0.1, 0.15, mid, 0, -0.095, -0.3);       // long box mag
-    p(0.008, 0.044, 0.22, black, -0.025, 0.075, -0.18);
-    p(0.008, 0.044, 0.22, black, 0.025, 0.075, -0.18);
-    p(0.058, 0.008, 0.22, black, 0, 0.1, -0.18);
     p(0.05, 0.09, 0.045, dark, 0, -0.005, 0.1);      // butt pad
     p(0.03, 0.07, 0.04, dark, 0, -0.075, -0.04);     // grip
     p(0.02, 0.05, 0.3, mid, 0, -0.062, -0.55);       // lower spring housing
     return 1.06;
   },
-  usp({ p, dark, mid }) {
+  usp({ p, s, dark, mid }) {
     p(0.04, 0.052, 0.25, dark, 0, 0.036, -0.105);    // squared slide
     p(0.038, 0.028, 0.2, mid, 0, 0, -0.1);           // frame w/ rail
     p(0.036, 0.115, 0.06, mid, 0, -0.055, -0.01);    // grip
     p(0.012, 0.01, 0.05, dark, 0, -0.022, -0.16);    // trigger guard
-    p(0.012, 0.026, 0.015, dark, 0, 0.075, -0.21);
-    p(0.016, 0.024, 0.015, dark, 0, 0.073, -0.01);
+    s(0.012, 0.026, 0.015, dark, 0, 0.075, -0.21);
+    s(0.016, 0.024, 0.015, dark, 0, 0.073, -0.01);
     return 0.24;
   },
-  deagle({ p, dark }) {
+  deagle({ p, s, dark }) {
     const steel = 0x565b63;
     p(0.05, 0.06, 0.31, steel, 0, 0.03, -0.135);     // huge slab slide
     p(0.028, 0.018, 0.3, steel, 0, 0.066, -0.13);    // flat top rib
     p(0.044, 0.03, 0.22, dark, 0, -0.005, -0.1);     // frame
     p(0.04, 0.12, 0.065, dark, 0, -0.062, 0);        // big grip
     p(0.014, 0.012, 0.05, dark, 0, -0.028, -0.17);   // trigger guard
-    p(0.012, 0.024, 0.015, dark, 0, 0.085, -0.26);   // sights on the rib
-    p(0.018, 0.022, 0.015, dark, 0, 0.083, -0.02);
+    s(0.012, 0.024, 0.015, dark, 0, 0.085, -0.26);   // sights on the rib
+    s(0.018, 0.022, 0.015, dark, 0, 0.083, -0.02);
     return 0.29;
   },
-  g18({ p, m, dark, mid }) {
+  g18({ p, s, m, dark, mid }) {
     const poly = 0x33363b;
     p(0.038, 0.048, 0.22, dark, 0, 0.032, -0.095);   // compact slide
     p(0.036, 0.026, 0.17, poly, 0, -0.002, -0.085);  // frame
     p(0.034, 0.1, 0.055, poly, 0, -0.052, 0);        // grip
     m(0.026, 0.1, 0.038, mid, 0, -0.15, 0.005);      // 33-rd extended mag
-    p(0.011, 0.024, 0.014, dark, 0, 0.068, -0.185);
-    p(0.014, 0.022, 0.014, dark, 0, 0.066, 0);
+    s(0.011, 0.024, 0.014, dark, 0, 0.068, -0.185);
+    s(0.014, 0.022, 0.014, dark, 0, 0.066, 0);
     return 0.22;
   },
   spas12({ p, s, k, dark, mid }) {
@@ -874,8 +896,30 @@ function buildViewModel(w) {
     g.add(m);
     return m;
   };
+  const vcyl = (r, l, c, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, 10), mat(c));
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  };
+  const tube = (r, l, c, x, y, z) => {
+    const material = mat(c);
+    material.side = THREE.DoubleSide;
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, 14, 1, true), material);
+    m.rotation.x = Math.PI / 2;
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  };
   const irons = [];
   const sight = (...a) => { const m = part(...a); irons.push(m); return m; };
+  const sightRing = (outer, inner, c, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 16), mat(c));
+    m.position.set(x, y, z);
+    g.add(m);
+    irons.push(m);
+    return m;
+  };
   const opticObstructions = [];
   const opticClearance = (...a) => { const m = part(...a); opticObstructions.push(m); return m; };
   const builtinGrips = [];
@@ -896,7 +940,7 @@ function buildViewModel(w) {
   let len = 0.62;
   const recipe = VM_RECIPES[w.key];
   if (recipe) {
-    len = recipe({ p: part, s: sight, o: opticClearance, u: ugrip, m: magp, k: cyclep, a: arrowp, str: stringp, cyl, dark, mid, wood, black });
+    len = recipe({ p: part, s: sight, ring: sightRing, o: opticClearance, u: ugrip, m: magp, k: cyclep, a: arrowp, str: stringp, cyl, dark, mid, wood, black });
   } else if (type === 'ar') {
     part(0.055, 0.085, 0.62, dark, 0, 0, -0.31);
     part(0.03, 0.03, 0.3, mid, 0, 0.005, -0.68);         // barrel
@@ -922,9 +966,6 @@ function buildViewModel(w) {
   } else if (type === 'sniper') {
     part(0.05, 0.075, 0.9, dark, 0, 0, -0.45);
     part(0.026, 0.026, 0.32, mid, 0, 0.006, -1.0);
-    part(0.008, 0.044, 0.22, black, -0.025, 0.07, -0.3);
-    part(0.008, 0.044, 0.22, black, 0.025, 0.07, -0.3);
-    part(0.058, 0.008, 0.22, black, 0, 0.095, -0.3);
     part(0.045, 0.09, 0.2, wood, 0, -0.015, 0.05);
     len = 1.17;
   } else if (type === 'shotgun') {
@@ -937,27 +978,56 @@ function buildViewModel(w) {
   } else { // pistol
     part(0.04, 0.07, 0.24, dark, 0, 0.03, -0.1);
     part(0.036, 0.13, 0.06, mid, 0, -0.05, -0.02);
-    part(0.012, 0.03, 0.015, dark, 0, 0.078, -0.2);
+    sight(0.012, 0.03, 0.015, dark, 0, 0.078, -0.2);
     len = 0.24;
   }
   camoOn = null; // base gun built — attachments below stay black
-  // optics (#9c red dot, #19b holo): hide the irons, mount the housing on
-  // the rail, and shift the ADS anchor so the reticle — not the 0.06 iron
-  // line — hits screen center. Reticle color comes off the resolved def
-  // (per-class pick, defaults red).
+  // Optics hide the default irons and move the ADS anchor to the mounted
+  // sight. Snipers without an optic get the shared fixed 6x tube; every
+  // attachment, including the longer variable scope, replaces that default.
   g.userData.adsPos = VM_POS.ads.clone();
-  const opticId = w.attachments && (w.attachments.includes('reddot') ? 'reddot'
-    : w.attachments.includes('holo') ? 'holo'
-    : w.attachments.includes('acog') ? 'acog'
-    : w.attachments.includes('scope3x') ? 'scope3x' : null); // P54 + crossbow 3X
+  const opticId = w.attachments && w.attachments.find(id =>
+    id === 'reddot' || id === 'holo' || id === 'acog' || id === 'variableScope');
+  const mnt = VM_OPTIC[w.key] || VM_OPTIC[type] || { y: 0.045, z: -0.12 };
+  const scopeCross = (retY, z) => {
+    const material = new THREE.MeshBasicMaterial({ color: 0x090909, side: THREE.DoubleSide });
+    const hbar = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.scopeArm, VM_RETICLE.scopeHair, 0.003), material);
+    hbar.position.set(0, retY, z);
+    g.add(hbar);
+    const vbar = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.scopeHair, VM_RETICLE.scopeArm, 0.003), material.clone());
+    vbar.position.set(0, retY, z);
+    g.add(vbar);
+  };
+  const mountScope = variable => {
+    const retY = mnt.y + 0.052;
+    const length = variable ? 0.34 : 0.25;
+    const centerZ = mnt.z - (variable ? 0.025 : 0);
+    part(0.052, 0.012, 0.13, black, 0, mnt.y + 0.008, centerZ); // rail base
+    for (const z of [centerZ - length * 0.27, centerZ + length * 0.27]) {
+      part(0.01, 0.052, 0.014, black, -0.022, mnt.y + 0.034, z); // ring legs
+      part(0.01, 0.052, 0.014, black, 0.022, mnt.y + 0.034, z);
+      tube(0.032, 0.018, black, 0, retY, z);                       // mounting ring
+    }
+    tube(0.026, length, black, 0, retY, centerZ);                  // hollow main tube
+    tube(variable ? 0.04 : 0.036, 0.058, black, 0, retY, centerZ - length * 0.48); // objective bell
+    tube(variable ? 0.034 : 0.031, 0.05, black, 0, retY, centerZ + length * 0.48); // eyepiece
+    if (variable) {
+      vcyl(0.016, 0.05, black, 0, retY + 0.044, centerZ);          // elevation turret
+      vcyl(0.021, 0.009, mid, 0, retY + 0.071, centerZ);           // knurled cap
+      vcyl(0.013, 0.042, black, 0.045, retY, centerZ);             // windage turret
+    }
+    scopeCross(retY, centerZ + length * 0.51);
+    g.userData.adsPos.y = -retY;
+  };
+
+  if (!opticId && w.defaultSight === 'fixedScope') mountScope(false);
   if (opticId) {
     for (const m of irons) m.visible = false;
     for (const m of opticObstructions) m.visible = false;
-    const mnt = VM_OPTIC[w.key] || VM_OPTIC[type] || { y: 0.045, z: -0.12 };
     const glow = () => new THREE.MeshBasicMaterial({ color: w.reticleColor || 0xff2020, side: THREE.DoubleSide });
-    part(0.04, 0.014, 0.08, black, 0, mnt.y + 0.007, mnt.z);          // rail base
     let retY;
     if (opticId === 'reddot') {
+      part(0.04, 0.014, 0.08, black, 0, mnt.y + 0.007, mnt.z);        // rail base
       retY = mnt.y + 0.039;
       part(0.007, 0.05, 0.026, black, -0.0215, retY, mnt.z);          // tube walls
       part(0.007, 0.05, 0.026, black, 0.0215, retY, mnt.z);
@@ -971,6 +1041,7 @@ function buildViewModel(w) {
       // four tube walls, a wider objective-bell collar up front. Crosshair
       // reticle (two thin bars) sits on the eyepiece plane and tints with
       // the same per-class reticle color as the dot/holo.
+      part(0.04, 0.014, 0.08, black, 0, mnt.y + 0.007, mnt.z);        // rail base
       retY = mnt.y + 0.043;
       part(0.03, 0.012, 0.03, black, 0, mnt.y + 0.017, mnt.z);        // riser
       part(0.007, 0.042, 0.12, black, -0.0215, retY, mnt.z);          // tube walls
@@ -999,28 +1070,12 @@ function buildViewModel(w) {
         vbar.position.set(0, retY, mnt.z);
         g.add(vbar);
       }
-    } else if (opticId === 'scope3x') {
-      // Crossbow 3X: a longer, slimmer open tube than the ACOG. The housing
-      // remains box-built, but every center-facing surface stays open so the
-      // exact ×3 sight picture is unobstructed.
-      retY = mnt.y + 0.044;
-      part(0.026, 0.014, 0.05, black, 0, mnt.y + 0.019, mnt.z);       // riser
-      part(0.006, 0.044, 0.18, black, -0.022, retY, mnt.z);           // tube walls
-      part(0.006, 0.044, 0.18, black, 0.022, retY, mnt.z);
-      part(0.05, 0.006, 0.18, black, 0, retY + 0.022, mnt.z);
-      part(0.05, 0.006, 0.18, black, 0, retY - 0.022, mnt.z);
-      part(0.007, 0.056, 0.018, black, -0.028, retY, mnt.z - 0.1);    // objective collar
-      part(0.007, 0.056, 0.018, black, 0.028, retY, mnt.z - 0.1);
-      part(0.064, 0.007, 0.018, black, 0, retY + 0.028, mnt.z - 0.1);
-      part(0.064, 0.007, 0.018, black, 0, retY - 0.028, mnt.z - 0.1);
-      const hbar = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.scope3xArm, VM_RETICLE.scope3xHair, 0.003), glow());
-      hbar.position.set(0, retY, mnt.z);
-      g.add(hbar);
-      const vbar = new THREE.Mesh(new THREE.BoxGeometry(VM_RETICLE.scope3xHair, VM_RETICLE.scope3xArm, 0.003), glow());
-      vbar.position.set(0, retY, mnt.z);
-      g.add(vbar);
+    } else if (opticId === 'variableScope') {
+      mountScope(true);
+      retY = -g.userData.adsPos.y;
     } else {
       // holo: wide flat open window frame with a circle-dot reticle
+      part(0.04, 0.014, 0.08, black, 0, mnt.y + 0.007, mnt.z);        // rail base
       retY = mnt.y + 0.046;
       part(0.008, 0.056, 0.03, black, -0.034, retY, mnt.z);           // window side walls
       part(0.008, 0.056, 0.03, black, 0.034, retY, mnt.z);
@@ -1033,7 +1088,7 @@ function buildViewModel(w) {
       dot.position.set(0, retY, mnt.z);
       g.add(dot);
     }
-    g.userData.adsPos.y = -retY; // camera-space y=0 at full ADS → reticle exactly on the aim point
+    g.userData.adsPos.y = -retY; // camera-space y=0 at full ADS -> reticle exactly on the aim point
   }
   // foregrip (#9d): vertical grip hung off the handguard underside — collar
   // at the mount, raked shaft, bottom cap. A recipe's built-in grip (MP5K)
@@ -1422,10 +1477,9 @@ function fxSmoke(at, ttl, size, tint) {
   s.sp.material.color.setHex(tint || 0xffffff);
   s.sp.visible = true;
 }
-// ---- crossbow bolts: real projectiles. Each bolt carries velocity and gravity,
-// sweeps its full movement segment every frame, and deals damage only when the
-// broadhead reaches a target. Target hits re-parent the mesh to the soldier so
-// it follows movement and the death fall, then disappears with the corpse.
+// ---- crossbow bolts: real penetrating projectiles. Each bolt carries velocity
+// and gravity, sweeps its full movement segment every frame, damages every new
+// aligned enemy at full calculated damage, and embeds in the first world wall.
 const _crossbowBolts = [];
 const _boltRay = new THREE.Ray();
 const _boltFrom = new THREE.Vector3();
@@ -1437,6 +1491,7 @@ const _boltImpact = new THREE.Vector3();
 const _boltHitVec = new THREE.Vector3();
 const _boltBodyBox = new THREE.Box3();
 const _boltHeadBox = new THREE.Box3();
+const _boltHits = [];
 function buildArrowMesh() {
   const g = new THREE.Group();
   const mat = c => new THREE.MeshLambertMaterial({ color: c });
@@ -1477,7 +1532,9 @@ function spawnCrossbowBolt(from, direction, def) {
     distance: 0,
     life: 0,
     state: 'flying',
-    target: null,
+    hitTargets: new Set(),
+    killCount: 0,
+    collateralShown: false,
   });
 }
 function crossbowBoltHitboxes(bot) {
@@ -1489,24 +1546,9 @@ function crossbowBoltHitboxes(bot) {
   _boltHeadBox.min.set(bot.pos.x - 0.2, bodyTop, bot.pos.z - 0.2);
   _boltHeadBox.max.set(bot.pos.x + 0.2, bot.pos.y + hitH, bot.pos.z + 0.2);
 }
-function attachCrossbowBoltToTarget(bolt, target) {
-  bolt.mesh.updateMatrixWorld(true);
-  target.mesh.updateMatrixWorld(true);
-  target.mesh.attach(bolt.mesh); // preserves the world impact pose
-  bolt.state = 'target';
-  bolt.target = target;
-  bolt.velocity.set(0, 0, 0);
-}
 function updateCrossbowBolts(dt) {
   for (let i = _crossbowBolts.length - 1; i >= 0; i--) {
     const bolt = _crossbowBolts[i];
-    if (bolt.state === 'target') {
-      // Bot.update hides the mesh at this exact threshold; removing the child
-      // here keeps the bolt and corpse lifetimes identical and prevents it
-      // reappearing when the same soldier mesh respawns.
-      if (!bolt.target || (!bolt.target.alive && bolt.target.deathAnimT <= 0)) removeCrossbowBolt(i);
-      continue;
-    }
     if (bolt.state === 'world') {
       bolt.life += dt;
       if (bolt.life > 2.5) removeCrossbowBolt(i);
@@ -1523,11 +1565,10 @@ function updateCrossbowBolts(dt) {
     _boltNext.copy(_boltFrom).add(_boltStep);
 
     const wall = rayWorld(_boltFrom, _boltDir, stepDist, G.colliders);
-    let nearestDist = wall ? wall.dist : stepDist;
-    let target = null;
-    let headshot = false;
+    const wallDist = wall ? wall.dist : stepDist;
+    _boltHits.length = 0;
     for (const bot of G.bots) {
-      if (!bot.alive || bot.team === player.team) continue;
+      if (!bot.alive || bot.team === player.team || bolt.hitTargets.has(bot)) continue;
       crossbowBoltHitboxes(bot);
       _boltRay.origin.copy(_boltFrom);
       _boltRay.direction.copy(_boltDir);
@@ -1540,35 +1581,35 @@ function updateCrossbowBolts(dt) {
         const bodyDist = bodyHit.distanceTo(_boltFrom);
         if (bodyDist < hitDist) { hitDist = bodyDist; hitHead = false; }
       }
-      if (hitDist <= nearestDist && hitDist <= stepDist) {
-        nearestDist = hitDist;
-        target = bot;
-        headshot = hitHead;
-      }
+      if (hitDist <= wallDist && hitDist <= stepDist)
+        _boltHits.push({ bot, dist: hitDist, head: hitHead });
     }
+    _boltHits.sort((a, b) => a.dist - b.dist);
 
-    if (target) {
-      bolt.distance += nearestDist;
-      _boltImpact.copy(_boltFrom).addScaledVector(_boltDir, nearestDist);
-      bolt.mesh.position.copy(_boltImpact);
-      bolt.mesh.lookAt(_boltLook.copy(_boltImpact).add(_boltDir));
+    for (const hit of _boltHits) {
+      bolt.hitTargets.add(hit.bot);
+      const traveled = bolt.distance + hit.dist;
+      _boltImpact.copy(_boltFrom).addScaledVector(_boltDir, hit.dist);
       const fall = THREE.MathUtils.clamp(
-        (bolt.distance - bolt.def.range[0]) / (bolt.def.range[1] - bolt.def.range[0]), 0, 1);
+        (traveled - bolt.def.range[0]) / (bolt.def.range[1] - bolt.def.range[0]), 0, 1);
       let dmg = THREE.MathUtils.lerp(bolt.def.dmg, bolt.def.minDmg, fall);
-      if (headshot) dmg *= bolt.def.head;
+      if (hit.head) dmg *= bolt.def.head;
       if (bolt.stoppingPower) dmg *= 1.25;
-      const wasAlive = target.alive;
-      const damaged = target.hurt(Math.round(dmg), player, bolt.def.name, headshot);
-      attachCrossbowBoltToTarget(bolt, target);
+      const wasAlive = hit.bot.alive;
+      const damaged = hit.bot.hurt(Math.round(dmg), player, bolt.def.name, hit.head);
       fxSpark(_boltImpact, true);
       if (damaged) {
-        const killed = wasAlive && !target.alive;
+        const killed = wasAlive && !hit.bot.alive;
+        if (killed) bolt.killCount++;
         UI.showHitmarker(killed);
         if (!killed) AudioSys.hit(false);
       } else {
         UI.showInvulnerableHit();
       }
-      continue;
+    }
+    if (bolt.def.collateral && bolt.killCount >= 2 && !bolt.collateralShown) {
+      bolt.collateralShown = true;
+      UI.showKillMsg('COLLATERAL!', true);
     }
 
     if (wall) {
@@ -4706,16 +4747,13 @@ document.addEventListener('mouseup', e => {
 });
 document.addEventListener('contextmenu', e => e.preventDefault());
 
-// #18e: mouse-wheel variable zoom while scoped on a high-zoom optic. Wheel up
-// zooms in, down zooms out, clamped 3×–8×. No-ops (but still eats the scroll)
-// unscoped or on a non-sniper — we deliberately don't bind wheel to weapon
-// switch. zoomLevel resets to the def's base each time you leave ADS (see
-// updatePlayer), so every scope-in starts at the weapon's default zoom.
+// Mouse-wheel adjustment belongs only to the final-tier variable scope. It
+// spans 4x-8x and resets to 4x whenever the player leaves ADS.
 document.addEventListener('wheel', e => {
   if (!G.pointerLocked || G.state !== 'playing') return;
   e.preventDefault();
   const def = curW().def;
-  if (def.zoom <= 3 || player.adsAmt < 0.5) return; // only while actually scoped
+  if (!def.variableZoom || player.adsAmt < 0.5) return;
   const step = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
   player.zoomLevel = THREE.MathUtils.clamp(player.zoomLevel + step, ZOOM_MIN, ZOOM_MAX);
 }, { passive: false });
@@ -4964,11 +5002,8 @@ function updatePlayer(dt) {
   const rate = dt / def.adsTime;
   player.adsAmt += THREE.MathUtils.clamp(adsTarget - player.adsAmt, -rate, rate);
   const fovBase = UI.settings.fov;
-  // #18e: high-zoom optics use the wheel-adjusted zoomLevel; it resets to the
-  // def's base whenever you're out of ADS so each scope-in starts at default.
-  // Everything else (non-snipers) just uses def.zoom directly.
-  if (def.zoom > 3) { if (player.adsAmt < 0.05) player.zoomLevel = def.zoom; }
-  const effZoom = def.zoom > 3 ? player.zoomLevel : def.zoom;
+  if (def.variableZoom && player.adsAmt < 0.05) player.zoomLevel = ZOOM_MIN;
+  const effZoom = def.variableZoom ? player.zoomLevel : def.zoom;
   G.camera.fov = THREE.MathUtils.lerp(fovBase, fovBase / effZoom, player.adsAmt);
   G.camera.updateProjectionMatrix();
 
@@ -5214,9 +5249,9 @@ function firePlayerShot(w) {
   }
   const pellets = def.pellets || 1;
   let anyHit = false, anyKill = false, protectedHit = false, killCount = 0;
-  // #18f: high-zoom snipers punch through stacked bodies at full damage
-  // (classic COD collateral); marksman/low-zoom guns stop at the first body
-  const penetrates = def.zoom > 3;
+  // Collateral is an explicit weapon capability, independent of optic choice
+  // and magnification. Sniper rifles carry it; marksman/other firearms do not.
+  const penetrates = !!def.collateral;
   _shotOrigin.copy(G.camera.position);
 
   for (let p = 0; p < pellets; p++) {
@@ -5299,8 +5334,9 @@ function updateCameraAndViewmodel(dt) {
   swayT += dt;
 
   let yaw = player.yaw, pitch = player.pitch;
-  // sniper sway when scoped
-  if (player.adsAmt > 0.8 && def.zoom > 3 && !UI.actionDown('sprint', keys)) {
+  // Fixed and variable high-power scopes sway; holding the sprint/steady bind
+  // while ADS suppresses it. ACOG and low-power optics do not sway.
+  if (player.adsAmt > 0.8 && def.scopeOverlay && !UI.actionDown('sprint', keys)) {
     yaw += Math.sin(swayT * 1.7) * 0.0025;
     pitch += Math.sin(swayT * 2.3 + 1) * 0.002;
   }
@@ -5545,7 +5581,7 @@ function updateCameraAndViewmodel(dt) {
       }
     }
     // hide gun when fully scoped
-    const scoped = player.adsAmt > 0.85 && def.zoom > 3;
+    const scoped = player.adsAmt > 0.85 && def.scopeOverlay;
     vmGun.visible = !scoped && !melee;
     document.getElementById('scopeOverlay').classList.toggle('hidden', !scoped);
   }

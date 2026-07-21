@@ -486,6 +486,21 @@ const UI = {
         head.className = 'attach-cat';
         head.textContent = cat.toUpperCase();
         wrap.appendChild(head);
+        if (cat === 'optic') {
+          const opticIds = picked.filter(id => ATTACHMENTS[id] && ATTACHMENTS[id].slot === 'optic');
+          const base = document.createElement('div');
+          const baseName = def.defaultSight === 'fixedScope' ? 'FIXED 6× SCOPE' : 'IRON SIGHTS';
+          base.className = 'weapon-item attach-item' + (!opticIds.length ? ' selected' : '');
+          base.innerHTML = `<span class="attach-name">${baseName}</span><span class="w-cat">DEFAULT</span>`;
+          base.onclick = () => {
+            AudioSys.uiClick();
+            for (let i = picked.length - 1; i >= 0; i--)
+              if (ATTACHMENTS[picked[i]] && ATTACHMENTS[picked[i]].slot === 'optic') picked.splice(i, 1);
+            this.saveClasses(); this.renderClassEditor(); this.renderWeaponStats(c[slot]);
+          };
+          base.onmouseenter = () => this.renderWeaponStats(c[slot]);
+          wrap.appendChild(base);
+        }
         for (const a of opts) {
           const div = document.createElement('div');
           const isCamo = a.slot === 'camo';
@@ -531,7 +546,7 @@ const UI = {
         }
         // reticle color chips (#19b): only while an optic is equipped —
         // one shared pick per weapon, tints mounted optic reticles
-        if (cat === 'optic' && picked.some(id => ATTACHMENTS[id] && ATTACHMENTS[id].slot === 'optic')) {
+        if (cat === 'optic' && picked.some(id => ['reddot', 'holo', 'acog'].includes(id))) {
           const row = document.createElement('div');
           row.className = 'reticle-row';
           row.innerHTML = '<span class="reticle-label">SIGHT COLOR</span>';
@@ -852,8 +867,8 @@ const UI = {
       hb.style.background = p.hp > 55 ? '#7fb069' : p.hp > 25 ? '#d9a13d' : '#d05040';
       this.$('vignette').style.opacity = p.hp < 100 ? Math.min(0.9, (100 - p.hp) / 90) * (p.hp < 40 ? 1 : 0.6) : 0;
     }
-    // #18e: live zoom readout, shown only while scoped on a high-zoom optic
-    const zoomTxt = (weapon.zoom > 3 && p.adsAmt > 0.5) ? p.zoomLevel.toFixed(1) + '×' : '';
+    // Live zoom readout belongs only to the adjustable final-tier scope.
+    const zoomTxt = (weapon.variableZoom && p.adsAmt > 0.5) ? p.zoomLevel.toFixed(1) + '×' : '';
     if (c.zoom !== zoomTxt) {
       c.zoom = zoomTxt;
       const el = this.$('zoomLevel');

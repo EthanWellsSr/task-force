@@ -55,7 +55,7 @@ const AudioSys = {
     return this._recentShots <= 4;
   },
 
-  // type: 'ar' | 'smg' | 'lmg' | 'sniper' | 'pistol' | 'shotgun'
+  // type: 'ar' | 'marksman' | 'smg' | 'lmg' | 'sniper' | 'pistol' | 'shotgun'
   // pan: -1 (left) .. 1 (right) from the listener's perspective
   // P55: suppressed — the crack drops into a flat low "pat": gain ×0.4,
   // band pulled to ~480 Hz, decay ×0.7, and NO thump oscillator at all.
@@ -65,6 +65,7 @@ const AudioSys = {
     const atten = dist <= 0 ? 1 : Math.max(0.04, 1 - dist / 85);
     const cfg = {
       ar:      { freq: 850,  decay: 0.13, gain: 0.5,  thump: 130 },
+      marksman:{ freq: 520,  decay: 0.24, gain: 0.68, thump: 90  },
       smg:     { freq: 1100, decay: 0.09, gain: 0.42, thump: 160 },
       lmg:     { freq: 700,  decay: 0.16, gain: 0.55, thump: 110 },
       sniper:  { freq: 380,  decay: 0.42, gain: 0.85, thump: 70  },

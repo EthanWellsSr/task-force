@@ -18,10 +18,10 @@ const Profile = {
   VERSION: 1,
   LEVEL_CAP: 20,
   WEAPON_CATEGORIES: [
-    'Assault Rifle', 'SMG', 'LMG', 'Shotgun', 'Sniper Rifle',
+    'Assault Rifle', 'Marksman Rifle', 'SMG', 'LMG', 'Shotgun', 'Sniper Rifle',
     'Handgun', 'Machine Pistol', 'Melee', 'Crossbow',
   ],
-  PRIMARY_CATEGORIES: ['Assault Rifle', 'SMG', 'LMG', 'Shotgun', 'Sniper Rifle'],
+  PRIMARY_CATEGORIES: ['Assault Rifle', 'Marksman Rifle', 'SMG', 'LMG', 'Shotgun', 'Sniper Rifle'],
   SECONDARY_CATEGORIES: ['Handgun', 'Machine Pistol', 'Shotgun', 'Melee', 'Crossbow'],
 
   // Grounded arcade ranks, index 0 = Level 1. Spec pins SERGEANT

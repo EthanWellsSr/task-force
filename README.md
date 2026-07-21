@@ -55,11 +55,12 @@ Click a map to start a Team Deathmatch, pick a class, and hit DEPLOY. Click the 
   - *SMGs:* HK MP5K, HK UMP45, KRISS Vector, FN P90, MAC-10
   - *LMGs:* RPD, M240, HK MG4, M60E4
   - *Shotguns:* Remington 870 MCS, Atchisson AA-12, Franchi SPAS-12
-  - *Sniper/marksman rifles:* CheyTac M200, Barrett M82, M14 EBR
+  - *Sniper rifles:* CheyTac M200, Barrett M82
+  - *Marksman rifles:* M14 EBR
   - *Sidearms:* HK USP45, Desert Eagle, Beretta M9, Glock 18
   - *Melee:* Tomahawk (throwable)
-  - plus attachments (red dot, holographic, ACOG, suppressor, foregrip,
-    quickdraw, laser, extended mags, and camos)
+  - plus attachments (red dot, holographic, ACOG, variable zoom scope,
+    suppressor, foregrip, quickdraw, laser, extended mags, and camos)
 - **Equipment** — lethal choices (frag, Semtex, C4, claymore, throwing knife)
   and tactical choices (stun, smoke, decoy, snapshot, flashbang)
 - **Perks** — 3 tiers: Marathon / Sleight of Hand / Scavenger / Arsenal /
@@ -70,7 +71,7 @@ Click a map to start a Team Deathmatch, pick a class, and hit DEPLOY. Click the 
 - **Bots** — 4 difficulty levels (Options menu), they patrol, hunt, strafe, and use the killfeed like you do
 - **Maps** — Tsar Taverns, Derrick Dunes, Freightlock, Breachworks, Dead Lease, and Chinook's Rest
 - Health regen, hitmarkers, headshots, killfeed, minimap (enemies show when they fire),
-  sniper scope sway (hold Shift to steady), damage direction indicator
+  fixed and variable scope sway (hold Shift to steady), damage direction indicator
 
 ## Local checks
 

@@ -120,21 +120,23 @@ const WEAPONS = {
   intervention: { slot:'primary', cat:'Sniper Rifle', name:'CHEYTAC M200',
     dmg:100, minDmg:70, head:1.6, rpm:46, mag:5, reserve:25, reload:2.9, mode:'bolt',
     spreadHip:.11, spreadAds:.0006, recoil:.05, bloom:.002, zoom:6.0, adsTime:.36,
-    speed:.92, range:[25,50], model:'sniper' },
+    speed:.92, range:[25,50], model:'sniper', defaultSight:'fixedScope', scopeOverlay:true,
+    collateral:true },
   barrett: { slot:'primary', cat:'Sniper Rifle', name:'BARRETT M82',
     dmg:70, minDmg:56, head:1.8, rpm:190, mag:10, reserve:30, reload:3.3, mode:'semi',
     spreadHip:.12, spreadAds:.0012, recoil:.042, bloom:.006, zoom:6.0, adsTime:.4,
-    speed:.9, range:[25,50], model:'sniper' },
-  // P33: marksman — zoom 2.8 deliberately ducks the `zoom > 3` scope gates
-  // (no overlay/sway/wheel, faster feel for free; it also skips the zoom-gated
-  // collateral penetration — part of the same trade). head 2.1 is a new family
-  // ceiling by design: one-shot headshot inside ~29 m while the body can
-  // never 2-shot without Stopping Power (49 × 2 = 98; SP makes it a .25 s
-  // 2-shot inside ~48 m — accepted perk trade, see sniper-audit).
-  m14: { slot:'primary', cat:'Sniper Rifle', name:'M14 EBR',
+    speed:.9, range:[25,50], model:'sniper', defaultSight:'fixedScope', scopeOverlay:true,
+    collateral:true },
+
+  // ---------- PRIMARY: MARKSMAN RIFLES ----------
+  // The M14 is the hybrid starter: sniper-adjacent damage and cadence with
+  // AR-style irons, handling, bot movement, and attachment compatibility.
+  // head 2.1 preserves its one-shot headshot inside ~29 m; the body can never
+  // 2-shot without Stopping Power (49 x 2 = 98).
+  m14: { slot:'primary', cat:'Marksman Rifle', name:'M14 EBR',
     dmg:49, minDmg:38, head:2.1, rpm:240, mag:15, reserve:45, reload:2.6, mode:'semi',
-    spreadHip:.09, spreadAds:.0018, recoil:.030, bloom:.0075, zoom:2.8, adsTime:.28,
-    speed:.93, range:[26,52], model:'sniper' },
+    spreadHip:.09, spreadAds:.0018, recoil:.030, bloom:.0075, zoom:1.35, adsTime:.28,
+    speed:.93, range:[26,52], model:'marksman' },
 
   // ---------- SECONDARIES ----------
   usp: { slot:'secondary', cat:'Handgun', name:'HK USP45',
@@ -187,7 +189,7 @@ const WEAPONS = {
     dmg:100, minDmg:67, head:1.5, rpm:55, mag:1, reserve:24, reload:1.2, mode:'bolt',
     perShotReload:true, projectileSpeed:85, projectileGravity:9.8,
     spreadHip:.02, spreadAds:.001, recoil:.015, bloom:.003, zoom:1.5, adsTime:.32,
-    speed:.96, range:[22,48], model:'crossbow' },
+    speed:.96, range:[22,48], model:'crossbow', collateral:true },
 };
 
 // T1: category-local weapon progression. Each weapon class starts with its
@@ -199,7 +201,8 @@ const WEAPON_UNLOCK_ORDER_BY_CATEGORY = {
   'SMG': ['mac10', 'mp5k', 'p90', 'vector', 'ump45'],
   'LMG': ['rpd', 'mg4', 'm240', 'm60'],
   'Shotgun': ['aa12', 'r870'],
-  'Sniper Rifle': ['m14', 'intervention', 'barrett'],
+  'Marksman Rifle': ['m14'],
+  'Sniper Rifle': ['intervention', 'barrett'],
 };
 const SECONDARY_UNLOCK_ORDER = ['usp', 'deagle', 'm9', 'g18', 'spas12', 'tomahawk', 'crossbow'];
 
@@ -344,7 +347,7 @@ const WEAPON_TRACK_UNLOCK_TABLE = [
   { level: 10, id: 'suppressor',   name: 'SUPPRESSOR',          pool: 'attachment' },
   { level: 11, id: 'camoTiger',    name: 'TIGER CAMO',          pool: 'camo' },
   { level: 11, id: 'quickdraw',    name: 'QUICKDRAW GRIP',      pool: 'attachment' },
-  { level: 12, id: 'scope3x',      name: '3X SCOPE',             pool: 'attachment' },
+  { level: 12, id: 'variableScope',name: 'VARIABLE ZOOM SCOPE',  pool: 'attachment' },
   { level: 12, id: 'camoHex',      name: 'HEX CAMO',            pool: 'camo' },
   { level: 13, id: 'camoCarbon',   name: 'CARBON CAMO',         pool: 'camo' },
   { level: 14, id: 'camoRedline',  name: 'REDLINE CAMO',        pool: 'camo' },
@@ -417,32 +420,33 @@ function unlocksFromCommit(commit) {
 // ============================================================
 const ATTACH_SLOTS = ['optic', 'muzzle', 'underbarrel', 'laser', 'mag', 'camo']; // P55/P56: 'muzzle' + 'mag' slots (editor rows + save hygiene pick them up from here)
 
+// Every weapon that fires a shot or projectile shares the same optic ladder.
+// The thrown tomahawk is deliberately absent.
+const SHOOTING_CATEGORIES = [
+  'Assault Rifle', 'Marksman Rifle', 'SMG', 'LMG', 'Shotgun',
+  'Sniper Rifle', 'Handgun', 'Machine Pistol', 'Crossbow',
+];
+
 const ATTACHMENTS = {
   reddot: { id:'reddot', name:'RED DOT SIGHT', slot:'optic',
-    cats:['Assault Rifle','SMG','LMG','Shotgun','Crossbow'],
+    cats:SHOOTING_CATEGORIES, zoom:1.35,
     mods:{ adsTime:.85, spreadAds:.9 }, unlockLevel:2 }, // first unlock (P13)
   // Holo identity vs the red dot: the bigger window aims tighter but the
   // bulkier housing aims up slower (still faster than irons). One optic per
   // slot, so it's mutually exclusive with the red dot via normalizeClass.
   holo: { id:'holo', name:'HOLOGRAPHIC SIGHT', slot:'optic',
-    cats:['Assault Rifle','SMG','LMG','Shotgun'],
+    cats:SHOOTING_CATEGORIES, zoom:1.35,
     mods:{ adsTime:.92, spreadAds:.82 }, unlockLevel:7 },
-  // P54: ACOG — the magnified third optic. zoom composes multiplicatively
-  // in resolveWeaponDef like every other stat: AR/LMG 1.35 -> ~2.6, SMG
-  // 1.25 -> ~2.4, all deliberately under the zoom > 3 sniper-scope gates
-  // (no overlay/wheel). The trade: magnification + a tighter ADS cone for
-  // the slowest aim-up of the three optics. No shotguns (zoom is pointless
-  // inside a 15 m falloff) and no snipers (they carry real scopes).
+  // ACOG is the fixed 3x tier. Optic magnification is absolute so the same
+  // sight never inherits a sniper's 6x base zoom or varies by weapon class.
   acog: { id:'acog', name:'ACOG SIGHT', slot:'optic',
-    cats:['Assault Rifle','SMG','LMG','Crossbow'],
-    mods:{ zoom:1.9, adsTime:1.18, spreadAds:.7 }, unlockLevel:9 },
-  // Crossbow-only long optic. Its ×2 modifier composes with the bow's base
-  // ×1.5 ADS value for an exact ×3 sight picture while staying below the
-  // high-power sniper-overlay gate. It shares the standard weapon-specific
-  // sight-color progression with the red dot and ACOG.
-  scope3x: { id:'scope3x', name:'3X SCOPE', slot:'optic',
-    cats:['Crossbow'],
-    mods:{ zoom:2, adsTime:1.24, spreadAds:.62 }, unlockLevel:12 },
+    cats:SHOOTING_CATEGORIES, zoom:3,
+    mods:{ adsTime:1.18, spreadAds:.7 }, unlockLevel:9 },
+  // Final optic tier: every shooting weapon can trade the slowest ADS time
+  // for the tightest cone and a 4x-8x wheel-adjustable sight picture.
+  variableScope: { id:'variableScope', name:'VARIABLE ZOOM SCOPE', slot:'optic',
+    cats:SHOOTING_CATEGORIES, zoom:4, variableZoom:true, scopeOverlay:true,
+    mods:{ adsTime:1.24, spreadAds:.62 }, unlockLevel:12 },
   // P55: suppressor — quiet fire for a shorter falloff band. The teeth:
   // bots' earshot on your shots drops 25 → ~9 m (noteShot ×0.35, composes
   // with ninja) and the minimap fire-flash never writes. The trade:
@@ -462,13 +466,13 @@ const ATTACHMENTS = {
   // suppression) and it shares the muzzle slot, so it's mutually exclusive with
   // the suppressor. Mounts on every firearm category.
   compensator: { id:'compensator', name:'COMPENSATOR', slot:'muzzle',
-    cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'],
+    cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'],
     mods:{ recoil:.75, bloom:.9 }, unlockLevel:6 },
   suppressor: { id:'suppressor', name:'SUPPRESSOR', slot:'muzzle',
-    cats:['Assault Rifle','SMG','LMG','Handgun','Machine Pistol'],
+    cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Handgun','Machine Pistol'],
     mods:{ rangeMult:.75, recoil:.9 }, suppressed:true, unlockLevel:10 },
   foregrip: { id:'foregrip', name:'FOREGRIP', slot:'underbarrel',
-    cats:['Assault Rifle','SMG','LMG','Shotgun'],
+    cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun'],
     mods:{ recoil:.8, bloom:.8 }, unlockLevel:3 },
   // P57: quickdraw grip — snap-aim speed for a looser aimed cone, the
   // inverse of the holo/ACOG direction. DELIBERATELY shares underbarrel
@@ -478,13 +482,13 @@ const ATTACHMENTS = {
   // quickdraw = .68 adsTime; quickdraw's +15% spreadAds nets +3.5% after
   // the reddot's ×.9).
   quickdraw: { id:'quickdraw', name:'QUICKDRAW GRIP', slot:'underbarrel',
-    cats:['Assault Rifle','SMG','LMG','Shotgun'],
+    cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun'],
     mods:{ adsTime:.8, spreadAds:1.15 }, unlockLevel:11 },
   // Laser (#19c): its own slot (underbarrel is the foregrip's), trades
   // concealment for a tighter hip cone. Beam drawn from the muzzle in
   // buildViewModel; color is a per-class pick like the reticle color.
   laser: { id:'laser', name:'LASER SIGHT', slot:'laser',
-    cats:['Assault Rifle','SMG','LMG','Shotgun'],
+    cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun'],
     mods:{ spreadHip:.8 }, unlockLevel:4 },
   // P56: extended mags — +50% magazine for +15% reload time. Reserve is
   // deliberately UNMODIFIED: the total pool stays, you just visit it less
@@ -496,24 +500,24 @@ const ATTACHMENTS = {
   // category strings are 'Handgun' + 'Machine Pistol' (G18's 33-rounder
   // is the classic).
   extmags: { id:'extmags', name:'EXTENDED MAGS', slot:'mag',
-    cats:['Assault Rifle','SMG','LMG','Handgun','Machine Pistol','Shotgun'],
+    cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Handgun','Machine Pistol','Shotgun'],
     mods:{ mag:1.5, reload:1.15 }, unlockLevel:8 },
   // T2: cosmetic-only camo ladder. All camos are locked until Level 5,
   // then one camo unlocks per level with Gold as the final camo.
-  camoDesert:    { id:'camoDesert',    name:'DESERT CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:5,  desc:'TAN FIELD PATTERN' },
-  camoWoodland:  { id:'camoWoodland',  name:'WOODLAND CAMO',   slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:6,  desc:'GREEN FIELD PATTERN' },
-  camoUrban:     { id:'camoUrban',     name:'URBAN CAMO',      slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:7,  desc:'GRAY CITY PATTERN' },
-  camoArctic:    { id:'camoArctic',    name:'ARCTIC CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:8,  desc:'WHITE FIELD PATTERN' },
-  camoJungle:    { id:'camoJungle',    name:'JUNGLE CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:9,  desc:'DENSE GREEN PATTERN' },
-  camoDigital:   { id:'camoDigital',   name:'DIGITAL CAMO',    slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:10, desc:'GRAY DIGITAL PATTERN' },
-  camoTiger:     { id:'camoTiger',     name:'TIGER CAMO',      slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:11, desc:'STRIPED FIELD PATTERN' },
-  camoHex:       { id:'camoHex',       name:'HEX CAMO',        slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:12, desc:'ANGULAR HEX PATTERN' },
-  camoCarbon:    { id:'camoCarbon',    name:'CARBON CAMO',     slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:13, desc:'DARK CARBON WEAVE' },
-  camoRedline:   { id:'camoRedline',   name:'REDLINE CAMO',    slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:14, desc:'RED ACCENT PATTERN' },
-  camoBlueSteel: { id:'camoBlueSteel', name:'BLUE STEEL CAMO', slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:15, desc:'BLUE METAL PATTERN' },
-  camoTopo:      { id:'camoTopo',      name:'TOPO CAMO',       slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:16, desc:'CONTOUR LINE PATTERN' },
-  camoSplinter:  { id:'camoSplinter',  name:'SPLINTER CAMO',   slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:17, desc:'SHARP SPLINTER PATTERN' },
-  camoGold:      { id:'camoGold',      name:'GOLD CAMO',       slot:'camo', cats:['Assault Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:18, desc:'ASPIRATIONAL GOLD FINISH' },
+  camoDesert:    { id:'camoDesert',    name:'DESERT CAMO',     slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:5,  desc:'TAN FIELD PATTERN' },
+  camoWoodland:  { id:'camoWoodland',  name:'WOODLAND CAMO',   slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:6,  desc:'GREEN FIELD PATTERN' },
+  camoUrban:     { id:'camoUrban',     name:'URBAN CAMO',      slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:7,  desc:'GRAY CITY PATTERN' },
+  camoArctic:    { id:'camoArctic',    name:'ARCTIC CAMO',     slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:8,  desc:'WHITE FIELD PATTERN' },
+  camoJungle:    { id:'camoJungle',    name:'JUNGLE CAMO',     slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:9,  desc:'DENSE GREEN PATTERN' },
+  camoDigital:   { id:'camoDigital',   name:'DIGITAL CAMO',    slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:10, desc:'GRAY DIGITAL PATTERN' },
+  camoTiger:     { id:'camoTiger',     name:'TIGER CAMO',      slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:11, desc:'STRIPED FIELD PATTERN' },
+  camoHex:       { id:'camoHex',       name:'HEX CAMO',        slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:12, desc:'ANGULAR HEX PATTERN' },
+  camoCarbon:    { id:'camoCarbon',    name:'CARBON CAMO',     slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:13, desc:'DARK CARBON WEAVE' },
+  camoRedline:   { id:'camoRedline',   name:'REDLINE CAMO',    slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:14, desc:'RED ACCENT PATTERN' },
+  camoBlueSteel: { id:'camoBlueSteel', name:'BLUE STEEL CAMO', slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:15, desc:'BLUE METAL PATTERN' },
+  camoTopo:      { id:'camoTopo',      name:'TOPO CAMO',       slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:16, desc:'CONTOUR LINE PATTERN' },
+  camoSplinter:  { id:'camoSplinter',  name:'SPLINTER CAMO',   slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:17, desc:'SHARP SPLINTER PATTERN' },
+  camoGold:      { id:'camoGold',      name:'GOLD CAMO',       slot:'camo', cats:['Assault Rifle','Marksman Rifle','SMG','LMG','Shotgun','Sniper Rifle','Handgun','Machine Pistol'], mods:{}, unlockLevel:18, desc:'ASPIRATIONAL GOLD FINISH' },
 };
 
 function attachmentAllowed(att, def) {
@@ -560,6 +564,7 @@ const ACOG_RETICLES = [
 const ATTACH_STAT_LABELS = { adsTime:'ADS TIME', spreadAds:'ADS SPREAD', spreadHip:'HIP SPREAD', recoil:'RECOIL', bloom:'BLOOM', zoom:'ZOOM', mag:'MAG', reload:'RELOAD', rangeMult:'RANGE' }; // P55/P56 labels
 function attachmentDesc(att) {
   const parts = [];
+  if (att.zoom) parts.push('ZOOM ' + att.zoom.toFixed(att.zoom % 1 ? 2 : 0) + 'x');
   for (const stat in att.mods) {
     const pct = Math.round((att.mods[stat] - 1) * 100);
     parts.push((ATTACH_STAT_LABELS[stat] || stat.toUpperCase()) + ' ' + (pct > 0 ? '+' : '') + pct + '%');
@@ -587,7 +592,8 @@ function resolveWeaponDef(key, attIds, dotColor, laserColor, acogReticle, allowA
   def.laserColor = laserHex(laserColor);   // ...and the laser beam/dot with this
   def.acogReticle = ACOG_RETICLES.some(r => r.id === acogReticle) ? acogReticle : 'cross';
   for (const id of ids) {
-    const mods = ATTACHMENTS[id].mods;
+    const att = ATTACHMENTS[id];
+    const mods = att.mods;
     for (const stat in mods) {
       // P55: range is an [falloffStart, falloffEnd] ARRAY — the reserved
       // rangeMult key scales both ends explicitly (the scalar loop below
@@ -595,7 +601,12 @@ function resolveWeaponDef(key, attIds, dotColor, laserColor, acogReticle, allowA
       if (stat === 'rangeMult') { def.range[0] *= mods[stat]; def.range[1] *= mods[stat]; continue; }
       def[stat] *= mods[stat];
     }
-    if (ATTACHMENTS[id].suppressed) def.suppressed = true; // P55: rides the resolved def for audio/AI/viewmodel
+    if (att.zoom) def.zoom = att.zoom;
+    if (att.suppressed) def.suppressed = true; // P55: rides the resolved def for audio/AI/viewmodel
+    if (att.slot === 'optic') {
+      def.scopeOverlay = !!att.scopeOverlay;
+      def.variableZoom = !!att.variableZoom;
+    }
   }
   // P56: mag is a round count — an odd base ×1.5 lands on .5 (Deagle
   // 7 → 10.5), so a modified mag rounds to NEAREST (Math.round: 10.5 →
