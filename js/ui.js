@@ -1,6 +1,7 @@
 // ============================================================
 // UI — menus, create-a-class (localStorage), settings, HUD.
-// main.js exposes window.MAIN = { startMatch, deploy, resume, quitMatch }.
+// main.js exposes window.MAIN = { startMatch, deploy, returnToMapSelect,
+// resume, quitMatch }.
 // ============================================================
 
 const DEFAULT_KEYBINDS = {
@@ -227,6 +228,7 @@ const UI = {
     this.$('btnSettings').onclick = () => { AudioSys.uiClick(); this.renderSettings(); this.show('settingsScreen'); };
     this.$('btnClassBack').onclick = () => { AudioSys.uiClick(); this.saveClasses(); this.show(MAIN.inMatch() ? 'spawnScreen' : 'menu'); if (MAIN.inMatch()) this.renderSpawnScreen(); };
     this.$('btnSettingsBack').onclick = () => { AudioSys.uiClick(); this.capturingBind = null; this.show('menu'); };
+    this.$('btnSpawnBack').onclick = () => { AudioSys.uiClick(); MAIN.returnToMapSelect(); };
     this.$('btnDeploy').onclick = () => { AudioSys.uiClick(); MAIN.deploy(); };
     this.$('btnResume').onclick = () => MAIN.resume();
     this.$('btnChangeClass').onclick = () => { AudioSys.uiClick(); this.renderClassEditor(); this.show('classScreen'); };
@@ -686,6 +688,7 @@ const UI = {
   // ---------- spawn screen ----------
   renderSpawnScreen(deathInfo) {
     this.renderControlHints();
+    this.$('btnSpawnBack').classList.toggle('hidden', !MAIN.canReturnToMapSelect());
     const wrap = this.$('spawnClasses');
     wrap.innerHTML = '';
     this.classes.forEach((c, i) => {

@@ -67,6 +67,7 @@ function moveEntity(pos, halfW, height, dx, dy, dz, colliders, stepUp = 0) {
 // ---------- global state ----------
 const G = {
   state: 'menu',   // menu | spawn | playing | dead | paused | end
+  matchStarted: false,
   mapId: null, map: null,
   modeId: 'tdm', mode: null,
   scene: null, camera: null, renderer: null,
@@ -3979,8 +3980,11 @@ function registerKill(killer, victim, weaponName, headshot) {
 }
 
 function startMatch(mapId, modeId = 'tdm') {
-  Profile.onMatchStart(); // P5: matchesPlayed++ and resets MatchXP/MatchStats
+  // Map selection is still pre-match setup. Reset transient match state now,
+  // but do not increment matchesPlayed until the player actually deploys.
+  Profile.resetMatch();
   Profile.setMatchDifficulty(UI.settings.enemyDifficulty || UI.settings.difficulty);
+  G.matchStarted = false;
   _daringUnlockedThisMatch = false; // fresh match: no Daring David unlock yet
   G.mapId = mapId;
   G.modeId = modeById(modeId).id;
@@ -4098,6 +4102,12 @@ function startMatch(mapId, modeId = 'tdm') {
 
 function deploy() {
   if (player.respawnT > 0) return;
+  if (!G.matchStarted) {
+    Profile.onMatchStart();
+    Profile.setMatchDifficulty(UI.settings.enemyDifficulty || UI.settings.difficulty);
+    G.matchStarted = true;
+    UI.$('btnSpawnBack').classList.add('hidden');
+  }
   // Daring David (class 5) is a fixed reward preset: skip sanitize (its curated
   // loadout ignores the normal unlock-level/mount gates) and flag it for the
   // bottomless-magazine Easter egg. If it's selected while still locked, fall
@@ -4696,6 +4706,12 @@ function quitMatch() {
   G.state = 'menu';
   document.exitPointerLock && document.exitPointerLock();
   UI.show('menu');
+}
+
+function returnToMapSelect() {
+  if (G.state !== 'spawn' || G.matchStarted) return false;
+  quitMatch();
+  return true;
 }
 
 function rematch() { startMatch(G.mapId, G.modeId); }
@@ -5702,8 +5718,9 @@ function loop() {
 // Public API for the UI layer
 // ============================================================
 window.MAIN = {
-  startMatch, deploy, quitMatch, rematch,
+  startMatch, deploy, quitMatch, returnToMapSelect, rematch,
   inMatch: () => G.state !== 'menu',
+  canReturnToMapSelect: () => G.state === 'spawn' && !G.matchStarted,
   resume() {
     if (G.state !== 'paused') return;
     G.state = 'playing';
