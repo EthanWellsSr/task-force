@@ -454,9 +454,12 @@ function buildTsarTaverns(scene, colliders) {
   k.box(-3.4, 0.35, 15.5, 2.2, 0.7, 0.8, 0x8f8060);
   k.box(3.2, 0.35, 15.6, 1.8, 0.7, 0.8, 0x8f8060);
   for (let px = -5; px <= 5; px += 2.5) k.box(px, 0.9, 16.8, 0.1, 1.8, 0.1, 0x4a4a48);
-  k.box(0, 1.35, 16.8, 11, 0.04, 0.04, 0x3a3a38, ns);
-  k.box(0, 1.7, 16.8, 11, 0.04, 0.04, 0x3a3a38, ns);
-  k.blocker(0, 3, 16.8, 13, 6, 1.6);
+  // The wire and posts are the collision here. A former 13 x 6 m invisible
+  // blocker covered the entire barricade, so enemies visible between the
+  // strands could not be shot. Keep each visible strand solid and leave the
+  // open air between the sandbags/wire clear to hitscan and bot LOS.
+  k.box(0, 1.35, 16.8, 11, 0.04, 0.04, 0x3a3a38);
+  k.box(0, 1.7, 16.8, 11, 0.04, 0.04, 0x3a3a38);
   k.box(0.5, 1.3, 18.4, 2.4, 2.2, 3.2, 0x4a5240);           // truck behind the wire
   k.box(0.5, 0.11, 18.4, 2.2, 0.18, 3.0, 0x2a2c30);         // skirt: floating bottom
   k.box(0, 0.5, 11.0, 1.8, 1.0, 4.0, 0x2e2f33);             // burnt wreck, secondary cover
