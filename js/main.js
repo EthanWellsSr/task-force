@@ -2396,25 +2396,205 @@ function updateNuke(dt) {
   UI.setNukeCountdown(sec);
 }
 
-// box-built strategic bomber, nose facing +x
-function buildNukePlane() {
+// The player is Task Force/USA and the opposing team is Spetsnaz/USSR. A
+// player-called tactical nuke therefore uses the caller's faction; the
+// Tsar Taverns match-end version uses the side that actually won. FFA keeps
+// the same readable convention: player win = USA, opponent win = USSR.
+function nukePlaneFactionForResult(endWin) {
+  const factionForTeam = team => team === 'sp' ? 'ussr' : 'usa';
+  if (endWin === undefined || endWin === true || endWin === null)
+    return factionForTeam(player.team);
+  if (G.mode && G.mode.structure === 'teams') {
+    const winningTeam = G.mode.teams.find(team => team !== player.team);
+    return factionForTeam(winningTeam);
+  }
+  return 'ussr';
+}
+
+// WWII four-engine heavy bombers, nose facing +x. These are deliberately
+// different silhouettes, not one mesh recolored: USA gets a Silverplate-style
+// Boeing B-29; USSR gets a Petlyakov Pe-8. The planes are cinematic-only.
+function buildNukePlane(faction = 'usa') {
   const g = new THREE.Group();
-  const mat = c => new THREE.MeshLambertMaterial({ color: c });
-  const part = (w, h, d, c, x, y, z) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c));
+  const materials = new Map();
+  const mat = (color, opts = {}) => {
+    const key = color + ':' + (opts.transparent ? opts.opacity : 'solid') + ':' + (opts.basic ? 'basic' : 'lit');
+    if (!materials.has(key)) {
+      const Ctor = opts.basic ? THREE.MeshBasicMaterial : THREE.MeshLambertMaterial;
+      materials.set(key, new Ctor({
+        color,
+        transparent: !!opts.transparent,
+        opacity: opts.opacity === undefined ? 1 : opts.opacity,
+        side: opts.side,
+        depthWrite: opts.depthWrite === undefined ? true : opts.depthWrite,
+      }));
+    }
+    return materials.get(key);
+  };
+  const part = (w, h, d, color, x, y, z, ry = 0, rz = 0, opts) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, opts));
+    m.position.set(x, y, z);
+    m.rotation.set(0, ry, rz);
+    g.add(m);
+    return m;
+  };
+  // CylinderGeometry's local Y axis becomes the aircraft's longitudinal X.
+  // radiusRear is at -X; radiusFront is at +X after the rotation.
+  const tube = (length, radiusRear, radiusFront, color, x, y, z, segments = 12, opts) => {
+    const m = new THREE.Mesh(
+      new THREE.CylinderGeometry(radiusRear, radiusFront, length, segments), mat(color, opts));
+    m.rotation.z = Math.PI / 2;
     m.position.set(x, y, z);
     g.add(m);
     return m;
   };
-  const body = 0x4a4f45, wing = 0x3e423a, dark = 0x2e3230;
-  part(9, 1.1, 1.1, body, 0, 0, 0);          // fuselage
-  part(1.6, 0.85, 0.85, dark, 5.2, 0, 0);    // nose
-  part(3.4, 0.18, 12, wing, 0.4, 0.2, 0);    // main wing
-  part(1.5, 0.14, 4.2, wing, -4.1, 0.35, 0); // tailplane
-  part(1.6, 2.1, 0.16, wing, -4.2, 1.1, 0);  // fin
-  for (const z of [-4.4, -2.4, 2.4, 4.4])    // engine pods under the wing
-    part(1.4, 0.5, 0.5, dark, 1.3, -0.35, z);
-  g.scale.set(1.6, 1.6, 1.6);
+  const flatShape = (points, color, y, opts = {}) => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(shape),
+      mat(color, { ...opts, side: THREE.DoubleSide }));
+    m.rotation.x = Math.PI / 2;
+    m.position.y = y;
+    g.add(m);
+    return m;
+  };
+  const verticalShape = (points, color, z = 0, opts = {}) => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(shape),
+      mat(color, { ...opts, side: THREE.DoubleSide }));
+    m.position.z = z;
+    g.add(m);
+    return m;
+  };
+  const star = (x, y, z, outer, color, vertical = false) => {
+    const points = [];
+    for (let i = 0; i < 10; i++) {
+      const a = Math.PI / 2 + i * Math.PI / 5;
+      const r = i % 2 ? outer * 0.42 : outer;
+      points.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
+    const s = vertical
+      ? verticalShape(points, color, z, { basic: true })
+      : flatShape(points, color, y, { basic: true });
+    if (vertical) s.position.set(x, y, z);
+    else {
+      s.position.x = x;
+      s.position.z = z;
+    }
+    return s;
+  };
+  const propeller = (x, y, z, radius) => {
+    const pg = new THREE.Group();
+    pg.position.set(x, y, z);
+    const bladeMat = mat(0x202326);
+    const vertical = new THREE.Mesh(new THREE.BoxGeometry(0.06, radius * 2, 0.1), bladeMat);
+    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, radius * 2), bladeMat);
+    const hub = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), mat(0x303438));
+    pg.add(vertical, horizontal, hub);
+    g.add(pg);
+    g.userData.propellers.push(pg);
+  };
+
+  g.userData.propellers = [];
+  g.userData.engineCount = 4;
+  if (faction === 'ussr') {
+    // Petlyakov Pe-8: dark VVS camouflage, tapered mid-mounted wing, long
+    // narrow nacelles, angular greenhouse nose, dorsal turret and tall fin.
+    const OLIVE = 0x4f5536, OLIVE_DARK = 0x343a29, UNDER = 0x7a8d91;
+    const GLASS = 0x607f84, RED = 0xc62026, BLACK = 0x171b1b;
+    flatShape([
+      [2.0, 0.75], [0.65, 5.4], [-0.65, 8.9], [-1.7, 8.75], [-1.45, 0.95],
+      [-2.15, 0.68], [-1.45, -0.95], [-1.7, -8.75], [-0.65, -8.9], [0.65, -5.4],
+    ], OLIVE, 0.05);
+    flatShape([
+      [-4.4, 0.38], [-5.1, 3.45], [-6.15, 3.15], [-5.75, 0.32],
+      [-5.75, -0.32], [-6.15, -3.15], [-5.1, -3.45], [-4.4, -0.38],
+    ], OLIVE_DARK, 0.15);
+    tube(9.8, 0.66, 0.72, OLIVE, -0.25, 0.15, 0, 12);
+    tube(2.25, 0.72, 0.15, GLASS, 5.75, 0.12, 0, 10, { transparent: true, opacity: 0.84 });
+    tube(1.8, 0.14, 0.6, OLIVE_DARK, -6.05, 0.16, 0, 10);
+    // Greenhouse framing stays visible against every map sky.
+    for (const x of [5.05, 5.55, 6.05]) part(0.055, 0.86, 1.05, OLIVE_DARK, x, 0.28, 0);
+    part(1.25, 0.06, 1.08, OLIVE_DARK, 5.5, 0.35, 0);
+    verticalShape([[-5.0, 0.2], [-5.35, 2.75], [-6.45, 2.35], [-6.2, 0.12]], OLIVE_DARK);
+    // Pale underside keel is readable during the climb after release.
+    part(8.2, 0.08, 0.85, UNDER, -0.1, -0.52, 0);
+    for (const z of [-5.65, -2.45, 2.45, 5.65]) {
+      tube(3.55, 0.34, 0.44, OLIVE_DARK, 0.2, -0.22, z, 10);
+      part(0.18, 0.68, 0.78, BLACK, 1.95, -0.22, z); // AM-35 radiator face
+      propeller(2.08, -0.22, z, 0.92);
+    }
+    const turret = new THREE.Mesh(new THREE.SphereGeometry(0.36, 10, 6), mat(GLASS));
+    turret.position.set(-1.75, 0.83, 0);
+    g.add(turret);
+    star(-0.1, 0.12, 6.7, 0.82, RED);
+    star(-0.1, 0.12, -6.7, 0.82, RED);
+    star(-5.63, 1.52, 0.015, 0.5, RED, true);
+    g.userData.faction = 'ussr';
+    g.userData.country = 'USSR';
+    g.userData.aircraft = 'Petlyakov Pe-8';
+    g.userData.marking = 'Soviet red stars';
+  } else {
+    // Boeing B-29 Silverplate: bare aluminum, very long high-aspect wing,
+    // round glazed nose, four radial nacelles and the large single tail.
+    const ALUMINUM = 0xb9c0c2, PANEL = 0x929a9d, DARK = 0x272d31;
+    const GLASS = 0x527786, INSIGNIA = 0x173c78, WHITE = 0xf2f0df;
+    flatShape([
+      [2.25, 0.72], [1.0, 6.15], [-0.15, 9.85], [-1.0, 9.8], [-1.25, 0.92],
+      [-2.0, 0.65], [-1.25, -0.92], [-1.0, -9.8], [-0.15, -9.85], [1.0, -6.15],
+    ], PANEL, 0.04);
+    flatShape([
+      [-4.75, 0.38], [-5.25, 3.65], [-6.25, 3.5], [-5.8, 0.3],
+      [-5.8, -0.3], [-6.25, -3.5], [-5.25, -3.65], [-4.75, -0.38],
+    ], PANEL, 0.13);
+    tube(10.6, 0.62, 0.7, ALUMINUM, -0.05, 0.12, 0, 14);
+    tube(2.5, 0.7, 0.09, ALUMINUM, 6.5, 0.12, 0, 14);
+    tube(1.8, 0.12, 0.58, PANEL, -6.25, 0.14, 0, 10);
+    // B-29 wraparound cockpit glazing just aft of the rounded nose.
+    part(0.72, 0.38, 1.18, GLASS, 5.45, 0.48, 0);
+    part(0.08, 0.43, 1.2, ALUMINUM, 5.45, 0.49, 0);
+    part(0.8, 0.08, 1.22, ALUMINUM, 5.45, 0.49, 0);
+    verticalShape([[-5.1, 0.18], [-5.45, 2.85], [-6.55, 2.65], [-6.35, 0.1]], PANEL);
+    for (const z of [-6.45, -3.25, 3.25, 6.45]) {
+      tube(2.75, 0.43, 0.5, PANEL, 0.65, -0.2, z, 12);
+      tube(0.28, 0.52, 0.52, DARK, 2.15, -0.2, z, 12); // R-3350 cowling face
+      propeller(2.33, -0.2, z, 1.0);
+    }
+    // Late-war USAAF white star in blue disc on both upper wing panels.
+    for (const z of [-7.45, 7.45]) {
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.045, 20),
+        mat(INSIGNIA, { basic: true }));
+      disc.position.set(-0.25, 0.13, z);
+      g.add(disc);
+      star(-0.25, 0.16, z, 0.68, WHITE);
+    }
+    // The cinematic sees the bomber mostly in profile, so repeat the period-
+    // correct star-and-bar on both aft-fuselage sides instead of relying only
+    // on the upper-wing roundels.
+    for (const side of [-1, 1]) {
+      part(1.75, 0.22, 0.035, WHITE, -3.55, 0.24, side * 0.665, 0, 0,
+        { basic: true });
+      const sideDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.045, 20),
+        mat(INSIGNIA, { basic: true }));
+      sideDisc.rotation.x = Math.PI / 2;
+      sideDisc.position.set(-3.55, 0.24, side * 0.69);
+      g.add(sideDisc);
+      star(-3.55, 0.24, side * 0.725, 0.44, WHITE, true);
+    }
+    // Silverplate aircraft retained the tail gun while deleting most turrets.
+    tube(0.45, 0.12, 0.12, DARK, -7.25, 0.15, 0, 8);
+    g.userData.faction = 'usa';
+    g.userData.country = 'USA';
+    g.userData.aircraft = 'Boeing B-29 Superfortress';
+    g.userData.marking = 'late-war USAAF star roundels';
+  }
+  g.name = 'nuke-plane-' + g.userData.faction;
+  g.scale.set(1.05, 1.05, 1.05);
   return g;
 }
 
@@ -2992,7 +3172,8 @@ function startNukeCinematic(endWin) {
   G.camera.updateProjectionMatrix();
   const B = Math.max(G.map.bounds.x, G.map.bounds.z);
   const span = B * 2.6;
-  const plane = buildNukePlane();
+  const planeFaction = nukePlaneFactionForResult(endWin);
+  const plane = buildNukePlane(planeFaction);
   plane.position.set(-span, B * 1.5, -B * 0.4);
   G.scene.add(plane);
   // Map-specific cinematic dressing turns the enlarged ground plane into a
@@ -3022,7 +3203,7 @@ function startNukeCinematic(endWin) {
     // cloud fits in frame with the map a diorama under it
     camFar: new THREE.Vector3(0, B * 2.9, B * 4.7),
     lookFar: new THREE.Vector3(0, B * 2.3, 0),
-    plane, planeSpeed: span / 3.2, dropped: false,
+    plane, planeFaction, planeSpeed: span / 3.2, dropped: false,
     bomb: null, bombT: 0, dropY: 0,
     cloud: null, impactT: -1, shake: 0,
     fogNear: G.scene.fog.near, fogFar: G.scene.fog.far,
@@ -3118,6 +3299,7 @@ function updateNukeCine(dt) {
   G.camera.lookAt(_cineLook);
 
   // bomber: straight run, releases over the middle, climbs away after
+  for (const prop of c.plane.userData.propellers) prop.rotation.x += dt * 21;
   c.plane.position.x += c.planeSpeed * dt;
   if (c.dropped) c.plane.position.y += dt * 2.5;
   if (!c.dropped && c.plane.position.x >= -c.B * 0.25) {
@@ -6325,6 +6507,7 @@ window.MAIN = {
 };
 
 window.DEBUG = { G, player, startMatch, deploy, cine: () => _cine,
+  startNukeCinematic, buildNukePlane, nukePlaneFactionForResult,
   nukeT: v => v === undefined ? _nukeT : (_nukeT = v),
   killCam: () => _killCam,
   carePackages: () => _carePackages, chooseCarePackageReward,
