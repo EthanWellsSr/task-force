@@ -474,6 +474,8 @@ label { display:block; font-size:10px; letter-spacing:2px; color:#8a9078; margin
 #scoreboard table, #endScreen table { width:100%; border-collapse:collapse; font-size:12px; }
 #scoreboard th, #endScreen th { text-align:left; font-size:9px; letter-spacing:2px; color:#6a7060; padding:5px 12px; }
 #scoreboard td, #endScreen td { padding:5px 12px; background:rgba(15,18,11,.8); border-bottom:1px solid rgba(0,0,0,.4); }
+#endScreen #endBoards { justify-content:center; }
+#endScreen th, #endScreen td { text-align:center; }
 tr.me td { color:#e8a33d; font-weight:700; }
 #endScreen { display:flex; align-items:center; justify-content:center; background:rgba(5,7,4,.94); }
 .end-inner {
