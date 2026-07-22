@@ -2428,6 +2428,241 @@ function buildNukeDiorama(B) {
   return g;
 }
 
+// Derrick Dunes-only Permian Basin dressing for the nuke pull-back. West
+// Texas fields read from the air as a loose checkerboard: caliche service
+// roads, individual cleared well pads, many pumpjacks, occasional tank
+// batteries and a much smaller number of tall active drilling rigs. The
+// roughly 430 m-wide field surrounds (but never covers) the playable yard.
+// Cosmetic and cinematic-only; removed with the other nuke props.
+function buildDerrickDunesNukeDiorama(B) {
+  const g = new THREE.Group();
+  g.name = 'derrick-dunes-oil-acreage-diorama';
+  const materials = new Map();
+  const mat = (c, basic = false) => {
+    const key = (basic ? 'b' : 'l') + c;
+    if (!materials.has(key)) materials.set(key, basic
+      ? new THREE.MeshBasicMaterial({ color: c })
+      : new THREE.MeshLambertMaterial({ color: c }));
+    return materials.get(key);
+  };
+  const unitBox = new THREE.BoxGeometry(1, 1, 1);
+  const unitCylinder = new THREE.CylinderGeometry(1, 1, 1, 10);
+  const unitSphere = new THREE.SphereGeometry(1, 8, 6);
+  const box = (parent, w, h, d, c, x, y, z, ry = 0, rz = 0) => {
+    const m = new THREE.Mesh(unitBox, mat(c));
+    m.scale.set(w, h, d);
+    m.position.set(x, y, z);
+    m.rotation.y = ry;
+    m.rotation.z = rz;
+    parent.add(m);
+    return m;
+  };
+  const cylinder = (parent, r, h, c, x, y, z, rz = 0) => {
+    const m = new THREE.Mesh(unitCylinder, mat(c));
+    m.scale.set(r, h, r);
+    m.position.set(x, y, z);
+    m.rotation.z = rz;
+    parent.add(m);
+    return m;
+  };
+  const beam = (parent, from, to, width, color) => {
+    const delta = new THREE.Vector3().subVectors(to, from);
+    const m = new THREE.Mesh(unitBox, mat(color));
+    m.scale.set(width, delta.length(), width);
+    m.position.copy(from).add(to).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
+    parent.add(m);
+    return m;
+  };
+  const tagged = (name, kind) => {
+    const gg = new THREE.Group();
+    gg.name = name;
+    gg.userData.oilFieldKind = kind;
+    g.add(gg);
+    return gg;
+  };
+  // Stable scenery keeps the cinematic composition and test counts fixed.
+  let seed = 0x5eED1234;
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+
+  const CALICHE = 0xa98758, PAD = 0xad8858, PAD_EDGE = 0x987448,
+        STEEL = 0x554f46, STEEL_DK = 0x383735, RUST = 0x78472f,
+        OXIDE = 0x925a35, TANK = 0xb7ad91, TANK_DK = 0x777267,
+        PIPE = 0x625b4f, SCRUB = 0x766d3f;
+
+  // Straight lease roads establish the large checkerboard before the
+  // machinery is added. Their inner pair stays outside the perimeter dunes.
+  const roadGrid = tagged('derrick-dunes-lease-road-grid', 'lease-roads');
+  const roadOffsets = [-8.25, -4.95, -1.65, 1.65, 4.95, 8.25];
+  for (const offset of roadOffsets) {
+    box(roadGrid, B * 0.18, 0.055, B * 18.8, CALICHE,
+      B * offset, NUKE_GROUND_Y + 0.035, 0);
+    box(roadGrid, B * 18.8, 0.055, B * 0.18, CALICHE,
+      0, NUKE_GROUND_Y + 0.035, B * offset);
+  }
+
+  const pumpBeams = [];
+  const buildPumpjack = (x, z, scale, yaw, index) => {
+    const pad = tagged('derrick-dunes-well-pad-' + index, 'well-pad');
+    pad.position.set(x, 0, z);
+    pad.rotation.y = yaw * 0.18;
+    box(pad, B * 0.72, 0.07, B * 0.58, PAD, 0, NUKE_GROUND_Y + 0.045, 0);
+    box(pad, B * 0.6, 0.025, B * 0.48, PAD_EDGE, 0, NUKE_GROUND_Y + 0.085, 0);
+
+    const p = new THREE.Group();
+    p.name = 'derrick-dunes-pumpjack-' + index;
+    p.userData.oilFieldKind = 'pumpjack';
+    p.position.set(x, NUKE_GROUND_Y + 0.1, z);
+    p.rotation.y = yaw;
+    p.scale.setScalar(scale);
+    g.add(p);
+    box(p, 4.8, 0.2, 2.5, STEEL_DK, 0, 0.1, 0);
+    box(p, 4.4, 0.18, 0.25, STEEL, 0, 0.22, -0.92);
+    box(p, 4.4, 0.18, 0.25, STEEL, 0, 0.22, 0.92);
+    for (const zz of [-0.72, 0.72]) {
+      beam(p, new THREE.Vector3(-1.45, 0.25, zz),
+        new THREE.Vector3(-0.35, 4.15, zz), 0.24, STEEL);
+      beam(p, new THREE.Vector3(0.7, 0.25, zz),
+        new THREE.Vector3(-0.35, 4.15, zz), 0.24, STEEL);
+    }
+    box(p, 1.15, 0.28, 1.85, STEEL_DK, -0.35, 4.1, 0);
+    cylinder(p, 0.58, 1.45, OXIDE, -1.6, 0.82, 0, Math.PI / 2);
+    box(p, 1.35, 0.9, 1.15, RUST, -0.45, 0.65, 0);
+
+    const walking = new THREE.Group();
+    walking.position.set(-0.35, 4.35, 0);
+    const baseRotation = (rand() - 0.5) * 0.2;
+    walking.rotation.z = baseRotation;
+    p.add(walking);
+    box(walking, 5.8, 0.34, 0.48, STEEL_DK, 0.7, 0, 0);
+    box(walking, 0.72, 1.6, 1.0, RUST, 3.62, -0.7, 0, 0, -0.18);
+    box(walking, 0.14, 3.5, 0.14, PIPE, 3.78, -2.25, 0);
+    cylinder(walking, 0.68, 0.5, OXIDE, -2.05, -0.58, 0, Math.PI / 2);
+    pumpBeams.push({ group: walking, baseRotation,
+      phase: rand() * Math.PI * 2, speed: 0.42 + rand() * 0.2 });
+  };
+
+  let pumpjackCount = 0;
+  const spacing = B * 1.65;
+  for (let ix = -5; ix <= 5; ix++) for (let iz = -5; iz <= 5; iz++) {
+    if (Math.abs(ix) <= 1 && Math.abs(iz) <= 1) continue;
+    if (rand() > 0.74) continue;
+    const x = ix * spacing + (rand() - 0.5) * B * 0.32;
+    const z = iz * spacing + (rand() - 0.5) * B * 0.32;
+    buildPumpjack(x, z, 0.82 + rand() * 0.42,
+      (Math.floor(rand() * 4) * Math.PI / 2) + (rand() - 0.5) * 0.18,
+      ++pumpjackCount);
+  }
+
+  const buildRig = (x, z, scale, yaw, index) => {
+    const rig = tagged('derrick-dunes-drilling-rig-' + index, 'drilling-rig');
+    rig.position.set(x, NUKE_GROUND_Y + 0.08, z);
+    rig.rotation.y = yaw;
+    rig.scale.setScalar(scale);
+    box(rig, 13, 0.15, 11, PAD, 0, 0.03, 0);
+    box(rig, 8.5, 1.25, 7.5, STEEL_DK, 0, 0.7, 0);
+    const H = 23, base = 3.8, top = 0.58;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1])
+      beam(rig, new THREE.Vector3(sx * base, 1.25, sz * base),
+        new THREE.Vector3(sx * top, H, sz * top), 0.28, OXIDE);
+    for (const y of [5.5, 10.8, 16.2, 21.5]) {
+      const r = base + (top - base) * ((y - 1.25) / (H - 1.25));
+      box(rig, r * 2, 0.22, 0.25, STEEL, 0, y, -r);
+      box(rig, r * 2, 0.22, 0.25, STEEL, 0, y, r);
+      box(rig, 0.25, 0.22, r * 2, STEEL, -r, y, 0);
+      box(rig, 0.25, 0.22, r * 2, STEEL, r, y, 0);
+    }
+    for (const side of [-1, 1]) {
+      beam(rig, new THREE.Vector3(-base, 1.4, side * base),
+        new THREE.Vector3(2.25, 10.8, side * 2.25), 0.16, STEEL_DK);
+      beam(rig, new THREE.Vector3(base, 1.4, side * base),
+        new THREE.Vector3(-2.25, 10.8, side * 2.25), 0.16, STEEL_DK);
+      beam(rig, new THREE.Vector3(side * base, 1.4, -base),
+        new THREE.Vector3(side * 2.25, 10.8, 2.25), 0.16, STEEL_DK);
+      beam(rig, new THREE.Vector3(side * base, 1.4, base),
+        new THREE.Vector3(side * 2.25, 10.8, -2.25), 0.16, STEEL_DK);
+    }
+    box(rig, 2.1, 0.6, 2.1, RUST, 0, H + 0.2, 0);
+    box(rig, 0.28, 3.2, 0.28, STEEL_DK, 0, H + 2.0, 0);
+    box(rig, 4.8, 2.7, 3.4, 0x6f6658, -6.2, 1.4, 1.8);
+    box(rig, 5.6, 0.7, 1.6, PIPE, 5.3, 0.45, -2.6);
+  };
+  const rigSites = [
+    [-8.4, -6.6], [-7.3, 6.9], [7.8, -7.5], [8.5, 5.5],
+    [-4.0, -8.6], [4.7, 8.4], [-8.7, 1.7], [8.8, -1.6],
+  ];
+  rigSites.forEach((site, i) => buildRig(B * site[0], B * site[1],
+    0.9 + (i % 3) * 0.1, (i % 4) * Math.PI / 2 + 0.08 * (i % 2), i + 1));
+
+  const buildTankBattery = (x, z, yaw, count, index) => {
+    const tanks = tagged('derrick-dunes-tank-battery-' + index, 'tank-battery');
+    tanks.position.set(x, NUKE_GROUND_Y + 0.08, z);
+    tanks.rotation.y = yaw;
+    box(tanks, 11.5, 0.12, 8.5, PAD, 0, 0.02, 0);
+    for (let i = 0; i < count; i++) {
+      const tx = (i % 2) * 4.5 - 2.25;
+      const tz = Math.floor(i / 2) * 4.0 - (count > 2 ? 1.9 : 0);
+      cylinder(tanks, 1.75, 3.8, TANK, tx, 2.0, tz);
+      cylinder(tanks, 1.82, 0.18, TANK_DK, tx, 3.95, tz);
+      box(tanks, 0.14, 4.1, 0.14, STEEL_DK, tx + 1.85, 2.05, tz);
+    }
+    box(tanks, 8.2, 0.24, 0.24, PIPE, 0, 0.55, -3.0);
+    for (let i = 0; i < count; i++)
+      box(tanks, 0.2, 0.85, 0.2, PIPE, (i % 2) * 4.5 - 2.25, 0.78,
+        Math.floor(i / 2) * 4.0 - (count > 2 ? 1.9 : 0));
+  };
+  const tankSites = [
+    [-6.6, -3.2], [-3.2, -6.6], [3.3, -6.4], [6.6, -3.3],
+    [-6.5, 3.4], [-3.2, 6.5], [3.4, 6.7], [6.5, 3.2],
+  ];
+  tankSites.forEach((site, i) => buildTankBattery(B * site[0], B * site[1],
+    (i % 4) * Math.PI / 2, 3 + (i % 2), i + 1));
+
+  const flareSites = [[-7.8, -4.8], [7.6, 7.0], [-5.5, 8.2], [8.1, -5.0], [5.2, 5.8]];
+  flareSites.forEach((site, i) => {
+    const flare = tagged('derrick-dunes-flare-stack-' + (i + 1), 'flare-stack');
+    flare.position.set(B * site[0], NUKE_GROUND_Y + 0.08, B * site[1]);
+    cylinder(flare, 0.22, 12 + i % 3, STEEL_DK, 0, 6 + (i % 3) * 0.5, 0);
+    box(flare, 1.7, 0.18, 1.7, STEEL, 0, 10.5, 0);
+    const flame = new THREE.Mesh(unitSphere, mat(0xff7b24, true));
+    flame.scale.set(0.65, 1.35, 0.65);
+    flame.position.y = 12.4 + i % 3;
+    flare.add(flame);
+  });
+
+  // Sparse scrub and utility lines keep the acreage rural instead of
+  // reading as one continuous industrial slab.
+  const details = tagged('derrick-dunes-oil-field-details', 'field-details');
+  for (let i = 0; i < 70; i++) {
+    const x = (rand() - 0.5) * B * 18.5;
+    const z = (rand() - 0.5) * B * 18.5;
+    if (Math.abs(x) < B * 1.4 && Math.abs(z) < B * 1.4) continue;
+    const scrub = new THREE.Mesh(unitSphere, mat(SCRUB));
+    const s = 0.25 + rand() * 0.45;
+    scrub.scale.set(s * 1.8, s, s * 1.4);
+    scrub.position.set(x, NUKE_GROUND_Y + s * 0.45, z);
+    details.add(scrub);
+  }
+  for (let i = -8; i <= 8; i++) {
+    const z = i * B * 0.95;
+    cylinder(details, 0.09, 5.5, STEEL_DK, B * 9.05, 2.7, z);
+    box(details, 2.5, 0.12, 0.12, STEEL_DK, B * 9.05, 5.35, z);
+  }
+
+  g.userData.oilAcreage = {
+    pumpjacks: pumpjackCount,
+    drillingRigs: rigSites.length,
+    tankBatteries: tankSites.length,
+    flareStacks: flareSites.length,
+    fieldWidthMeters: Math.round(B * 16.5),
+  };
+  g.userData.oilPumpBeams = pumpBeams;
+  return g;
+}
+
 // Freightlock-only port dressing for the nuke pull-back. The playable yard
 // remains the foreground diorama; this builds the much larger American
 // container terminal it belongs to: an apron and on-dock rail, dense stacks,
@@ -2650,11 +2885,15 @@ function startNukeCinematic(endWin) {
   plane.position.set(-span, B * 1.5, -B * 0.4);
   G.scene.add(plane);
   // Map-specific cinematic dressing turns the enlarged ground plane into a
-  // real horizon: desert around Tsar Taverns, a major container port around
-  // Freightlock. Other maps keep their existing ground treatment.
+  // real horizon: desert around Tsar Taverns, Permian oil acreage around
+  // Derrick Dunes, and a major container port around Freightlock. Other maps
+  // keep their existing ground treatment.
   let diorama = null;
   if (G.mapId === 'tsartaverns') {
     diorama = buildNukeDiorama(B);
+    G.scene.add(diorama);
+  } else if (G.mapId === 'derrickdunes') {
+    diorama = buildDerrickDunesNukeDiorama(B);
     G.scene.add(diorama);
   } else if (G.mapId === 'freightlock') {
     diorama = buildFreightlockNukeDiorama(B);
@@ -2738,6 +2977,13 @@ function updateNukeCine(dt) {
   const c = _cine;
   if (!c) return;
   c.t += dt;
+
+  // Derrick Dunes' walking beams nod slowly and out of phase, like an active
+  // field rather than a grid of static props.
+  if (c.diorama && c.diorama.userData.oilPumpBeams) {
+    for (const pump of c.diorama.userData.oilPumpBeams)
+      pump.group.rotation.z = pump.baseRotation + Math.sin(c.t * pump.speed + pump.phase) * 0.14;
+  }
 
   // camera: smoothstep glide out to the drop vantage, then after impact a
   // second, much longer pull-back that tracks the cloud's growth (plus
