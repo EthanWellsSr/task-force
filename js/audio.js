@@ -55,7 +55,7 @@ const AudioSys = {
     return this._recentShots <= 4;
   },
 
-  // type: 'ar' | 'marksman' | 'smg' | 'lmg' | 'sniper' | 'pistol' | 'shotgun'
+  // type: 'ar' | 'ak' | 'marksman' | 'smg' | 'lmg' | 'sniper' | 'pistol' | 'shotgun'
   // pan: -1 (left) .. 1 (right) from the listener's perspective
   // P55: suppressed — the crack drops into a flat low "pat": gain ×0.4,
   // band pulled to ~480 Hz, decay ×0.7, and NO thump oscillator at all.
@@ -65,6 +65,7 @@ const AudioSys = {
     const atten = dist <= 0 ? 1 : Math.max(0.04, 1 - dist / 85);
     const cfg = {
       ar:      { freq: 850,  decay: 0.13, gain: 0.5,  thump: 130 },
+      ak:      { freq: 650,  decay: 0.17, gain: 0.6,  thump: 105 },
       marksman:{ freq: 520,  decay: 0.24, gain: 0.68, thump: 90  },
       smg:     { freq: 1100, decay: 0.09, gain: 0.42, thump: 160 },
       lmg:     { freq: 700,  decay: 0.16, gain: 0.55, thump: 110 },
@@ -147,9 +148,34 @@ const AudioSys = {
     }
   },
 
-  reload() {
+  reload(profile = null, empty = false, duration = 0) {
     if (!this.ensure()) return;
     const t = this.ctx.currentTime;
+    if (profile === 'ak') {
+      // Steel magazine latch/reseat, followed only on an empty gun by the
+      // right-side carrier pull and release. Event positions scale with the
+      // live duration so Sleight of Hand remains synchronized.
+      const dur = Math.max(0.4, duration || 2.35);
+      const events = [
+        { at: dur * 0.2, freq: 430, gain: 0.15 },
+        { at: dur * 0.62, freq: 760, gain: 0.18 },
+      ];
+      if (empty) events.push(
+        { at: dur * 0.82, freq: 330, gain: 0.16 },
+        { at: dur * 0.91, freq: 940, gain: 0.2 });
+      for (const ev of events) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.value = ev.freq;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.setValueAtTime(ev.gain, t + ev.at);
+        g.gain.exponentialRampToValueAtTime(0.001, t + ev.at + 0.045);
+        osc.connect(g); g.connect(this.master);
+        osc.start(t + ev.at); osc.stop(t + ev.at + 0.06);
+      }
+      return;
+    }
     [0, 0.12].forEach((dt, i) => {
       const osc = this.ctx.createOscillator();
       osc.type = 'square'; osc.frequency.value = i ? 900 : 600;

@@ -123,14 +123,15 @@ const MODES = {
 // shotguns (one-shot rhythm) → SMGs (spray control) → ARs (discipline) →
 // LMG (power/pig) → bolt sniper (precision wall) → tomahawk finale.
 // Every consumer is length-generic (clamps/length reads), so the array IS
-// the ladder. Deliberate skips per the audit docs: FAMAS (bot burst path
-// shipped with P25, but a fifth AR tier bloats the band — 16 tiers stay),
+// the ladder. The AK replaces the SCAR stage so the AR band now teaches
+// balanced auto → high-recoil auto → semi-auto without growing past 16 tiers.
+// Deliberate skips per the audit docs: FAMAS (bot burst path shipped with P25,
 // Barrett M82 (semi bot path would out-fire the bolt — lobby-clearing
 // sniper bot), M14 EBR (same, plus back-to-back sniper tiers kill flow),
 // CROSSBOW (projectile flight + 1-round re-cock; the hitscan bot cadence
 // path can't drive it honestly). 'intervention' is the CheyTac.
 const GUN_LADDER = ['m9', 'usp', 'deagle', 'g18', 'spas12', 'r870', 'aa12', 'mac10',
-  'vector', 'ump45', 'm4a1', 'scar', 'fal', 'm60', 'intervention', 'tomahawk'];
+  'vector', 'ump45', 'm4a1', 'ak47', 'fal', 'm60', 'intervention', 'tomahawk'];
 
 function modeById(id) {
   return MODES[id] || MODES.tdm;
@@ -181,13 +182,15 @@ function gunGameWeaponKey(c) {
 function setPlayerGunGameWeapon() {
   player.weapons = [weaponStateForKey(gunGameWeaponKey(player))];
   player.cur = 0;
-  player.reloadT = 0; player.switchT = 0; player.burstQueue = 0; player.fireCooldown = 0;
+  player.reloadT = 0; player.reloadDuration = 0; player.reloadWasEmpty = false;
+  player.switchT = 0; player.burstQueue = 0; player.fireCooldown = 0;
   player.adsToggle = false;
   if (player.alive) buildViewModel(curW().def);
 }
 
 function setBotGunGameWeapon(bot) {
   bot.weapon = WEAPONS[gunGameWeaponKey(bot)];
+  if (typeof setSoldierWeapon === 'function') setSoldierWeapon(bot.mesh, bot.weapon.key);
   bot.magLeft = bot.weapon.mag;
   bot.reloadT = 0;
   bot.burstLeft = 0;
@@ -286,7 +289,8 @@ const player = {
   stamina: 1, sprinting: false, winded: false,
   perks: new Set(),
   weapons: [], cur: 0,
-  reloadT: 0, switchT: 0, fireCooldown: 0, burstQueue: 0,
+  reloadT: 0, reloadDuration: 0, reloadWasEmpty: false,
+  switchT: 0, fireCooldown: 0, burstQueue: 0,
   adsHeld: false, adsToggle: false, adsAmt: 0, bloom: 0,
   zoomLevel: 4, // live variable-scope zoom (x), reset to 4x on each ADS entry
   meleeT: 0, sinceDamage: 99, respawnT: 0, spawnProtectT: 0,
@@ -378,6 +382,7 @@ const VM_OPTIC = {
   crossbow: { y: 0.065, z: -0.16 },
   m4a1: { y: 0.059, z: -0.18 },
   scar: { y: 0.055, z: -0.14 },
+  ak47: { y: 0.069, z: -0.24 },
   acr: { y: 0.041, z: -0.16 },
   tar21: { y: 0.048, z: -0.1 },
   famas: { y: 0.066, z: -0.13 },
@@ -407,6 +412,7 @@ const VM_OPTIC = {
 const VM_GRIP = {
   m4a1: { y: -0.039, z: -0.5 },
   scar: { y: -0.045, z: -0.42 },
+  ak47: { y: -0.043, z: -0.52 },
   acr: { y: -0.043, z: -0.47 },
   tar21: { y: -0.066, z: -0.5 },
   famas: { y: -0.045, z: -0.36 },
@@ -435,6 +441,7 @@ const VM_GRIP = {
 const VM_HANDS = {
   m4a1: { trig: [-0.09, -0.05] },
   scar: { trig: [-0.088, -0.02] },
+  ak47: { trig: [-0.09, -0.035] },
   acr: { trig: [-0.09, -0.04] },
   tar21: { trig: [-0.088, -0.24] },
   famas: { trig: [-0.092, -0.2] },
@@ -467,6 +474,9 @@ const VM_HANDS = {
 // top-mounted mag lifts up and back off the rail instead.
 const VM_MAG_PULL = {
   p90: { x: 0, y: 0.075, z: 0.15, rx: -0.25 },
+  // AK magazines unlatch at the rear, then rock down and forward before
+  // clearing the well. The slight side roll keeps the curved body readable.
+  ak47: { x: -0.035, y: -0.15, z: -0.085, rx: 0.78, rz: -0.12 },
   default: { x: 0, y: -0.17, z: 0.06, rx: 0.45 },
 };
 
@@ -583,6 +593,92 @@ const VM_RECIPES = {
     s(0.014, 0.045, 0.02, dark, 0, 0.062, -0.58);    // front post
     s(0.02, 0.032, 0.025, dark, 0, 0.058, -0.12);    // rear sight
     return 0.82;
+  },
+  // Original fixed-stock Type 3 AK-47: milled receiver, reddish shellacked
+  // furniture, ribbed rock-and-lock steel magazine, right-side carrier handle,
+  // 800 m tangent rear leaf, and the threaded front post between protective
+  // ears. The sight geometry itself produces the ADS picture: an open rear
+  // notch framing the centered front post, never a generic aperture ring.
+  ak47({ p, s, o, m, k, dark, mid, black, weapon }) {
+    const blued = 0x24272a, bluedHi = 0x34383b;
+    const shellac = 0x7d351f, shellacDark = 0x562416;
+
+    // Milled receiver and smooth Type 3 top cover. Thin dark side insets read
+    // as the characteristic slanted lightening cuts without turning the solid
+    // low-poly receiver into a modern stamped AKM shell.
+    p(0.062, 0.09, 0.46, blued, 0, 0, -0.22);          // milled receiver
+    p(0.054, 0.038, 0.36, bluedHi, 0, 0.052, -0.19);   // smooth top cover
+    const cutL = p(0.008, 0.035, 0.19, black, -0.059, 0.004, -0.22);
+    const cutR = p(0.008, 0.035, 0.19, black, 0.059, 0.004, -0.22);
+    cutL.rotation.x = cutR.rotation.x = -0.08;
+
+    // Reddish Soviet shellac furniture: fixed stock, separate pistol grip,
+    // lower handguard and the smaller upper gas-tube handguard.
+    p(0.056, 0.095, 0.3, shellac, 0, -0.008, 0.15);    // fixed wood stock
+    p(0.058, 0.088, 0.045, shellacDark, 0, -0.005, 0.31); // steel buttplate edge
+    const grip = p(0.042, 0.105, 0.055, shellacDark, 0, -0.082, -0.035);
+    grip.rotation.x = -0.18;
+    p(0.068, 0.07, 0.27, shellac, 0, -0.015, -0.52);   // lower handguard
+    p(0.052, 0.045, 0.25, shellacDark, 0, 0.045, -0.51); // upper handguard
+
+    // Long-stroke gas system, barrel, gas block and original straight muzzle
+    // thread protector (no AKM slant brake on a Type 3).
+    p(0.027, 0.027, 0.4, bluedHi, 0, 0.018, -0.68);    // gas tube
+    p(0.022, 0.022, 0.44, mid, 0, -0.005, -0.77);     // barrel
+    p(0.055, 0.075, 0.055, blued, 0, 0.018, -0.69);   // gas block
+    p(0.03, 0.03, 0.09, blued, 0, -0.005, -1.025);    // thread protector
+    p(0.009, 0.009, 0.64, bluedHi, 0, -0.038, -0.7);  // cleaning rod
+
+    // Strongly curved ribbed 30-round stamped-steel magazine. Extended Mags
+    // keeps the agreed 45-round game capacity and adds a fourth visible lower
+    // section so the attachment is not a stat-only change.
+    const magSeg = (y, z, rx, h, d) => {
+      const seg = m(0.05, h, d, blued, 0, y, z);
+      seg.rotation.x = rx;
+      return seg;
+    };
+    magSeg(-0.078, -0.18, 0.05, 0.07, 0.09);
+    magSeg(-0.132, -0.19, 0.18, 0.072, 0.088);
+    magSeg(-0.185, -0.215, 0.34, 0.07, 0.084);
+    for (const y of [-0.11, -0.155, -0.2]) m(0.055, 0.009, 0.088, black, 0, y, -0.205);
+    if (weapon.attachments && weapon.attachments.includes('extmags')) {
+      magSeg(-0.238, -0.255, 0.48, 0.072, 0.08);
+      m(0.055, 0.009, 0.084, black, 0, -0.25, -0.27);
+    }
+
+    // Selector and right-side charging handle move as a group only during an
+    // empty reload. Tactical reloads leave the chambered round untouched.
+    p(0.008, 0.018, 0.22, bluedHi, 0.065, 0.022, -0.16); // selector lever
+    k(0.075, 0.014, 0.018, bluedHi, 0.06, 0.045, -0.12); // carrier/handle arm
+    k(0.024, 0.022, 0.028, black, 0.096, 0.045, -0.12);  // charging knob
+
+    // Type 3 tangent rear sight: forward-mounted leaf, sliding range collar,
+    // shallow open notch, battle setting plus eight visible scale ticks.
+    s(0.054, 0.012, 0.19, blued, 0, 0.057, -0.365);     // tangent leaf
+    s(0.066, 0.022, 0.035, black, 0, 0.064, -0.415);    // range slider
+    s(0.018, 0.034, 0.018, black, -0.018, 0.079, -0.275); // rear notch left
+    s(0.018, 0.034, 0.018, black, 0.018, 0.079, -0.275);  // rear notch right
+    for (let i = 0; i < 8; i++) {
+      const z = -0.315 - i * 0.018;
+      s(0.012, 0.006, 0.006, bluedHi, i % 2 ? 0.018 : -0.018, 0.066, z);
+    }
+
+    // Threaded front post in its windage drum. The two tall ears and their
+    // inward-curving caps remain distinct, so the post is never mistaken for
+    // a full circular hood in the sight picture.
+    s(0.066, 0.026, 0.034, blued, 0, 0.043, -0.885);    // windage drum/base
+    s(0.009, 0.055, 0.012, black, 0, 0.069, -0.885);    // threaded post
+    const earL = s(0.012, 0.07, 0.018, blued, -0.03, 0.066, -0.885);
+    const earR = s(0.012, 0.07, 0.018, blued, 0.03, 0.066, -0.885);
+    const capL = s(0.024, 0.012, 0.018, blued, -0.022, 0.098, -0.885);
+    const capR = s(0.024, 0.012, 0.018, blued, 0.022, 0.098, -0.885);
+    capL.rotation.z = -0.32;
+    capR.rotation.z = 0.32;
+
+    // A narrow receiver-cover spine is hidden with the irons whenever the
+    // removable optic bridge mounts. It is part of the bare Type 3 silhouette.
+    o(0.018, 0.012, 0.3, bluedHi, 0, 0.074, -0.19);
+    return 1.07;
   },
   scar({ p, s, m, black }) {
     const tan = 0x8d7c58, tanDk = 0x6f6248;
@@ -941,7 +1037,9 @@ function buildViewModel(w) {
   let len = 0.62;
   const recipe = VM_RECIPES[w.key];
   if (recipe) {
-    len = recipe({ p: part, s: sight, ring: sightRing, o: opticClearance, u: ugrip, m: magp, k: cyclep, a: arrowp, str: stringp, cyl, dark, mid, wood, black });
+    len = recipe({ p: part, s: sight, ring: sightRing, o: opticClearance, u: ugrip,
+      m: magp, k: cyclep, a: arrowp, str: stringp, cyl, dark, mid, wood, black,
+      weapon: w });
   } else if (type === 'ar') {
     part(0.055, 0.085, 0.62, dark, 0, 0, -0.31);
     part(0.03, 0.03, 0.3, mid, 0, 0.005, -0.68);         // barrel
@@ -1023,6 +1121,14 @@ function buildViewModel(w) {
 
   if (!opticId && w.defaultSight === 'fixedScope') mountScope(false);
   if (opticId) {
+    // The original Type 3 has no permanent top rail. Any optic gets a
+    // removable black bridge clamped over the receiver cover; bare irons keep
+    // the historically correct unmodified silhouette.
+    if (w.key === 'ak47') {
+      part(0.064, 0.016, 0.42, black, 0, mnt.y - 0.004, -0.21);
+      part(0.014, 0.075, 0.028, black, -0.045, mnt.y - 0.036, -0.08);
+      part(0.014, 0.075, 0.028, black, 0.045, mnt.y - 0.036, -0.08);
+    }
     for (const m of irons) m.visible = false;
     for (const m of opticObstructions) m.visible = false;
     const glow = () => new THREE.MeshBasicMaterial({ color: w.reticleColor || 0xff2020, side: THREE.DoubleSide });
@@ -1091,6 +1197,11 @@ function buildViewModel(w) {
     }
     g.userData.adsPos.y = -retY; // camera-space y=0 at full ADS -> reticle exactly on the aim point
   }
+  // Exposed on the mesh for browser-level visual contract checks and replay
+  // diagnostics; gameplay still consumes the local arrays directly above.
+  g.userData.weaponKey = w.key;
+  g.userData.irons = irons;
+  g.userData.opticId = opticId || null;
   // foregrip (#9d): vertical grip hung off the handguard underside — collar
   // at the mount, raked shaft, bottom cap. A recipe's built-in grip (MP5K)
   // hides so the mounted one replaces it.
@@ -4604,7 +4715,8 @@ function deploy() {
     player.weapons = [mkState('primary'), mkState('secondary')];
     player.cur = 0;
   }
-  player.reloadT = 0; player.switchT = 0; player.burstQueue = 0; player.meleeT = 0;
+  player.reloadT = 0; player.reloadDuration = 0; player.reloadWasEmpty = false;
+  player.switchT = 0; player.burstQueue = 0; player.meleeT = 0;
   // #16a: equipment is a per-class pick now — an unequipped slot ('none') is
   // null with a 0 count, so its key no-ops and its HUD counter hides
   player.equip = (!isGunGameMode() && cls.lethal && cls.lethal !== 'none') ? cls.lethal : null;
@@ -4724,6 +4836,7 @@ function mixReplayFrames(a, b, mix) {
     crouchAmt: THREE.MathUtils.lerp(a.crouchAmt || 0, b.crouchAmt || 0, mix),
     proneAmt: THREE.MathUtils.lerp(a.proneAmt || 0, b.proneAmt || 0, mix),
     sprinting: mix < 0.5 ? !!a.sprinting : !!b.sprinting,
+    weaponName: mix < 0.5 ? a.weaponName : b.weaponName,
     flash: mix < 0.5 ? !!a.flash : !!b.flash,
     fall: THREE.MathUtils.lerp(a.fall || 0, b.fall || 0, mix),
   };
@@ -4743,8 +4856,10 @@ function sampleReplayFrame(replay, replayT) {
   return cloneReplayFrame(last);
 }
 
-function applyReplayFrameToMesh(mesh, frame, replayT, fall = 0) {
+function applyReplayFrameToMesh(mesh, frame, replayT, fall = 0, weaponOverride = null) {
   if (!mesh || !frame) return;
+  if (typeof setSoldierWeapon === 'function')
+    setSoldierWeapon(mesh, weaponOverride || frame.weaponName);
   fall = Math.max(fall, frame.fall || 0);
   mesh.visible = true;
   mesh.position.set(frame.x, frame.y, frame.z);
@@ -4852,7 +4967,7 @@ function recordReplayFrames(dt) {
 function createKillCamVictim() {
   killCamCleanupVictim();
   if (typeof buildSoldierMesh !== 'function' || !G.scene) return null;
-  const mesh = buildSoldierMesh(player.team, 'YOU', false);
+  const mesh = buildSoldierMesh(player.team, 'YOU', false, combatantReplayWeapon(player));
   mesh.position.copy(player.pos);
   mesh.rotation.set(0, (player.yaw || 0) + Math.PI, 0);
   const body = mesh.userData && mesh.userData.body;
@@ -4909,7 +5024,7 @@ function combatantReplayWindow(ent, startT, endT, finalFrame = null) {
   return replay;
 }
 
-function buildKillCamActors(attacker, startT, endT) {
+function buildKillCamActors(attacker, startT, endT, lethalWeaponName) {
   const actors = [];
   for (const b of G.bots || []) {
     if (!b || !b.mesh) continue;
@@ -4917,7 +5032,15 @@ function buildKillCamActors(attacker, startT, endT) {
       b._replayDeathT <= endT && (b._replayDeathUntil || b._replayDeathT) >= startT;
     const finalFrame = deathInWindow ? replayFrameForCombatant(b, endT) : null;
     const replay = combatantReplayWindow(b, startT, endT, finalFrame);
-    if (replay.length) actors.push({ ent: b, mesh: b.mesh, replay });
+    if (replay.length) actors.push({
+      ent: b,
+      mesh: b.mesh,
+      replay,
+      // The killer carries the weapon named by the lethal event throughout
+      // the replay. This prevents a later/current loadout or generic mesh from
+      // rewriting what the player was actually killed by.
+      weaponOverride: b === attacker ? lethalWeaponName : null,
+    });
   }
   return actors;
 }
@@ -4931,7 +5054,8 @@ function startKillCam(attacker, weaponName, shot) {
   const victim = createKillCamVictim();
   const victimFinalFrame = replayFrameForCombatant(player, lethalFrame.t);
   const victimReplay = combatantReplayWindow(player, startT, lethalFrame.t, victimFinalFrame);
-  const actors = buildKillCamActors(attacker, startT, lethalFrame.t);
+  const actors = buildKillCamActors(attacker, startT, lethalFrame.t, weaponName);
+  const shotDef = weaponDefForKillName(weaponName) || attacker.weapon || null;
   _killCam = {
     t: KILLCAM_DUR,
     elapsed: 0,
@@ -4948,7 +5072,7 @@ function startKillCam(attacker, weaponName, shot) {
     victim,
     victimReplay,
     aim: lethalFrame.aim,                                    // fatal-round impact point
-    shotModel: (attacker.weapon && attacker.weapon.model) || 'ar',
+    shotModel: (shotDef && (shotDef.audio || shotDef.model)) || 'ar',
     suppressed: !!(attacker.weapon && attacker.weapon.suppressed),
     melee: !!(attacker.weapon && attacker.weapon.melee),     // no tracer for a knife/tomahawk kill
     shotTimer: 0,                                            // cadence accumulator for the fatal burst
@@ -4998,7 +5122,8 @@ function updateKillCam(dt) {
     const fall = THREE.MathUtils.clamp((replayT - _killCam.lethalT) / KILLCAM_POST_ROLL, 0, 1);
     applyReplayFrameToMesh(_killCam.victim, victimFrame, replayT, _ss(fall));
   }
-  for (const actor of _killCam.actors || []) applyReplayFrameToMesh(actor.mesh, sampleReplayFrame(actor.replay, replayT), replayT);
+  for (const actor of _killCam.actors || [])
+    applyReplayFrameToMesh(actor.mesh, sampleReplayFrame(actor.replay, replayT), replayT, 0, actor.weaponOverride);
   // Third-person chase replay: place the camera behind the killer's recorded
   // movement while keeping the look point on the replayed victim/fatal impact.
   if (f) {
@@ -5301,6 +5426,8 @@ function switchWeapon(idx) {
   player.cur = idx;
   player.switchT = 0.4;
   player.reloadT = 0;
+  player.reloadDuration = 0;
+  player.reloadWasEmpty = false;
   player.burstQueue = 0;
   player.adsToggle = false;
   buildViewModel(curW().def);
@@ -5310,9 +5437,14 @@ function startReload() {
   const w = curW();
   if (player.reloadT > 0 || player.switchT > 0) return;
   if (w.mag >= w.def.mag || w.reserve <= 0) return;
-  player.reloadT = w.def.reload * (player.perks.has('soh') ? 0.5 : 1);
+  player.reloadWasEmpty = w.mag <= 0;
+  const baseDuration = player.reloadWasEmpty && w.def.reloadEmpty
+    ? w.def.reloadEmpty
+    : w.def.reload;
+  player.reloadDuration = baseDuration * (player.perks.has('soh') ? 0.5 : 1);
+  player.reloadT = player.reloadDuration;
   player.burstQueue = 0;
-  AudioSys.reload();
+  AudioSys.reload(w.def.reloadProfile, player.reloadWasEmpty, player.reloadDuration);
 }
 
 function tryMelee() {
@@ -5676,7 +5808,7 @@ function firePlayerShot(w) {
   // Crossbow launch has its own report; its reload and world bolt continue
   // independently after this frame.
   if (isCrossbow) AudioSys.bow();
-  else AudioSys.shot(def.model, 0, 0, def.suppressed); // P55: suppressed defs report the quiet voice
+  else AudioSys.shot(def.audio || def.model, 0, 0, def.suppressed); // P55: suppressed defs report the quiet voice
 
   // muzzle flash — a crossbow has none; the arrow launch is the whole event
   if (!isCrossbow) {
@@ -5864,15 +5996,21 @@ function updateCameraAndViewmodel(dt) {
     // hand seats the fresh mag, phase 3 racks the charging handle
     // (quick z-jerk toward the camera).
     const isCrossbow = def.model === 'crossbow';
+    const isAk = def.key === 'ak47';
+    const liveReloadDuration = player.reloadDuration ||
+      (def.reload * (player.perks.has('soh') ? 0.5 : 1));
     let rTilt = 0, rOut = 0, rRack = 0, crossbowReloadT = -1;
     if (player.reloadT > 0) {
-      const t = 1 - player.reloadT / (def.reload * (player.perks.has('soh') ? 0.5 : 1));
+      const t = 1 - player.reloadT / liveReloadDuration;
       if (isCrossbow) {
         crossbowReloadT = THREE.MathUtils.clamp(t, 0, 1);
       } else {
         rTilt = _ss(t / 0.22) - _ss((t - 0.55) / 0.24);   // roll out, hold, roll back
         rOut = _ss(t / 0.3) - _ss((t - 0.38) / 0.3);      // mag out 0→0.3, back in by 0.68
-        rRack = _ss((t - 0.8) / 0.09) - _ss((t - 0.9) / 0.09); // handle jerk at the end
+        // The AK does not lock open on empty. Its handle is worked only after
+        // an empty-mag change; a tactical reload leaves the live chamber alone.
+        if (!isAk || player.reloadWasEmpty)
+          rRack = _ss((t - 0.8) / 0.09) - _ss((t - 0.9) / 0.09); // handle jerk at the end
       }
     }
     // pump/bolt cycle (#10c): for pump/bolt weapons fireCooldown IS the
@@ -5903,15 +6041,16 @@ function updateCameraAndViewmodel(dt) {
     if (mag) {
       mag.position.set(pull.x * rOut, pull.y * rOut, pull.z * rOut);
       mag.rotation.x = pull.rx * rOut;
+      mag.rotation.z = (pull.rz || 0) * rOut;
     }
     const cyc = vmGun.userData.pumpPart;
-    if (cyc) cyc.position.z = pOut * (boltMode ? 0.06 : 0.075);
+    if (cyc) cyc.position.z = isAk ? rRack * 0.09 : pOut * (boltMode ? 0.06 : 0.075);
     // crossbow reload: after each shot the string snaps forward (released), then
     // re-cocks (draws back) while a fresh bolt slides onto the rail and seats.
     // The crossbow's per-shot reload timer drives the complete sequence.
     if (isCrossbow) {
       let ct; // 0 = just fired (string forward, no bolt) → 1 = ready (cocked + loaded)
-      if (player.reloadT > 0) ct = 1 - player.reloadT / (def.reload * (player.perks.has('soh') ? 0.5 : 1));
+      if (player.reloadT > 0) ct = 1 - player.reloadT / liveReloadDuration;
       else if (!def.perShotReload && player.fireCooldown > 0 && player.switchT <= 0) ct = 1 - player.fireCooldown / (60 / def.rpm);
       else ct = 1; // idle & ready
       ct = THREE.MathUtils.clamp(ct, 0, 1);
@@ -5955,8 +6094,8 @@ function updateCameraAndViewmodel(dt) {
           rest.z + THREE.MathUtils.lerp(sz, 0, release));
       } else {
         armS.position.set(
-          rest.x + pull.x * rOut,
-          rest.y + pull.y * rOut + rRack * 0.05,
+          rest.x + pull.x * rOut + (isAk ? rRack * 0.1 : 0),
+          rest.y + pull.y * rOut + rRack * (isAk ? 0.11 : 0.05),
           // rack slides the support hand back to the receiver (~z −0.06);
           // hands already at/behind it (pistols) stay put
           rest.z + pull.z * rOut + rRack * Math.max(0, -0.06 - rest.z) +
@@ -5983,7 +6122,7 @@ function updateCameraAndViewmodel(dt) {
     // roll is negative (top-to-the-right) so the magwell swings toward
     // the camera instead of hiding behind the receiver; bolt work rolls
     // positive so the right-side handle comes up into view
-    vmGun.rotation.z = dip * 0.5 - rTilt * 0.42 + bReach * 0.18;
+    vmGun.rotation.z = dip * 0.5 - rTilt * 0.42 + bReach * 0.18 + (isAk ? rRack * 0.18 : 0);
     // Prone ground recognition: with the low prone eye (0.35), the camera
     // pitch tilts the weapon muzzle-first into the deck and it sinks through
     // the surface the player lies on. Pose the gun first, then measure its

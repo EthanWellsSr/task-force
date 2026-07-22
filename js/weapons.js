@@ -15,6 +15,16 @@ const WEAPONS = {
     dmg:40, minDmg:30, head:1.4, rpm:585, mag:20, reserve:100, reload:2.3, mode:'auto',
     spreadHip:.034, spreadAds:.0038, recoil:.019, bloom:.0055, zoom:1.35, adsTime:.26,
     speed:.94, range:[30,58], model:'ar' },
+  // Classic fixed-stock Type 3 AK-47. The intermediate 7.62x39 role is a
+  // disciplined 3-shot close / 4-shot far automatic: a 30-round advantage
+  // over the SCAR-H, paid for with the strongest recoil and bloom in the AR
+  // roster. Tactical reloads retain the chambered round visually; an empty
+  // gun takes longer because the right-side charging handle must be worked.
+  ak47: { slot:'primary', cat:'Assault Rifle', name:'AK-47',
+    dmg:34, minDmg:25, head:1.4, rpm:650, mag:30, reserve:120,
+    reload:2.35, reloadEmpty:2.65, reloadProfile:'ak', mode:'auto',
+    spreadHip:.038, spreadAds:.0038, recoil:.023, bloom:.006, zoom:1.35, adsTime:.27,
+    speed:.94, range:[24,50], model:'ar', audio:'ak' },
   acr: { slot:'primary', cat:'Assault Rifle', name:'REMINGTON ACR',
     dmg:28, minDmg:21, head:1.4, rpm:705, mag:30, reserve:120, reload:2.1, mode:'auto',
     spreadHip:.028, spreadAds:.0026, recoil:.0085, bloom:.0030, zoom:1.35, adsTime:.24,
@@ -197,7 +207,7 @@ const WEAPONS = {
 // category on the matching level. Later category-XP work can reuse the rank
 // metadata without re-auditing weapon order.
 const WEAPON_UNLOCK_ORDER_BY_CATEGORY = {
-  'Assault Rifle': ['f2000', 'm4a1', 'tar21', 'famas', 'scar', 'acr', 'fal'],
+  'Assault Rifle': ['f2000', 'm4a1', 'tar21', 'famas', 'scar', 'ak47', 'acr', 'fal'],
   'SMG': ['mac10', 'mp5k', 'p90', 'vector', 'ump45'],
   'LMG': ['rpd', 'mg4', 'm240', 'm60'],
   'Shotgun': ['aa12', 'r870'],
@@ -612,6 +622,11 @@ function resolveWeaponDef(key, attIds, dotColor, laserColor, acogReticle, allowA
   // 7 → 10.5), so a modified mag rounds to NEAREST (Math.round: 10.5 →
   // 11, generous by half a round; even bases multiply exact, untouched)
   if (def.mag !== base.mag) def.mag = Math.round(def.mag);
+  // Weapons with distinct empty reloads keep the same attachment multiplier
+  // as their tactical reload. This matters for the AK's Extended Mags path:
+  // both animations slow by 15%, rather than only the chambered reload.
+  if (base.reloadEmpty && def.reload !== base.reload)
+    def.reloadEmpty = base.reloadEmpty * (def.reload / base.reload);
   return def;
 }
 
@@ -812,6 +827,7 @@ const DARING_DAVID_INDEX = DEFAULT_CLASSES.length; // 5
 const BOT_LOADOUTS = [
   { primary:'m4a1',   secondary:'usp',    lethal:'frag' },
   { primary:'scar',   secondary:'deagle', lethal:'frag' },
+  { primary:'ak47',   secondary:'usp',    lethal:'frag' },
   { primary:'acr',    secondary:'usp',    lethal:'frag' },
   { primary:'tar21',  secondary:'g18',    lethal:'frag' },
   { primary:'famas',  secondary:'usp',    lethal:'frag' },

@@ -69,8 +69,73 @@ function makeNameSprite(name, color) {
   return sp;
 }
 
+function soldierWeaponDef(ref) {
+  if (!ref || typeof WEAPONS === 'undefined') return null;
+  if (WEAPONS[ref]) return WEAPONS[ref];
+  for (const key in WEAPONS)
+    if (WEAPONS[key].name === ref) return WEAPONS[key];
+  return null;
+}
+
+// Third-person held gun. Most of the legacy arsenal retains the compact
+// generic silhouette, but the AK has a keyed Type 3 model so bots and the true
+// kill-cam replay show the actual weapon used instead of a universal black box.
+function buildSoldierWeaponMesh(ref) {
+  const def = soldierWeaponDef(ref);
+  const key = def ? def.key : '';
+  const g = new THREE.Group();
+  g.position.set(0, 1.3, 0.55);
+  const mat = col => new THREE.MeshLambertMaterial({ color: col });
+  const part = (w, h, d, col, x, y, z) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(col));
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    g.add(mesh);
+    return mesh;
+  };
+  if (key === 'ak47') {
+    const steel = 0x24272a, steelHi = 0x34383b;
+    const wood = 0x7d351f, woodDark = 0x562416;
+    part(0.1, 0.14, 0.42, steel, 0, 0, -0.05);       // milled receiver
+    part(0.085, 0.06, 0.32, steelHi, 0, 0.075, -0.04); // smooth cover
+    part(0.11, 0.13, 0.28, wood, 0, -0.015, 0.3);    // handguard
+    part(0.055, 0.055, 0.3, steelHi, 0, 0.035, 0.48); // gas tube
+    part(0.04, 0.04, 0.42, steelHi, 0, 0.005, 0.67); // barrel
+    part(0.055, 0.055, 0.09, steel, 0, 0.005, 0.91); // thread protector
+    part(0.12, 0.16, 0.34, wood, 0, -0.005, -0.42);  // fixed stock
+    const grip = part(0.065, 0.16, 0.065, woodDark, 0, -0.12, -0.14);
+    grip.rotation.x = 0.2;
+    for (const [y, z, rx] of [[-0.11, -0.06, -0.08], [-0.17, -0.03, -0.22], [-0.23, 0.02, -0.38]]) {
+      const mag = part(0.075, 0.09, 0.1, steel, 0, y, z);
+      mag.rotation.x = rx;
+    }
+    for (const y of [-0.14, -0.19, -0.24]) part(0.082, 0.012, 0.11, 0x151719, 0, y, 0);
+    // Forward tangent notch + distant protected post, kept visible in replay.
+    part(0.07, 0.035, 0.14, steel, 0, 0.105, 0.16);
+    part(0.02, 0.08, 0.025, steel, -0.035, 0.105, 0.77);
+    part(0.02, 0.08, 0.025, steel, 0.035, 0.105, 0.77);
+    part(0.012, 0.07, 0.018, 0x111315, 0, 0.105, 0.77);
+  } else {
+    part(0.09, 0.14, 0.85, 0x22252a, 0, 0, 0);
+  }
+  g.userData.weaponKey = key;
+  return g;
+}
+
+function setSoldierWeapon(mesh, ref) {
+  if (!mesh || !mesh.userData || !mesh.userData.body) return;
+  const def = soldierWeaponDef(ref);
+  const key = def ? def.key : '';
+  if (mesh.userData.weaponKey === key && mesh.userData.gun) return;
+  if (mesh.userData.gun) mesh.userData.body.remove(mesh.userData.gun);
+  const gun = buildSoldierWeaponMesh(ref);
+  mesh.userData.body.add(gun);
+  mesh.userData.gun = gun;
+  mesh.userData.weaponKey = key;
+}
+
 // Blocky soldier, origin at feet, facing +Z
-function buildSoldierMesh(team, name, showTag) {
+function buildSoldierMesh(team, name, showTag, weaponRef = null) {
   const c = Object.assign({}, teamColors(team), { helmet: helmetColorForTeam(team) });
   const g = new THREE.Group();
   const body = new THREE.Group();
@@ -100,7 +165,8 @@ function buildSoldierMesh(team, name, showTag) {
   part(0.38, 0.16, 0.36, c.helmet, 0, 1.75, 0);            // helmet
   part(0.16, 0.16, 0.55, c.uniform, -0.24, 1.25, 0.3);     // arms forward
   part(0.16, 0.16, 0.45, c.uniform, 0.22, 1.28, 0.32);
-  const gun = part(0.09, 0.14, 0.85, 0x22252a, 0, 1.3, 0.55);
+  const gun = buildSoldierWeaponMesh(weaponRef);
+  body.add(gun);
   // muzzle flash sprite
   const flash = new THREE.Mesh(
     new THREE.PlaneGeometry(0.4, 0.4),
@@ -109,7 +175,8 @@ function buildSoldierMesh(team, name, showTag) {
   flash.visible = false;
   body.add(flash);
   if (showTag) g.add(makeNameSprite(name, '#7ab4f0'));
-  g.userData = { body, legL, legR, gun, flash };
+  g.userData = { body, legL, legR, gun, flash,
+    weaponKey: gun.userData.weaponKey };
   return g;
 }
 
@@ -176,7 +243,7 @@ class Bot {
     const v = 0.8 + Math.random() * 0.4;
     this.skill = { ...s, acc: s.acc * v, react: s.react / v };
 
-    this.mesh = buildSoldierMesh(team, name, team === 'tf');
+    this.mesh = buildSoldierMesh(team, name, team === 'tf', this.weapon.key);
     this.mesh.visible = false;
     world.scene.add(this.mesh);
 
@@ -630,7 +697,7 @@ class Bot {
     this.world.api.tracer(muzzle, end);
     this.flashT = 0.05;
 
-    AudioSys.shot(w.model, this.pos.distanceTo(this.world.api.playerPos()),
+    AudioSys.shot(w.audio || w.model, this.pos.distanceTo(this.world.api.playerPos()),
       this.world.api.audioPan(this.pos), w.suppressed); // P55: scaffolding — bot defs carry no attachments today
     this.world.api.noteShot(this);
 
