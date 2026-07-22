@@ -2428,6 +2428,209 @@ function buildNukeDiorama(B) {
   return g;
 }
 
+// Freightlock-only port dressing for the nuke pull-back. The playable yard
+// remains the foreground diorama; this builds the much larger American
+// container terminal it belongs to: an apron and on-dock rail, dense stacks,
+// ship-to-shore gantry cranes, a berthed container ship, a feeder ship and
+// harbor tugs. Cosmetic and cinematic-only; removed with the other nuke props.
+function buildFreightlockNukeDiorama(B) {
+  const g = new THREE.Group();
+  g.name = 'freightlock-shipyard-diorama';
+  const materials = new Map();
+  const mat = c => {
+    if (!materials.has(c)) materials.set(c, new THREE.MeshLambertMaterial({ color: c }));
+    return materials.get(c);
+  };
+  const box = (parent, w, h, d, c, x, y, z, ry = 0, rz = 0) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c));
+    m.position.set(x, y, z);
+    m.rotation.y = ry;
+    m.rotation.z = rz;
+    parent.add(m);
+    return m;
+  };
+  const tagGroup = (name, kind) => {
+    const gg = new THREE.Group();
+    gg.name = name;
+    gg.userData.shipyardKind = kind;
+    g.add(gg);
+    return gg;
+  };
+
+  const WATER = 0x31596b, WATER_HI = 0x547f8d, CONCRETE = 0x777a76,
+        QUAY = 0x3c4243, RAIL = 0x292d2d, CRANE = 0x6e9aaa,
+        CRANE_DK = 0x3f6674, CRANE_MARK = 0xd8d4c5, HULL = 0x263d4c,
+        HULL_RED = 0x74372f, DECK = 0x444b4c, CABIN = 0xd5d2bd;
+  const containerColors = [0x315d78, 0x934936, 0x4f7048, 0xa1833e, 0x5c6265, 0x6d4140, 0x47716d];
+  let yardContainerCount = 0, shipContainerCount = 0;
+  const containerGeo = new THREE.BoxGeometry(B * 0.42, B * 0.17, B * 0.16);
+  const addContainer = (parent, x, y, z, color, ry = 0, scale = 1) => {
+    const m = new THREE.Mesh(containerGeo, mat(color));
+    m.position.set(x, y, z);
+    m.rotation.y = ry;
+    m.scale.setScalar(scale);
+    parent.add(m);
+    return m;
+  };
+
+  // San Pedro Bay-style terminal basin: water begins at a hard quay edge,
+  // replacing the otherwise featureless gray horizon behind Freightlock.
+  const water = tagGroup('freightlock-harbor-water', 'water');
+  box(water, B * 18, 0.08, B * 12, WATER, 0, NUKE_GROUND_Y + 0.06, -B * 8.1);
+  for (let i = 0; i < 22; i++) {
+    const x = B * (-7.8 + (i % 11) * 1.55);
+    const z = -B * (3.2 + Math.floor(i / 11) * 4.2 + (i % 3) * 0.16);
+    box(water, B * (0.5 + (i % 4) * 0.2), 0.015, 0.045, WATER_HI,
+      x, NUKE_GROUND_Y + 0.115, z, (i % 2 ? 0.08 : -0.08));
+  }
+
+  const terminal = tagGroup('freightlock-terminal-apron', 'terminal');
+  box(terminal, B * 14, 0.18, B * 0.8, CONCRETE, 0, 0.02, -B * 2.2);
+  box(terminal, B * 14, B * 0.42, B * 0.16, QUAY, 0, -B * 0.18, -B * 2.56);
+  // Parallel on-dock rail and pale lane marks make the apron read as a
+  // working intermodal terminal instead of another blank concrete plane.
+  for (const z of [-1.18, -1.42, -1.66]) {
+    box(terminal, B * 12, 0.035, 0.055, RAIL, 0, 0.045, B * z);
+    box(terminal, B * 12, 0.035, 0.025, 0xb7aa7a, 0, 0.066, B * (z - 0.06));
+  }
+  // Foreground drayage apron fills the pull-back camera's near side with
+  // marked truck lanes and parked container chassis instead of bare ground.
+  box(terminal, B * 9, 0.11, B * 1.28, 0x686d6b, 0, 0.01, B * 1.55);
+  for (const x of [-3.2, -2.0, -0.8, 0.8, 2.0, 3.2])
+    box(terminal, 0.045, 0.025, B * 1.08, 0xd0c58e, B * x, 0.08, B * 1.55);
+  for (const side of [-1, 1]) for (let i = 0; i < 2; i++) {
+    const tx = side * B * (2.65 + i * 0.62), tz = B * (1.34 + i * 0.28);
+    addContainer(terminal, tx, B * 0.1, tz,
+      containerColors[(i + (side > 0 ? 2 : 5)) % containerColors.length], Math.PI / 2, 0.9);
+    box(terminal, B * 0.25, B * 0.22, B * 0.28, 0xc2b68c,
+      tx, B * 0.11, tz + B * 0.34);
+    box(terminal, B * 0.06, B * 0.12, B * 0.72, RAIL,
+      tx - B * 0.1, B * 0.04, tz);
+    box(terminal, B * 0.06, B * 0.12, B * 0.72, RAIL,
+      tx + B * 0.1, B * 0.04, tz);
+  }
+
+  // Long, ordered container rows surround the compact playable stack yard.
+  // The fixed pattern keeps the cinematic composition stable between runs.
+  const yard = tagGroup('freightlock-container-terminal', 'container-yard');
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 15; col++) {
+      if (col >= 5 && col <= 8) continue; // center service lane reveals the berthed ship
+      const tiers = 2 + ((row * 3 + col) % 3);
+      const x = B * (-4.25 + col * 0.6);
+      const z = -B * (0.98 + row * 0.32);
+      for (let tier = 0; tier < tiers; tier++) {
+        addContainer(yard, x, B * (0.09 + tier * 0.18), z,
+          containerColors[(row + col + tier) % containerColors.length]);
+        yardContainerCount++;
+      }
+    }
+  }
+  // Additional wing stacks frame the playable yard without covering it.
+  for (const side of [-1, 1]) {
+    for (let row = 0; row < 4; row++) for (let col = 0; col < 5; col++) {
+      const tiers = 2 + ((row + col) % 2);
+      for (let tier = 0; tier < tiers; tier++) {
+        addContainer(yard, side * B * (1.45 + row * 0.31), B * (0.09 + tier * 0.18),
+          B * (-0.55 + col * 0.36), containerColors[(row * 2 + col + tier) % containerColors.length],
+          Math.PI / 2);
+        yardContainerCount++;
+      }
+    }
+  }
+
+  // Tall blue-gray ship-to-shore cranes, modeled after the repeated gantry
+  // silhouettes at large U.S. container berths. Their booms reach over the
+  // berthed ship and stay readable behind the map during the camera pullout.
+  const buildCrane = (x, index) => {
+    const cg = tagGroup('freightlock-sts-crane-' + index, 'gantry-crane');
+    cg.position.set(x, 0, -B * 2.42);
+    const legX = B * 0.34, legZ = B * 0.18, legH = B * 2.15;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1])
+      box(cg, B * 0.095, legH, B * 0.095, CRANE, sx * legX, legH / 2, sz * legZ, 0, sx * sz * 0.13);
+    box(cg, B * 0.86, B * 0.13, B * 0.18, CRANE_DK, 0, B * 2.07, 0);
+    box(cg, B * 0.68, B * 0.75, B * 0.12, CRANE, 0, B * 2.45, 0);
+    box(cg, B * 0.92, B * 0.12, B * 0.15, CRANE_MARK, 0, B * 2.82, 0);
+    // Waterside boom + landside counter-boom.
+    box(cg, B * 0.12, B * 0.12, B * 3.55, CRANE, 0, B * 2.9, -B * 1.65);
+    box(cg, B * 0.12, B * 0.16, B * 1.25, CRANE_DK, 0, B * 2.88, B * 0.58);
+    box(cg, B * 0.25, B * 0.22, B * 0.3, CABIN, B * 0.17, B * 2.65, -B * 0.42);
+    // Cable drop and spreader over the ship's container bays.
+    box(cg, B * 0.035, B * 1.3, B * 0.035, RAIL, 0, B * 2.2, -B * 1.55);
+    box(cg, B * 0.55, B * 0.055, B * 0.2, CRANE_DK, 0, B * 1.54, -B * 1.55);
+    cg.scale.y = 0.78; // monumental, but fully legible inside the cinematic frame
+  };
+  [-2.7, -0.9, 0.9, 2.7].forEach((x, i) => buildCrane(B * x, i + 1));
+
+  const buildContainerShip = (name, x, z, scale, accent, feeder = false) => {
+    const ship = tagGroup(name, feeder ? 'feeder-ship' : 'container-ship');
+    ship.position.set(x, 0, z);
+    const L = B * 5.8 * scale, W = B * 1.12 * scale;
+    box(ship, L, B * 0.42 * scale, W, accent, 0, B * 0.13 * scale, 0);
+    box(ship, L * 0.88, B * 0.22 * scale, W * 0.88, HULL, 0, B * 0.39 * scale, 0);
+    // Tapered-looking bow/stern blocks keep the silhouette from reading as
+    // one plain rectangle at the cinematic scale.
+    box(ship, L * 0.12, B * 0.25 * scale, W * 0.62, HULL,
+      -L * 0.5, B * 0.3 * scale, 0, 0, -0.16);
+    box(ship, L * 0.12, B * 0.25 * scale, W * 0.72, HULL,
+      L * 0.5, B * 0.3 * scale, 0, 0, 0.12);
+    box(ship, L * 0.12, B * 0.85 * scale, W * 0.72, CABIN,
+      L * 0.36, B * 0.88 * scale, 0);
+    box(ship, L * 0.04, B * 0.28 * scale, W * 0.28, DECK,
+      L * 0.39, B * 1.43 * scale, 0);
+    const bays = feeder ? 7 : 11, lanes = feeder ? 2 : 3, tiers = feeder ? 2 : 3;
+    for (let bay = 0; bay < bays; bay++) for (let lane = 0; lane < lanes; lane++) {
+      for (let tier = 0; tier < tiers - ((bay + lane) % 3 === 0 ? 1 : 0); tier++) {
+        const cx = -L * 0.36 + bay * (L * 0.061);
+        const cz = (lane - (lanes - 1) / 2) * W * 0.27;
+        addContainer(ship, cx, B * scale * (0.57 + tier * 0.18), cz,
+          containerColors[(bay + lane + tier) % containerColors.length], 0, scale * 0.82);
+        shipContainerCount++;
+      }
+    }
+    return ship;
+  };
+  buildContainerShip('freightlock-berth-container-ship', -B * 0.3, -B * 3.55, 1.0, HULL_RED);
+  const feeder = buildContainerShip('freightlock-channel-feeder', -B * 3.8, -B * 7.1, 0.5, 0x6b4a38, true);
+  feeder.rotation.y = 0.1;
+
+  const buildTug = (name, x, z, ry, color) => {
+    const tug = tagGroup(name, 'tugboat');
+    tug.position.set(x, 0, z);
+    tug.rotation.y = ry;
+    box(tug, B * 0.78, B * 0.22, B * 0.38, color, 0, B * 0.09, 0);
+    box(tug, B * 0.35, B * 0.32, B * 0.28, CABIN, B * 0.08, B * 0.32, 0);
+    box(tug, B * 0.08, B * 0.28, B * 0.08, RAIL, B * 0.12, B * 0.61, 0);
+    box(tug, B * 0.2, B * 0.05, B * 0.43, HULL, -B * 0.35, B * 0.13, 0);
+  };
+  buildTug('freightlock-harbor-tug-1', -B * 1.65, -B * 3.25, -0.22, 0xc4a340);
+  buildTug('freightlock-harbor-tug-2', B * 1.15, -B * 3.7, 0.35, 0xb4583e);
+
+  // Low warehouses, a control tower and high mast lights finish the skyline.
+  const shore = tagGroup('freightlock-port-buildings', 'port-buildings');
+  for (const side of [-1, 1]) {
+    box(shore, B * 2.3, B * 0.7, B * 1.05, 0x596267,
+      side * B * 4.8, B * 0.35, -B * 1.3);
+    box(shore, B * 2.45, B * 0.08, B * 1.12, 0x41484b,
+      side * B * 4.8, B * 0.74, -B * 1.3);
+  }
+  box(shore, B * 0.55, B * 2.25, B * 0.55, 0x6c7475, B * 4.0, B * 1.12, -B * 2.0);
+  box(shore, B * 0.78, B * 0.4, B * 0.78, CABIN, B * 4.0, B * 2.32, -B * 2.0);
+  for (const x of [-3.4, -1.7, 0, 1.7, 3.4]) {
+    box(shore, B * 0.045, B * 2.4, B * 0.045, RAIL, B * x, B * 1.2, -B * 1.9);
+    box(shore, B * 0.38, B * 0.06, B * 0.08, 0xe7dba3, B * x, B * 2.38, -B * 1.9);
+  }
+
+  g.userData.shipyard = {
+    cranes: 4,
+    containerShips: 2,
+    tugboats: 2,
+    yardContainers: yardContainerCount,
+    shipContainers: shipContainerCount,
+  };
+  return g;
+}
+
 // endWin (optional): when set (true/false/null), this is the end-of-match
 // Tsar Taverns nuke — cosmetic, and the held result is shown afterwards.
 // When omitted it's the killstreak nuke: everyone dies, owner's team wins.
@@ -2446,12 +2649,15 @@ function startNukeCinematic(endWin) {
   const plane = buildNukePlane();
   plane.position.set(-span, B * 1.5, -B * 0.4);
   G.scene.add(plane);
-  // Desert dressing (cacti/tumbleweeds/mesas) is Tsar Taverns' identity only —
-  // other maps keep their own theme, which their enlarged ground plane already
-  // carries out to the horizon.
+  // Map-specific cinematic dressing turns the enlarged ground plane into a
+  // real horizon: desert around Tsar Taverns, a major container port around
+  // Freightlock. Other maps keep their existing ground treatment.
   let diorama = null;
   if (G.mapId === 'tsartaverns') {
     diorama = buildNukeDiorama(B);
+    G.scene.add(diorama);
+  } else if (G.mapId === 'freightlock') {
+    diorama = buildFreightlockNukeDiorama(B);
     G.scene.add(diorama);
   }
   _cine = {
