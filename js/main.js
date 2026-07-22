@@ -3638,6 +3638,46 @@ function buildGrenadeMesh(def) {
   return g;
 }
 
+// Throwable replay is captured independently from the live mesh because the
+// live grenade is removed before its blast can start a kill cam. Frames are
+// time-based like combatant replay, so bounces and rests survive frame-rate
+// changes and the kill cam can begin at the real release instead of inventing
+// a straight projectile path after the fact.
+function recordThrowableReplayFrame(t, at = G.time) {
+  if (!t || !t.pos || !t.mesh) return;
+  if (!t.replay) t.replay = [];
+  const frame = {
+    t: at,
+    x: t.pos.x, y: t.pos.y, z: t.pos.z,
+    rx: t.mesh.rotation.x, ry: t.mesh.rotation.y, rz: t.mesh.rotation.z,
+  };
+  const last = t.replay[t.replay.length - 1];
+  if (last && Math.abs(last.t - at) < 1e-5) t.replay[t.replay.length - 1] = frame;
+  else t.replay.push(frame);
+  const minT = G.time - KILLCAM_BUFFER;
+  while (t.replay.length && t.replay[0].t < minT) t.replay.shift();
+}
+
+function beginThrowableReplay(t) {
+  t.thrownT = G.time;
+  t.replay = [];
+  recordThrowableReplayFrame(t, G.time);
+  return t;
+}
+
+function throwableReplayEvent(t) {
+  recordThrowableReplayFrame(t, G.time);
+  return {
+    kind: 'throwable',
+    throwableDef: t.def,
+    thrownT: t.thrownT === undefined ? G.time : t.thrownT,
+    explodedT: G.time,
+    trajectory: (t.replay || []).map(f => Object.assign({}, f)),
+    aim: t.pos.clone(),
+    explosion: t.pos.clone(),
+  };
+}
+
 function initGrenadePreview(scene) {
   const group = new THREE.Group();
   group.visible = false;
@@ -3681,8 +3721,8 @@ function spawnThrowable(def, fuse, speed, up) {
   const mesh = buildGrenadeMesh(def);
   mesh.position.copy(pos);
   G.scene.add(mesh);
-  const t = { def, mesh, pos, vel, fuse,
-    spin: 5 + Math.random() * 3, sinceBounce: 0 };
+  const t = beginThrowableReplay({ def, mesh, pos, vel, fuse,
+    spin: 5 + Math.random() * 3, sinceBounce: 0 });
   // P44: a planting def remembers the aim direction at placement — the
   // planted mine watches (and blasts) along this horizontal facing
   if (def.plants) {
@@ -3717,8 +3757,9 @@ function spawnBotThrowable(bot, kind, aimPos) {
   const mesh = buildGrenadeMesh(def);
   mesh.position.copy(from);
   G.scene.add(mesh);
-  _throwables.push({ def, mesh, pos: from.clone(), vel, fuse: def.fuse,
-    spin: 5 + Math.random() * 3, sinceBounce: 0, owner: bot });
+  bot.lastGrenadeThrowTime = G.time;
+  _throwables.push(beginThrowableReplay({ def, mesh, pos: from.clone(), vel, fuse: def.fuse,
+    spin: 5 + Math.random() * 3, sinceBounce: 0, owner: bot }));
   AudioSys.throwWhoosh();
 }
 
@@ -3924,6 +3965,7 @@ function updateThrowables(dt) {
     const t = _throwables[i];
     t.fuse -= dt;
     if (t.fuse <= 0) {
+      recordThrowableReplayFrame(t, G.time);
       G.scene.remove(t.mesh);
       _throwables.splice(i, 1);
       t.def.detonate(t);
@@ -3939,6 +3981,7 @@ function updateThrowables(dt) {
         else t.stuckTo = null;
       }
       t.mesh.position.copy(p);
+      recordThrowableReplayFrame(t, G.time);
       continue;
     }
     // P49: an armed decoy skips physics — blink the amber light and emit
@@ -4044,6 +4087,7 @@ function updateThrowables(dt) {
         // the stick thunk — reuse the bounce foley at the pin point
         AudioSys.grenadeBounce(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(p));
         t.mesh.position.copy(p);
+        recordThrowableReplayFrame(t, G.time);
         continue;
       }
     }
@@ -4056,6 +4100,7 @@ function updateThrowables(dt) {
       t.mesh.rotation.x += t.spin * dt;
       t.mesh.rotation.z += t.spin * 0.6 * dt;
     }
+    recordThrowableReplayFrame(t, G.time);
   }
 }
 
@@ -4313,20 +4358,7 @@ function blastDamage(def, at, victimPos) {
   return f < 0 ? 0 : Math.round(THREE.MathUtils.lerp(def.dmg, def.minDmg, f));
 }
 
-// #16b: a throwable carries its `owner` (the thrower) so a bot's frag
-// credits the bot and can hurt the player. Player throws leave owner unset,
-// so it defaults to the player — the original behaviour.
-function fragDetonate(t) {
-  const def = t.def, p = t.pos;
-  const owner = t.owner || player;
-  // P42: a semtex riding its victim deals full damage through any cover —
-  // they're wearing it. Handled up front; the area loops below skip them.
-  const stuckTo = t.stuckTo || null;
-  if (stuckTo === player) {
-    if (player.alive) damagePlayer(def.dmg, owner === player ? null : owner, def.name, false);
-  } else if (stuckTo && stuckTo.alive) {
-    stuckTo.hurt(def.dmg, stuckTo === owner ? null : owner, def.name, false);
-  }
+function playFragExplosionFx(p) {
   _blastAt.set(p.x, p.y + 0.4, p.z);
   fxFire(_blastAt, 0.3, 4);
   for (let i = 0; i < 4; i++) {
@@ -4335,6 +4367,26 @@ function fragDetonate(t) {
     fxFire(_victimAt, 0.3 + Math.random() * 0.3, 1.2 + Math.random());
   }
   AudioSys.explosion(Math.hypot(p.x - player.pos.x, p.z - player.pos.z), audioPan(_blastAt));
+}
+
+// #16b: a throwable carries its `owner` (the thrower) so a bot's frag
+// credits the bot and can hurt the player. Player throws leave owner unset,
+// so it defaults to the player — the original behaviour. The replay event is
+// threaded into player damage so a lethal frag shows its real arc/explosion.
+function fragDetonate(t) {
+  const def = t.def, p = t.pos;
+  const owner = t.owner || player;
+  const replayEvent = throwableReplayEvent(t);
+  // P42: a semtex riding its victim deals full damage through any cover —
+  // they're wearing it. Handled up front; the area loops below skip them.
+  const stuckTo = t.stuckTo || null;
+  playFragExplosionFx(p);
+  if (stuckTo === player) {
+    if (player.alive) damagePlayer(def.dmg, owner === player ? null : owner,
+      def.name, false, false, replayEvent);
+  } else if (stuckTo && stuckTo.alive) {
+    stuckTo.hurt(def.dmg, stuckTo === owner ? null : owner, def.name, false);
+  }
   for (const b of G.bots) {
     if (!b.alive || b === stuckTo) continue; // stuck victim already paid in full
     // teammates are safe, but the frag still hurts the thrower themselves
@@ -4347,10 +4399,10 @@ function fragDetonate(t) {
   // hurts and credits the bot through the normal damage path
   if (owner === player) {
     const selfDmg = blastDamage(def, p, player.pos);
-    if (selfDmg > 0) damagePlayer(selfDmg, null, def.name, false);
+    if (selfDmg > 0) damagePlayer(selfDmg, null, def.name, false, false, replayEvent);
   } else if (owner.team !== player.team && stuckTo !== player) {
     const dmg = blastDamage(def, p, player.pos);
-    if (dmg > 0) damagePlayer(dmg, owner, def.name, false);
+    if (dmg > 0) damagePlayer(dmg, owner, def.name, false, false, replayEvent);
   }
   // the blast is loud — enemies within earshot investigate the spot
   _blastAt.set(p.x, p.y + 0.4, p.z); // blastDamage reuses the scratch
@@ -4946,6 +4998,7 @@ const KILLCAM_CHASE_HEIGHT = 0.65;
 const KILLCAM_SHOULDER_OFFSET = 0.48;
 const KILLCAM_CAM_MARGIN = 0.28; // pull-in gap so the near plane clears a wall the chase cam backs into
 let _killCamVictim = null;
+let _killCamThrowable = null;
 let _killCamHiddenBots = null; // live bot visibility restored after replay
 const _killCamMarker = new THREE.Vector3();
 const _killCamMuzzle = new THREE.Vector3(); // scratch for the fatal-shot muzzle point
@@ -4962,6 +5015,10 @@ function killCamCleanupVictim() {
     if (_killCamVictim.parent) _killCamVictim.parent.remove(_killCamVictim);
     _killCamVictim = null;
   }
+  if (_killCamThrowable) {
+    if (_killCamThrowable.parent) _killCamThrowable.parent.remove(_killCamThrowable);
+    _killCamThrowable = null;
+  }
   // Restore live bot meshes after the replay has driven them through their
   // recorded positions.
   if (_killCamHiddenBots) {
@@ -4972,6 +5029,8 @@ function killCamCleanupVictim() {
       b.mesh.position.copy(b.pos);
       b.mesh.rotation.set(0, b.yaw || 0, 0);
       if (b.mesh.userData && b.mesh.userData.flash) b.mesh.userData.flash.visible = false;
+      if (b.mesh.userData && b.mesh.userData.gun) b.mesh.userData.gun.visible = true;
+      if (b.mesh.userData && b.mesh.userData.body) b.mesh.userData.body.rotation.x = 0;
     }
     _killCamHiddenBots = null;
   }
@@ -5020,6 +5079,7 @@ function mixReplayFrames(a, b, mix) {
     sprinting: mix < 0.5 ? !!a.sprinting : !!b.sprinting,
     weaponName: mix < 0.5 ? a.weaponName : b.weaponName,
     flash: mix < 0.5 ? !!a.flash : !!b.flash,
+    throwAmt: THREE.MathUtils.lerp(a.throwAmt || 0, b.throwAmt || 0, mix),
     fall: THREE.MathUtils.lerp(a.fall || 0, b.fall || 0, mix),
   };
 }
@@ -5038,6 +5098,63 @@ function sampleReplayFrame(replay, replayT) {
   return cloneReplayFrame(last);
 }
 
+function sampleThrowableReplayFrame(replay, replayT) {
+  if (!replay || !replay.length) return null;
+  if (replayT <= replay[0].t) return Object.assign({}, replay[0]);
+  const last = replay[replay.length - 1];
+  if (replayT >= last.t) return Object.assign({}, last);
+  for (let i = 1; i < replay.length; i++) {
+    if (replay[i].t < replayT) continue;
+    const a = replay[i - 1], b = replay[i];
+    const span = Math.max(0.0001, b.t - a.t);
+    const mix = THREE.MathUtils.clamp((replayT - a.t) / span, 0, 1);
+    return {
+      t: THREE.MathUtils.lerp(a.t, b.t, mix),
+      x: THREE.MathUtils.lerp(a.x, b.x, mix),
+      y: THREE.MathUtils.lerp(a.y, b.y, mix),
+      z: THREE.MathUtils.lerp(a.z, b.z, mix),
+      rx: lerpAngle(a.rx || 0, b.rx || 0, mix),
+      ry: lerpAngle(a.ry || 0, b.ry || 0, mix),
+      rz: lerpAngle(a.rz || 0, b.rz || 0, mix),
+    };
+  }
+  return Object.assign({}, last);
+}
+
+function clearKillCamTransientFx() {
+  for (const t of FX.tracers) { t.ttl = 0; t.line.visible = false; }
+  for (const s of FX.sparks) { s.ttl = 0; s.sp.visible = false; }
+  for (const f of FX.fires) { f.ttl = 0; f.sp.visible = false; }
+  muzzleLight.intensity = 0;
+}
+
+function createKillCamThrowable(event) {
+  if (!event || !event.throwableDef || !event.trajectory || !event.trajectory.length) return null;
+  const mesh = buildGrenadeMesh(event.throwableDef);
+  // The real trajectory and rotation are preserved; only the replay proxy is
+  // enlarged slightly so a hand-sized frag remains legible from the shoulder
+  // camera as it leaves the thrower and crosses the map.
+  mesh.scale.setScalar(2.15);
+  const highlight = new THREE.Mesh(
+    new THREE.SphereGeometry(0.13, 8, 6),
+    new THREE.MeshBasicMaterial({
+      color: 0xffd35c, wireframe: true, transparent: true, opacity: 0.82,
+      depthWrite: false,
+    }));
+  highlight.position.y = 0.085;
+  mesh.add(highlight);
+  mesh.visible = false;
+  G.scene.add(mesh);
+  _killCamThrowable = mesh;
+  return {
+    mesh,
+    replay: event.trajectory.map(f => Object.assign({}, f)),
+    explosion: event.explosion.clone(),
+    highlight,
+    exploded: false,
+  };
+}
+
 function applyReplayFrameToMesh(mesh, frame, replayT, fall = 0, weaponOverride = null) {
   if (!mesh || !frame) return;
   if (typeof setSoldierWeapon === 'function')
@@ -5050,7 +5167,9 @@ function applyReplayFrameToMesh(mesh, frame, replayT, fall = 0, weaponOverride =
   if (ud.body) {
     ud.body.scale.y = THREE.MathUtils.lerp(THREE.MathUtils.lerp(1, 0.73, frame.crouchAmt || 0), 0.36, frame.proneAmt || 0);
     ud.body.scale.z = THREE.MathUtils.lerp(1, 1.35, frame.proneAmt || 0);
+    ud.body.rotation.x = -0.16 * (frame.throwAmt || 0);
   }
+  if (ud.gun) ud.gun.visible = (frame.throwAmt || 0) < 0.08;
   const moving = (frame.speedNow || 0) > 0.5 && fall <= 0;
   const leg = moving
     ? Math.sin((frame.t || replayT) * 9) * (frame.sprinting ? 0.75 : (frame.proneAmt || 0) > 0.5 ? 0.25 : 0.55)
@@ -5097,6 +5216,8 @@ function replayFrameForCombatant(ent, t = G.time, aimPoint = null) {
     yaw = a.yaw;
     pitch = a.pitch;
   }
+  const throwAge = typeof ent.lastGrenadeThrowTime === 'number'
+    ? t - ent.lastGrenadeThrowTime : Infinity;
   return {
     t,
     x: ent.pos.x,
@@ -5113,6 +5234,7 @@ function replayFrameForCombatant(ent, t = G.time, aimPoint = null) {
     proneAmt: ent.proneAmt || 0,
     sprinting: !!ent.sprinting,
     flash: typeof ent.lastShotTime === 'number' && t >= ent.lastShotTime && t - ent.lastShotTime <= 0.08,
+    throwAmt: throwAge >= 0 && throwAge <= 0.55 ? Math.sin(throwAge / 0.55 * Math.PI) : 0,
     fall: ent._replayDeathT === undefined ? 0 : _ss((t - ent._replayDeathT) / 0.35),
   };
 }
@@ -5188,8 +5310,7 @@ function buildLethalReplayFrame(attacker, weaponName, shot) {
   return f;
 }
 
-function killCamReplayWindow(attacker, lethalFrame) {
-  const startT = G.time - KILLCAM_PRE_ROLL;
+function killCamReplayWindow(attacker, lethalFrame, startT) {
   const replay = combatantReplayWindow(attacker, startT, G.time, lethalFrame);
   return replay;
 }
@@ -5229,15 +5350,24 @@ function buildKillCamActors(attacker, startT, endT, lethalWeaponName) {
 
 function startKillCam(attacker, weaponName, shot) {
   if (!attacker || !attacker.pos || !(G.mode || MODES.tdm).respawn) return false;
+  const throwableEvent = shot && shot.kind === 'throwable' ? shot : null;
   const lethalFrame = buildLethalReplayFrame(attacker, weaponName, shot);
-  const replay = killCamReplayWindow(attacker, lethalFrame);
-  const startT = G.time - KILLCAM_PRE_ROLL;
+  // A bot frag uses its full 3.6-second fuse, slightly longer than the normal
+  // firearm pre-roll. Start at the actual release so the throw is never cut.
+  const startT = throwableEvent
+    ? throwableEvent.thrownT
+    : G.time - KILLCAM_PRE_ROLL;
+  const replay = killCamReplayWindow(attacker, lethalFrame, startT);
   const endT = lethalFrame.t + KILLCAM_POST_ROLL;
   const victim = createKillCamVictim();
   const victimFinalFrame = replayFrameForCombatant(player, lethalFrame.t);
   const victimReplay = combatantReplayWindow(player, startT, lethalFrame.t, victimFinalFrame);
-  const actors = buildKillCamActors(attacker, startT, lethalFrame.t, weaponName);
+  const actorWeaponName = throwableEvent ? combatantReplayWeapon(attacker) : weaponName;
+  const actors = buildKillCamActors(attacker, startT, lethalFrame.t, actorWeaponName);
   const shotDef = weaponDefForKillName(weaponName) || attacker.weapon || null;
+  const melee = !throwableEvent && !!(attacker.weapon && attacker.weapon.melee);
+  if (throwableEvent) clearKillCamTransientFx();
+  const throwable = createKillCamThrowable(throwableEvent);
   _killCam = {
     t: KILLCAM_DUR,
     elapsed: 0,
@@ -5256,7 +5386,9 @@ function startKillCam(attacker, weaponName, shot) {
     aim: lethalFrame.aim,                                    // fatal-round impact point
     shotModel: (shotDef && (shotDef.audio || shotDef.model)) || 'ar',
     suppressed: !!(attacker.weapon && attacker.weapon.suppressed),
-    melee: !!(attacker.weapon && attacker.weapon.melee),     // no tracer for a knife/tomahawk kill
+    melee,
+    ballistic: !throwableEvent && !melee && !!(shot && shot.origin && shot.aim),
+    throwable,
     shotTimer: 0,                                            // cadence accumulator for the fatal burst
   };
   G.state = 'killcam';
@@ -5306,6 +5438,23 @@ function updateKillCam(dt) {
   }
   for (const actor of _killCam.actors || [])
     applyReplayFrameToMesh(actor.mesh, sampleReplayFrame(actor.replay, replayT), replayT, 0, actor.weaponOverride);
+  const throwable = _killCam.throwable;
+  if (throwable) {
+    const grenadeFrame = sampleThrowableReplayFrame(throwable.replay, replayT);
+    if (grenadeFrame && replayT < _killCam.lethalT) {
+      throwable.mesh.visible = true;
+      throwable.mesh.position.set(grenadeFrame.x, grenadeFrame.y, grenadeFrame.z);
+      throwable.mesh.rotation.set(grenadeFrame.rx || 0, grenadeFrame.ry || 0, grenadeFrame.rz || 0);
+      const pulse = 1 + Math.sin(replayT * 18) * 0.12;
+      throwable.highlight.scale.setScalar(pulse);
+    } else {
+      throwable.mesh.visible = false;
+    }
+    if (!throwable.exploded && replayT >= _killCam.lethalT) {
+      throwable.exploded = true;
+      playFragExplosionFx(throwable.explosion);
+    }
+  }
   // Third-person chase replay: place the camera behind the killer's recorded
   // movement while keeping the look point on the replayed victim/fatal impact.
   if (f) {
@@ -5348,10 +5497,10 @@ function updateKillCam(dt) {
     G.camera.position.set(_killCam.pos.x, _killCam.pos.y + KILLCAM_EYE_HEIGHT, _killCam.pos.z);
     G.camera.rotation.set(_killCam.pitch || 0, _killCam.yaw || 0, 0);
   }
-  // Replay the fatal shot: a short muzzle-flash + tracer burst that lands on
-  // the victim right as they drop, so the death has a visible cause instead of
-  // just keeling over. Skipped for melee kills (no tracer to draw).
-  if (_killCam.aim && !_killCam.melee) {
+  // Replay a fatal firearm shot as a short muzzle-flash + tracer burst. Melee
+  // and explosive deaths stay out of this branch; throwables own their actual
+  // flight and blast replay above.
+  if (_killCam.ballistic && _killCam.aim) {
     _killCam.shotTimer -= dt;
     const inBurst = replayT >= _killCam.lethalT - 0.16 && replayT <= _killCam.lethalT + 0.03;
     if (inBurst && _killCam.shotTimer <= 0) {
