@@ -2616,49 +2616,111 @@ function buildNukeBomb() {
   return g;
 }
 
-// Tsar Bomba-scale low-poly mushroom cloud: total height ~5× the map's
-// half-extent and a cap wider than the whole play area, so the map reads
-// as a diorama under it. Grown from ~0 by the cinematic; returns the
-// group + the glow light inside it
-function buildMushroomCloud(B) {
-  const H = B * 5; // ground zero → cap dome
+// Nuclear fireball and mushroom column. Most maps use a compact height based
+// on their bounds; large map-specific dioramas can pass a physical scene
+// height so the blast, aircraft, and landmark share one scale model.
+function buildMushroomCloud(B, sceneHeight = B * 5) {
+  const H = sceneHeight;
   const g = new THREE.Group();
-  const puff = (r, x, y, z, c) => {
+  const smokeMaterials = new Map();
+  const fireMaterials = [];
+  const smokeMat = color => {
+    if (!smokeMaterials.has(color))
+      smokeMaterials.set(color, new THREE.MeshLambertMaterial({ color }));
+    return smokeMaterials.get(color);
+  };
+  const puff = (r, x, y, z, color, material = null) => {
     const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8),
-      new THREE.MeshLambertMaterial({ color: c }));
+      material || smokeMat(color));
     m.position.set(x, y, z);
     g.add(m);
     return m;
   };
-  const gray = 0x9a9284, dust = 0x8a8072;
-  // stem: a fat column of puffs all the way up to the cap
-  puff(H * 0.09, 0, H * 0.05, 0, dust);
-  puff(H * 0.11, 0, H * 0.16, 0, dust);
-  puff(H * 0.13, 0, H * 0.30, 0, dust);
-  puff(H * 0.14, 0, H * 0.45, 0, gray);
-  puff(H * 0.15, 0, H * 0.60, 0, gray);
-  // ground-dust skirt around the stem base
-  for (let i = 0; i < 8; i++) {
-    const a = i / 8 * Math.PI * 2;
-    puff(H * 0.10, Math.sin(a) * H * 0.13, H * 0.07, Math.cos(a) * H * 0.13, dust);
+
+  const fireMat = (color, opacity = 1) => {
+    const material = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity, depthWrite: false, depthTest: false,
+    });
+    fireMaterials.push(material);
+    return material;
+  };
+  const FIRE_WHITE = 0xfff0b0, FIRE_YELLOW = 0xffc142,
+        FIRE_ORANGE = 0xff6a18, FIRE_RED = 0xb82d13;
+  const DUST = 0x6d5142, ASH = 0x655d58, SMOKE = 0x474441, DARK = 0x302f2f;
+
+  // Incandescent ground fireball: a white-hot core, orange shell, and ragged
+  // red edge remain visible beneath the rising column.
+  puff(H * 0.045, 0, H * 0.09, 0, FIRE_WHITE, fireMat(FIRE_WHITE));
+  puff(H * 0.075, 0, H * 0.12, 0, FIRE_ORANGE, fireMat(FIRE_ORANGE, 0.94));
+  for (let i = 0; i < 10; i++) {
+    const a = i / 10 * Math.PI * 2;
+    puff(H * 0.035, Math.sin(a) * H * 0.065, H * (0.10 + (i % 3) * 0.018),
+      Math.cos(a) * H * 0.065, FIRE_RED, fireMat(i % 2 ? FIRE_ORANGE : FIRE_RED, 0.9));
   }
-  // cap: center dome + a wide ring curling under it + an upper crown
-  puff(H * 0.30, 0, H * 0.88, 0, gray);
-  for (let i = 0; i < 11; i++) {
-    const a = i / 11 * Math.PI * 2;
-    puff(H * 0.15, Math.sin(a) * H * 0.24, H * 0.74, Math.cos(a) * H * 0.24, dust);
+
+  // Thick turbulent column, darker toward the cap.
+  puff(H * 0.10, 0, H * 0.08, 0, DUST);
+  puff(H * 0.12, H * 0.025, H * 0.28, -H * 0.018, DUST);
+  puff(H * 0.135, -H * 0.02, H * 0.42, H * 0.025, ASH);
+  puff(H * 0.15, H * 0.025, H * 0.56, 0, SMOKE);
+  puff(H * 0.17, -H * 0.02, H * 0.69, 0, DARK);
+
+  // The exposed, white-hot nuclear fireball stays broader than the column,
+  // with orange lobes breaking through the smoke beneath the cap.
+  puff(H * 0.22, 0, H * 0.57, 0, FIRE_ORANGE,
+    fireMat(FIRE_ORANGE, 0.9));
+  puff(H * 0.14, -H * 0.015, H * 0.56, H * 0.015, FIRE_WHITE,
+    fireMat(FIRE_WHITE, 0.98));
+  for (let i = 0; i < 10; i++) {
+    const a = i / 10 * Math.PI * 2;
+    puff(H * 0.105, Math.sin(a) * H * 0.19, H * (0.58 + (i % 2) * 0.045),
+      Math.cos(a) * H * 0.19, FIRE_ORANGE,
+      fireMat(i % 3 ? FIRE_ORANGE : FIRE_YELLOW, 0.88));
   }
-  for (let i = 0; i < 7; i++) {
-    const a = (i + 0.5) / 7 * Math.PI * 2;
-    puff(H * 0.13, Math.sin(a) * H * 0.15, H * 1.0, Math.cos(a) * H * 0.15, gray);
+
+  // Rolling ground dust and the bright firelit underside of the mushroom.
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * Math.PI * 2;
+    puff(H * 0.04, Math.sin(a) * H * 0.065, H * 0.04,
+      Math.cos(a) * H * 0.065, i % 2 ? DUST : ASH);
   }
-  // fireball glow at the base
-  puff(H * 0.11, 0, H * 0.06, 0, 0xffa040).material =
-    new THREE.MeshBasicMaterial({ color: 0xff9030 });
-  const light = new THREE.PointLight(0xff8030, 10, H * 2);
-  light.position.y = H * 0.12;
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * Math.PI * 2;
+    puff(H * 0.16, Math.sin(a) * H * 0.29, H * 0.72,
+      Math.cos(a) * H * 0.29, FIRE_ORANGE,
+      fireMat(i % 3 ? FIRE_ORANGE : FIRE_YELLOW, 0.82));
+  }
+
+  // Vast dark cap with an irregular rolling edge and rising crown. At full
+  // scale its diameter is roughly the blast height, not a narrow smoke bulb.
+  puff(H * 0.36, 0, H * 0.92, 0, DARK);
+  for (let i = 0; i < 14; i++) {
+    const a = i / 14 * Math.PI * 2;
+    puff(H * (0.17 + (i % 3) * 0.015), Math.sin(a) * H * 0.37,
+      H * (0.79 + (i % 2) * 0.035), Math.cos(a) * H * 0.37,
+      i % 3 ? SMOKE : ASH);
+  }
+  for (let i = 0; i < 9; i++) {
+    const a = (i + 0.5) / 9 * Math.PI * 2;
+    puff(H * 0.15, Math.sin(a) * H * 0.24, H * 1.08,
+      Math.cos(a) * H * 0.24, i % 2 ? DARK : SMOKE);
+  }
+
+  // Expanding white-orange pressure ring at the water/deck plane.
+  const shockMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffd39a, transparent: true, opacity: 0.85,
+    side: THREE.DoubleSide, depthWrite: false,
+  });
+  const shockwave = new THREE.Mesh(
+    new THREE.TorusGeometry(H * 0.28, H * 0.022, 8, 64), shockMaterial);
+  shockwave.rotation.x = Math.PI / 2;
+  shockwave.position.y = H * 0.035;
+  g.add(shockwave);
+
+  const light = new THREE.PointLight(0xff6b20, 22, H * 4);
+  light.position.y = H * 0.23;
   g.add(light);
-  return { group: g, light };
+  return { group: g, light, fireMaterials, shockwave, shockMaterial };
 }
 
 // Tsar Taverns-only desert dressing for the nuke pull-back: scattered saguaro
@@ -2954,14 +3016,13 @@ function buildDerrickDunesNukeDiorama(B) {
   return g;
 }
 
-// Freightlock-only port dressing for the nuke pull-back. The playable yard
-// remains the foreground diorama; this builds the much larger American
-// container terminal it belongs to: an apron and on-dock rail, dense stacks,
-// ship-to-shore gantry cranes, a berthed container ship, a feeder ship and
-// harbor tugs. Cosmetic and cinematic-only; removed with the other nuke props.
+// Freightlock-only open-ocean dressing for the nuke pull-back. The playable
+// yard is the midships cargo deck of one full-sized freighter; ISO container
+// stacks, the bridge, bow, hull, wake, and uninterrupted water establish its
+// scale without adding gameplay collision. Removed with the other nuke props.
 function buildFreightlockNukeDiorama(B) {
   const g = new THREE.Group();
-  g.name = 'freightlock-shipyard-diorama';
+  g.name = 'freightlock-open-ocean-freighter-diorama';
   const materials = new Map();
   const mat = c => {
     if (!materials.has(c)) materials.set(c, new THREE.MeshLambertMaterial({ color: c }));
@@ -2975,184 +3036,247 @@ function buildFreightlockNukeDiorama(B) {
     parent.add(m);
     return m;
   };
+  const flat = (parent, points, c, y) => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const flatMaterial = mat(c).clone();
+    flatMaterial.side = THREE.DoubleSide;
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), flatMaterial);
+    m.rotation.x = Math.PI / 2;
+    m.position.y = y;
+    parent.add(m);
+    return m;
+  };
+  const hullShell = (parent, topPoints, topY, bottomPoints, bottomY, c) => {
+    const positions = [];
+    for (let i = 0; i < topPoints.length; i++) {
+      const n = (i + 1) % topPoints.length;
+      const a = topPoints[i], b = topPoints[n], c0 = bottomPoints[n], d = bottomPoints[i];
+      positions.push(
+        a[0], topY, a[1], b[0], topY, b[1], c0[0], bottomY, c0[1],
+        a[0], topY, a[1], c0[0], bottomY, c0[1], d[0], bottomY, d[1]);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.computeVertexNormals();
+    const shellMaterial = mat(c).clone();
+    shellMaterial.side = THREE.DoubleSide;
+    const m = new THREE.Mesh(geometry, shellMaterial);
+    parent.add(m);
+    return m;
+  };
   const tagGroup = (name, kind) => {
     const gg = new THREE.Group();
     gg.name = name;
-    gg.userData.shipyardKind = kind;
+    gg.userData.freighterKind = kind;
     g.add(gg);
     return gg;
   };
 
-  const WATER = 0x31596b, WATER_HI = 0x547f8d, CONCRETE = 0x777a76,
-        QUAY = 0x3c4243, RAIL = 0x292d2d, CRANE = 0x6e9aaa,
-        CRANE_DK = 0x3f6674, CRANE_MARK = 0xd8d4c5, HULL = 0x263d4c,
-        HULL_RED = 0x74372f, DECK = 0x444b4c, CABIN = 0xd5d2bd;
+  const WATER = 0x244e65, WATER_HI = 0x6f9eaa,
+        FOAM = 0xb8ced0, HULL_RED = 0x713d35,
+        BOOT = 0x151e24, DECK = 0x515b5c, DECK_LINE = 0xc2ae67,
+        RAIL = 0x272d30, CABIN = 0xd4d1c1, GLASS = 0x335a68,
+        FUNNEL = 0xb48748, FUNNEL_TOP = 0x262b2c;
   const containerColors = [0x315d78, 0x934936, 0x4f7048, 0xa1833e, 0x5c6265, 0x6d4140, 0x47716d];
-  let yardContainerCount = 0, shipContainerCount = 0;
-  const containerGeo = new THREE.BoxGeometry(B * 0.42, B * 0.17, B * 0.16);
-  const addContainer = (parent, x, y, z, color, ry = 0, scale = 1) => {
+  const shipLength = B * 18;        // ~279 m on Freightlock
+  const shipBeam = B * 3.25;        // ~50 m: the 29 m yard fits at midships
+  const bowLength = B * 2.25;
+  const oceanSpan = Math.max(8000, B * 500);
+  const waterY = -B * 0.27;         // ~4.2 m below the cargo deck
+  const deckY = 0.08;
+
+  // The oversized Freightlock horizon slab is hidden while this diorama is
+  // active, allowing a real waterline several metres below the unchanged map.
+  const ocean = tagGroup('freightlock-open-ocean', 'open-ocean');
+  const oceanSurface = new THREE.Mesh(
+    new THREE.BoxGeometry(oceanSpan, 0.04, oceanSpan),
+    new THREE.MeshBasicMaterial({ color: WATER }));
+  oceanSurface.position.set(0, waterY - 0.02, 0);
+  ocean.add(oceanSurface);
+  let waveCount = 0;
+  for (let i = 0; i < 68; i++) {
+    const x = ((i * 47) % 113 - 56) * B * 0.62;
+    const z = ((i * 71) % 127 - 63) * B * 0.56;
+    if (Math.abs(x) < shipLength * 0.55 && Math.abs(z) < shipBeam * 0.72) continue;
+    const len = B * (0.32 + (i % 6) * 0.11);
+    box(ocean, len, 0.012, 0.055, i % 4 ? WATER_HI : FOAM,
+      x, waterY + 0.008, z, (i % 5 - 2) * 0.035);
+    waveCount++;
+  }
+
+  // Sunset backdrop and a physical sun disc low over the port bow. Both use
+  // unlit materials so the sun remains readable through cinematic fog.
+  const sky = tagGroup('freightlock-sunset-horizon', 'sunset-sky');
+  const skyGeometry = new THREE.PlaneGeometry(oceanSpan * 1.35, oceanSpan, 1, 16);
+  const skyPosition = skyGeometry.attributes.position;
+  const skyColors = [];
+  const horizonColor = new THREE.Color(0xe49a68);
+  const zenithColor = new THREE.Color(0x53697d);
+  for (let i = 0; i < skyPosition.count; i++) {
+    const aboveHorizon = skyPosition.getY(i) + oceanSpan / 2;
+    const t = THREE.MathUtils.clamp(aboveHorizon / (B * 90), 0, 1);
+    const color = horizonColor.clone().lerp(zenithColor, t);
+    skyColors.push(color.r, color.g, color.b);
+  }
+  skyGeometry.setAttribute('color', new THREE.Float32BufferAttribute(skyColors, 3));
+  const skyPanel = new THREE.Mesh(skyGeometry, new THREE.MeshBasicMaterial({
+    vertexColors: true, side: THREE.DoubleSide, fog: false, depthWrite: false,
+  }));
+  skyPanel.position.set(0, waterY + oceanSpan / 2, -B * 100);
+  skyPanel.renderOrder = -2;
+  sky.add(skyPanel);
+
+  const sun = tagGroup('freightlock-horizon-sun', 'horizon-sun');
+  const sunPosition = new THREE.Vector3(-B * 75, waterY + B * 3.6, -B * 95);
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(B * 5.3, 24, 16),
+    new THREE.MeshBasicMaterial({
+      color: 0xffa64f, transparent: true, opacity: 0.18,
+      fog: false, depthWrite: false,
+    }));
+  halo.position.copy(sunPosition);
+  sun.add(halo);
+  const sunDisc = new THREE.Mesh(new THREE.SphereGeometry(B * 3.35, 24, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffd47a, fog: false }));
+  sunDisc.position.copy(sunPosition);
+  sun.add(sunDisc);
+  const sunsetLight = new THREE.DirectionalLight(0xffad69, 0.5);
+  sunsetLight.position.set(-1, 0.35, -1);
+  sun.add(sunsetLight);
+
+  const hull = tagGroup('freightlock-mid-ocean-freighter', 'freighter');
+  const hullOutline = [
+    [-shipLength / 2, 0],
+    [-shipLength / 2 + bowLength, -shipBeam / 2],
+    [shipLength * 0.43, -shipBeam / 2],
+    [shipLength / 2, -shipBeam * 0.36],
+    [shipLength / 2, shipBeam * 0.36],
+    [shipLength * 0.43, shipBeam / 2],
+    [-shipLength / 2 + bowLength, shipBeam / 2],
+  ];
+  const deckInset = 1.15;
+  const deckOutline = [
+    [-shipLength / 2 + deckInset, 0],
+    [-shipLength / 2 + bowLength + deckInset, -shipBeam / 2 + deckInset],
+    [shipLength * 0.425, -shipBeam / 2 + deckInset],
+    [shipLength / 2 - deckInset, -shipBeam * 0.34],
+    [shipLength / 2 - deckInset, shipBeam * 0.34],
+    [shipLength * 0.425, shipBeam / 2 - deckInset],
+    [-shipLength / 2 + bowLength + deckInset, shipBeam / 2 - deckInset],
+  ];
+  const waterlineOutline = hullOutline.map(p => [p[0] * 0.985, p[1] * 0.92]);
+  const keelOutline = hullOutline.map(p => [p[0] * 0.94, p[1] * 0.68]);
+  hullShell(hull, hullOutline, deckY - 0.02,
+    waterlineOutline, waterY + 0.28, HULL_RED);
+  hullShell(hull, waterlineOutline, waterY + 0.28,
+    keelOutline, waterY - B * 0.22, BOOT);
+  flat(hull, hullOutline, HULL_RED, deckY - 0.025);
+  flat(hull, deckOutline, DECK, deckY);
+
+  // Foam along both shoulders and a broad wake at the stern make the vessel
+  // read as isolated and underway rather than berthed beside an unseen quay.
+  const wake = tagGroup('freightlock-freighter-wake', 'wake');
+  for (const side of [-1, 1]) {
+    box(wake, shipLength * 0.78, 0.018, 0.24, FOAM,
+      shipLength * 0.055, waterY + 0.018, side * (shipBeam / 2 + 0.38), 0, side * 0.004);
+    for (let i = 0; i < 7; i++) {
+      const x = shipLength / 2 + B * (0.75 + i * 0.72);
+      box(wake, B * (0.72 + i * 0.22), 0.016, 0.16, i % 2 ? WATER_HI : FOAM,
+        x, waterY + 0.018, side * B * (0.25 + i * 0.12), side * (0.03 + i * 0.012));
+    }
+  }
+
+  // The existing 31×29 m Freightlock arena occupies the clearly marked
+  // midships deck. Cargo remains fore and aft so the map is never occluded.
+  const deckMarks = tagGroup('freightlock-midships-deck-markings', 'midships-map');
+  const mapHalfX = B + 1.2, mapHalfZ = B * 0.96 + 1.2;
+  for (const x of [-mapHalfX, mapHalfX])
+    box(deckMarks, 0.16, 0.025, mapHalfZ * 2, DECK_LINE, x, deckY + 0.018, 0);
+  for (const z of [-mapHalfZ, mapHalfZ])
+    box(deckMarks, mapHalfX * 2, 0.025, 0.16, DECK_LINE, 0, deckY + 0.018, z);
+  for (const side of [-1, 1])
+    box(deckMarks, B * 1.1, 0.022, 0.08, DECK_LINE,
+      side * B * 0.68, deckY + 0.017, 0);
+
+  let cargoContainerCount = 0;
+  const containerGeo = new THREE.BoxGeometry(12.2, 2.6, 2.45);
+  const addContainer = (parent, x, tier, z, color) => {
     const m = new THREE.Mesh(containerGeo, mat(color));
-    m.position.set(x, y, z);
-    m.rotation.y = ry;
-    m.scale.setScalar(scale);
+    m.position.set(x, deckY + 1.3 + tier * 2.62, z);
     parent.add(m);
+    cargoContainerCount++;
     return m;
   };
-
-  // San Pedro Bay-style terminal basin: water begins at a hard quay edge,
-  // replacing the otherwise featureless gray horizon behind Freightlock.
-  const water = tagGroup('freightlock-harbor-water', 'water');
-  box(water, B * 18, 0.08, B * 12, WATER, 0, NUKE_GROUND_Y + 0.06, -B * 8.1);
-  for (let i = 0; i < 22; i++) {
-    const x = B * (-7.8 + (i % 11) * 1.55);
-    const z = -B * (3.2 + Math.floor(i / 11) * 4.2 + (i % 3) * 0.16);
-    box(water, B * (0.5 + (i % 4) * 0.2), 0.015, 0.045, WATER_HI,
-      x, NUKE_GROUND_Y + 0.115, z, (i % 2 ? 0.08 : -0.08));
-  }
-
-  const terminal = tagGroup('freightlock-terminal-apron', 'terminal');
-  box(terminal, B * 14, 0.18, B * 0.8, CONCRETE, 0, 0.02, -B * 2.2);
-  box(terminal, B * 14, B * 0.42, B * 0.16, QUAY, 0, -B * 0.18, -B * 2.56);
-  // Parallel on-dock rail and pale lane marks make the apron read as a
-  // working intermodal terminal instead of another blank concrete plane.
-  for (const z of [-1.18, -1.42, -1.66]) {
-    box(terminal, B * 12, 0.035, 0.055, RAIL, 0, 0.045, B * z);
-    box(terminal, B * 12, 0.035, 0.025, 0xb7aa7a, 0, 0.066, B * (z - 0.06));
-  }
-  // Foreground drayage apron fills the pull-back camera's near side with
-  // marked truck lanes and parked container chassis instead of bare ground.
-  box(terminal, B * 9, 0.11, B * 1.28, 0x686d6b, 0, 0.01, B * 1.55);
-  for (const x of [-3.2, -2.0, -0.8, 0.8, 2.0, 3.2])
-    box(terminal, 0.045, 0.025, B * 1.08, 0xd0c58e, B * x, 0.08, B * 1.55);
-  for (const side of [-1, 1]) for (let i = 0; i < 2; i++) {
-    const tx = side * B * (2.65 + i * 0.62), tz = B * (1.34 + i * 0.28);
-    addContainer(terminal, tx, B * 0.1, tz,
-      containerColors[(i + (side > 0 ? 2 : 5)) % containerColors.length], Math.PI / 2, 0.9);
-    box(terminal, B * 0.25, B * 0.22, B * 0.28, 0xc2b68c,
-      tx, B * 0.11, tz + B * 0.34);
-    box(terminal, B * 0.06, B * 0.12, B * 0.72, RAIL,
-      tx - B * 0.1, B * 0.04, tz);
-    box(terminal, B * 0.06, B * 0.12, B * 0.72, RAIL,
-      tx + B * 0.1, B * 0.04, tz);
-  }
-
-  // Long, ordered container rows surround the compact playable stack yard.
-  // The fixed pattern keeps the cinematic composition stable between runs.
-  const yard = tagGroup('freightlock-container-terminal', 'container-yard');
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 15; col++) {
-      if (col >= 5 && col <= 8) continue; // center service lane reveals the berthed ship
-      const tiers = 2 + ((row * 3 + col) % 3);
-      const x = B * (-4.25 + col * 0.6);
-      const z = -B * (0.98 + row * 0.32);
-      for (let tier = 0; tier < tiers; tier++) {
-        addContainer(yard, x, B * (0.09 + tier * 0.18), z,
-          containerColors[(row + col + tier) % containerColors.length]);
-        yardContainerCount++;
+  const cargo = tagGroup('freightlock-fore-aft-cargo', 'cargo-stacks');
+  const laneZ = [-18.0, -12.0, -6.0, 6.0, 12.0, 18.0];
+  const cargoRanges = [
+    { start: -shipLength * 0.34, bays: 7 },
+    { start: B * 2.35, bays: 4 },
+  ];
+  for (let section = 0; section < cargoRanges.length; section++) {
+    const range = cargoRanges[section];
+    for (let bay = 0; bay < range.bays; bay++) {
+      for (let lane = 0; lane < laneZ.length; lane++) {
+        const tiers = 2 + ((bay + lane + section) % 3);
+        for (let tier = 0; tier < tiers; tier++) {
+          addContainer(cargo, range.start + bay * 12.65, tier, laneZ[lane],
+            containerColors[(bay * 2 + lane + tier + section) % containerColors.length]);
+        }
       }
     }
   }
-  // Additional wing stacks frame the playable yard without covering it.
+
+  // Aft island: layered white superstructure, dark bridge glazing, twin
+  // funnels, radar, and mast. It is intentionally outside the combat yard.
+  const island = tagGroup('freightlock-freighter-superstructure', 'superstructure');
+  const islandX = shipLength * 0.365;
+  box(island, B * 1.7, B * 0.55, shipBeam * 0.78, CABIN,
+    islandX, B * 0.275 + deckY, 0);
+  box(island, B * 1.25, B * 0.48, shipBeam * 0.66, CABIN,
+    islandX + B * 0.12, B * 0.79 + deckY, 0);
+  box(island, B * 0.92, B * 0.38, shipBeam * 0.72, CABIN,
+    islandX - B * 0.02, B * 1.22 + deckY, 0);
+  for (const side of [-1, 1])
+    box(island, B * 0.78, B * 0.16, 0.12, GLASS,
+      islandX - B * 0.03, B * 1.32 + deckY, side * shipBeam * 0.365);
+  for (const z of [-B * 0.38, B * 0.38]) {
+    box(island, B * 0.32, B * 0.72, B * 0.32, FUNNEL,
+      islandX + B * 0.2, B * 1.72 + deckY, z);
+    box(island, B * 0.35, B * 0.18, B * 0.35, FUNNEL_TOP,
+      islandX + B * 0.2, B * 2.12 + deckY, z);
+  }
+  box(island, 0.16, B * 1.8, 0.16, RAIL,
+    islandX - B * 0.34, B * 2.05 + deckY, 0);
+  box(island, B * 0.75, 0.1, 0.1, RAIL,
+    islandX - B * 0.34, B * 2.78 + deckY, 0);
+  const radar = new THREE.Mesh(new THREE.SphereGeometry(B * 0.15, 10, 6), mat(CABIN));
+  radar.scale.y = 0.35;
+  radar.position.set(islandX - B * 0.34, B * 2.65 + deckY, 0);
+  island.add(radar);
+
+  // Heavy perimeter rails keep the silhouette legible from the final camera.
   for (const side of [-1, 1]) {
-    for (let row = 0; row < 4; row++) for (let col = 0; col < 5; col++) {
-      const tiers = 2 + ((row + col) % 2);
-      for (let tier = 0; tier < tiers; tier++) {
-        addContainer(yard, side * B * (1.45 + row * 0.31), B * (0.09 + tier * 0.18),
-          B * (-0.55 + col * 0.36), containerColors[(row * 2 + col + tier) % containerColors.length],
-          Math.PI / 2);
-        yardContainerCount++;
-      }
-    }
+    box(hull, shipLength * 0.78, 0.18, 0.14, RAIL,
+      shipLength * 0.04, deckY + 0.16, side * (shipBeam / 2 - 1.0));
+    for (let i = 0; i < 18; i++)
+      box(hull, 0.1, 0.55, 0.1, RAIL,
+        -shipLength * 0.36 + i * shipLength * 0.043,
+        deckY + 0.28, side * (shipBeam / 2 - 1.0));
   }
 
-  // Tall blue-gray ship-to-shore cranes, modeled after the repeated gantry
-  // silhouettes at large U.S. container berths. Their booms reach over the
-  // berthed ship and stay readable behind the map during the camera pullout.
-  const buildCrane = (x, index) => {
-    const cg = tagGroup('freightlock-sts-crane-' + index, 'gantry-crane');
-    cg.position.set(x, 0, -B * 2.42);
-    const legX = B * 0.34, legZ = B * 0.18, legH = B * 2.15;
-    for (const sx of [-1, 1]) for (const sz of [-1, 1])
-      box(cg, B * 0.095, legH, B * 0.095, CRANE, sx * legX, legH / 2, sz * legZ, 0, sx * sz * 0.13);
-    box(cg, B * 0.86, B * 0.13, B * 0.18, CRANE_DK, 0, B * 2.07, 0);
-    box(cg, B * 0.68, B * 0.75, B * 0.12, CRANE, 0, B * 2.45, 0);
-    box(cg, B * 0.92, B * 0.12, B * 0.15, CRANE_MARK, 0, B * 2.82, 0);
-    // Waterside boom + landside counter-boom.
-    box(cg, B * 0.12, B * 0.12, B * 3.55, CRANE, 0, B * 2.9, -B * 1.65);
-    box(cg, B * 0.12, B * 0.16, B * 1.25, CRANE_DK, 0, B * 2.88, B * 0.58);
-    box(cg, B * 0.25, B * 0.22, B * 0.3, CABIN, B * 0.17, B * 2.65, -B * 0.42);
-    // Cable drop and spreader over the ship's container bays.
-    box(cg, B * 0.035, B * 1.3, B * 0.035, RAIL, 0, B * 2.2, -B * 1.55);
-    box(cg, B * 0.55, B * 0.055, B * 0.2, CRANE_DK, 0, B * 1.54, -B * 1.55);
-    cg.scale.y = 0.78; // monumental, but fully legible inside the cinematic frame
-  };
-  [-2.7, -0.9, 0.9, 2.7].forEach((x, i) => buildCrane(B * x, i + 1));
-
-  const buildContainerShip = (name, x, z, scale, accent, feeder = false) => {
-    const ship = tagGroup(name, feeder ? 'feeder-ship' : 'container-ship');
-    ship.position.set(x, 0, z);
-    const L = B * 5.8 * scale, W = B * 1.12 * scale;
-    box(ship, L, B * 0.42 * scale, W, accent, 0, B * 0.13 * scale, 0);
-    box(ship, L * 0.88, B * 0.22 * scale, W * 0.88, HULL, 0, B * 0.39 * scale, 0);
-    // Tapered-looking bow/stern blocks keep the silhouette from reading as
-    // one plain rectangle at the cinematic scale.
-    box(ship, L * 0.12, B * 0.25 * scale, W * 0.62, HULL,
-      -L * 0.5, B * 0.3 * scale, 0, 0, -0.16);
-    box(ship, L * 0.12, B * 0.25 * scale, W * 0.72, HULL,
-      L * 0.5, B * 0.3 * scale, 0, 0, 0.12);
-    box(ship, L * 0.12, B * 0.85 * scale, W * 0.72, CABIN,
-      L * 0.36, B * 0.88 * scale, 0);
-    box(ship, L * 0.04, B * 0.28 * scale, W * 0.28, DECK,
-      L * 0.39, B * 1.43 * scale, 0);
-    const bays = feeder ? 7 : 11, lanes = feeder ? 2 : 3, tiers = feeder ? 2 : 3;
-    for (let bay = 0; bay < bays; bay++) for (let lane = 0; lane < lanes; lane++) {
-      for (let tier = 0; tier < tiers - ((bay + lane) % 3 === 0 ? 1 : 0); tier++) {
-        const cx = -L * 0.36 + bay * (L * 0.061);
-        const cz = (lane - (lanes - 1) / 2) * W * 0.27;
-        addContainer(ship, cx, B * scale * (0.57 + tier * 0.18), cz,
-          containerColors[(bay + lane + tier) % containerColors.length], 0, scale * 0.82);
-        shipContainerCount++;
-      }
-    }
-    return ship;
-  };
-  buildContainerShip('freightlock-berth-container-ship', -B * 0.3, -B * 3.55, 1.0, HULL_RED);
-  const feeder = buildContainerShip('freightlock-channel-feeder', -B * 3.8, -B * 7.1, 0.5, 0x6b4a38, true);
-  feeder.rotation.y = 0.1;
-
-  const buildTug = (name, x, z, ry, color) => {
-    const tug = tagGroup(name, 'tugboat');
-    tug.position.set(x, 0, z);
-    tug.rotation.y = ry;
-    box(tug, B * 0.78, B * 0.22, B * 0.38, color, 0, B * 0.09, 0);
-    box(tug, B * 0.35, B * 0.32, B * 0.28, CABIN, B * 0.08, B * 0.32, 0);
-    box(tug, B * 0.08, B * 0.28, B * 0.08, RAIL, B * 0.12, B * 0.61, 0);
-    box(tug, B * 0.2, B * 0.05, B * 0.43, HULL, -B * 0.35, B * 0.13, 0);
-  };
-  buildTug('freightlock-harbor-tug-1', -B * 1.65, -B * 3.25, -0.22, 0xc4a340);
-  buildTug('freightlock-harbor-tug-2', B * 1.15, -B * 3.7, 0.35, 0xb4583e);
-
-  // Low warehouses, a control tower and high mast lights finish the skyline.
-  const shore = tagGroup('freightlock-port-buildings', 'port-buildings');
-  for (const side of [-1, 1]) {
-    box(shore, B * 2.3, B * 0.7, B * 1.05, 0x596267,
-      side * B * 4.8, B * 0.35, -B * 1.3);
-    box(shore, B * 2.45, B * 0.08, B * 1.12, 0x41484b,
-      side * B * 4.8, B * 0.74, -B * 1.3);
-  }
-  box(shore, B * 0.55, B * 2.25, B * 0.55, 0x6c7475, B * 4.0, B * 1.12, -B * 2.0);
-  box(shore, B * 0.78, B * 0.4, B * 0.78, CABIN, B * 4.0, B * 2.32, -B * 2.0);
-  for (const x of [-3.4, -1.7, 0, 1.7, 3.4]) {
-    box(shore, B * 0.045, B * 2.4, B * 0.045, RAIL, B * x, B * 1.2, -B * 1.9);
-    box(shore, B * 0.38, B * 0.06, B * 0.08, 0xe7dba3, B * x, B * 2.38, -B * 1.9);
-  }
-
-  g.userData.shipyard = {
-    cranes: 4,
-    containerShips: 2,
-    tugboats: 2,
-    yardContainers: yardContainerCount,
-    shipContainers: shipContainerCount,
+  g.userData.freighter = {
+    setting: 'open-ocean',
+    mapPosition: 'midships',
+    lengthMeters: Math.round(shipLength),
+    beamMeters: Math.round(shipBeam),
+    oceanSpanMeters: Math.round(oceanSpan),
+    cargoContainers: cargoContainerCount,
+    waveStreaks: waveCount,
+    playableDeckMeters: Math.round(B * 2),
+    freeboardMeters: Number((deckY - waterY).toFixed(1)),
+    sunOnHorizon: true,
   };
   return g;
 }
@@ -3172,13 +3296,32 @@ function startNukeCinematic(endWin) {
   G.camera.updateProjectionMatrix();
   const B = Math.max(G.map.bounds.x, G.map.bounds.z);
   const span = B * 2.6;
+  const freightlockOcean = G.mapId === 'freightlock';
   const planeFaction = nukePlaneFactionForResult(endWin);
   const plane = buildNukePlane(planeFaction);
-  plane.position.set(-span, B * 1.5, -B * 0.4);
+  // Freightlock's ship is modeled in metres. The aircraft meshes are authored
+  // at roughly half scale, so 2.05 makes the B-29 about 29 m long with a 42 m
+  // wingspan (and gives the Pe-8 its comparable real-world silhouette).
+  if (freightlockOcean) plane.scale.setScalar(2.05);
+  const planeStartX = freightlockOcean ? -B * 9 : -span;
+  const planeAltitude = freightlockOcean ? B * 4 : B * 1.5;
+  plane.position.set(planeStartX, planeAltitude, -B * 0.4);
   G.scene.add(plane);
+  const hiddenDioramaObjects = [];
+  if (freightlockOcean) {
+    for (const child of G.scene.children) {
+      if (!child.visible || !child.geometry) continue;
+      const size = new THREE.Box3().setFromObject(child).getSize(new THREE.Vector3());
+      const isHorizonGround = child.name === 'freightlock-horizon-ground'
+        || (size.x >= 1000 && size.z >= 1000 && child.position.y < 0);
+      if (!isHorizonGround) continue;
+      child.visible = false;
+      hiddenDioramaObjects.push(child);
+    }
+  }
   // Map-specific cinematic dressing turns the enlarged ground plane into a
   // real horizon: desert around Tsar Taverns, Permian oil acreage around
-  // Derrick Dunes, and a major container port around Freightlock. Other maps
+  // Derrick Dunes, and an open-ocean freighter around Freightlock. Other maps
   // keep their existing ground treatment.
   let diorama = null;
   if (G.mapId === 'tsartaverns') {
@@ -3191,19 +3334,31 @@ function startNukeCinematic(endWin) {
     diorama = buildFreightlockNukeDiorama(B);
     G.scene.add(diorama);
   }
+  const planeSize = new THREE.Box3().setFromObject(plane).getSize(new THREE.Vector3());
+  const cloudHeight = B * (freightlockOcean ? 42 : 5);
   _cine = {
-    t: 0, B, diorama,
+    t: 0, B, diorama, cloudHeight, hiddenDioramaObjects,
     // camera glides from the player's eyes to a vantage over the map
     camFrom: G.camera.position.clone(),
     lookFrom: G.camera.position.clone()
       .add(G.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(12)),
-    camTo: new THREE.Vector3(0, B * 1.15, B * 2.3),
-    lookTo: new THREE.Vector3(0, 4, 0),
-    // post-impact pull-back: far/high enough that the full-grown ~5×B
-    // cloud fits in frame with the map a diorama under it
-    camFar: new THREE.Vector3(0, B * 2.9, B * 4.7),
-    lookFar: new THREE.Vector3(0, B * 2.3, 0),
-    plane, planeFaction, planeSpeed: span / 3.2, dropped: false,
+    camTo: freightlockOcean
+      ? new THREE.Vector3(0, B * 3.7, B * 7.2)
+      : new THREE.Vector3(0, B * 1.15, B * 2.3),
+    lookTo: freightlockOcean
+      ? new THREE.Vector3(0, B * 0.35, 0)
+      : new THREE.Vector3(0, 4, 0),
+    // Freightlock's final camera contains the complete ~280 m ship and a
+    // ~650 m nuclear column whose cap is more than twice the ship's length.
+    camFar: freightlockOcean
+      ? new THREE.Vector3(0, B * 45, B * 55)
+      : new THREE.Vector3(0, B * 2.9, B * 4.7),
+    lookFar: freightlockOcean
+      ? new THREE.Vector3(0, B * 20, 0)
+      : new THREE.Vector3(0, B * 2.3, 0),
+    plane, planeFaction,
+    planeSpeed: freightlockOcean ? B * 2.9 : span / 3.2,
+    planeSize, freightlockOcean, dropped: false,
     bomb: null, bombT: 0, dropY: 0,
     cloud: null, impactT: -1, shake: 0,
     fogNear: G.scene.fog.near, fogFar: G.scene.fog.far,
@@ -3212,9 +3367,9 @@ function startNukeCinematic(endWin) {
   };
   // the pull-back vantage sits inside the gameplay fog band and near the
   // 300 far plane — push both out for the show, restored at finish
-  G.scene.fog.near = B * 7;
-  G.scene.fog.far = B * 16;
-  G.camera.far = B * 18;
+  G.scene.fog.near = B * (freightlockOcean ? 80 : 7);
+  G.scene.fog.far = B * (freightlockOcean ? 150 : 16);
+  G.camera.far = B * (freightlockOcean ? 170 : 18);
   G.camera.updateProjectionMatrix();
   AudioSys.nukePlane();
 }
@@ -3225,7 +3380,7 @@ function nukeImpact(x, z) {
   c.shake = 1;
   UI.nukeFlash();
   AudioSys.nukeBlast();
-  const cloud = buildMushroomCloud(c.B);
+  const cloud = buildMushroomCloud(c.B, c.cloudHeight);
   cloud.group.position.set(x, 0, z);
   cloud.group.scale.set(0.05, 0.05, 0.05);
   G.scene.add(cloud.group);
@@ -3333,13 +3488,20 @@ function updateNukeCine(dt) {
     const s = 0.05 + 0.95 * (1 - Math.pow(1 - g, 3)); // fast rise, slow finish
     c.cloud.group.scale.set(s, s, s);
     c.cloud.group.rotation.y += dt * 0.06;
-    c.cloud.light.intensity = Math.max(0, 10 * (1 - c.impactT / 7));
+    const fireFade = Math.max(0.55, 1 - c.impactT / 9);
+    for (const material of c.cloud.fireMaterials) material.opacity = fireFade;
+    const shockGrowth = Math.min(1, c.impactT / 3.6);
+    const shockScale = 0.18 + shockGrowth * 2.9;
+    c.cloud.shockwave.scale.set(shockScale, shockScale, shockScale);
+    c.cloud.shockMaterial.opacity = Math.max(0, 0.9 * (1 - c.impactT / 6.8));
+    c.cloud.light.intensity = Math.max(0, 22 * (1 - c.impactT / 9));
     for (const b of G.bots) if (!b.alive) b.update(dt); // death anims play out
     if (c.impactT >= 10.5) {
       G.scene.fog.near = c.fogNear;
       G.scene.fog.far = c.fogFar;
       G.camera.far = c.camFarPlane;
       G.camera.updateProjectionMatrix();
+      for (const child of c.hiddenDioramaObjects) child.visible = true;
       if (c.diorama) G.scene.remove(c.diorama);
       // end-of-match nuke shows the held result; the killstreak nuke
       // wins for the owner's team no matter the score
